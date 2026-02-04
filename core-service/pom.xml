@@ -8,11 +8,11 @@
 		<version>3.5.4</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.ecommerce</groupId>
-	<artifactId>product</artifactId>
+	<groupId>com.ticketbox</groupId>
+	<artifactId>core-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>product</name>
-	<description>Product service for eCommerce application</description>
+	<name>Core Service</name>
+	<description>Core service for TicketBox - Events, Bookings, Payments</description>
 	<url/>
 	<licenses>
 		<license/>
