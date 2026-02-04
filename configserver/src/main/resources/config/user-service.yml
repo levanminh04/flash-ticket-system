@@ -1,0 +1,67 @@
+server:
+  port: 8082
+
+spring:
+  data:
+    mongodb:
+      uri: ${MONGO_URI}
+      database: userdb
+    rabbitmq:
+      host: localhost
+      port: 5672
+      username: guest
+      password: guest
+#      uri: mongodb+srv://levminh04:YpKyANcOQHCwQ5zz@userdb.eu0odxa.mongodb.net/?retryWrites=true&w=majority&appName=userdb
+#      database: userdb
+
+
+
+#  datasource:
+#    url: jdbc:postgresql://localhost:5432/userdb
+#    username: levanminh
+#    password: 123456
+#
+#  jpa:
+#    database: POSTGRESQL
+#    hibernate:
+#      ddl-auto: update
+#    database-platform: org.hibernate.dialect.PostgreSQLDialect
+#    show-sql: true
+
+#  h2:
+#    console:
+#      enabled: true
+#  datasource:
+#    url: jdbc:h2:mem:test
+#  jpa:
+#    show-sql: true
+#    hibernate:
+#      ddl-auto: create
+
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+
+# KEYCLOAK
+keycloak:
+  admin:
+    username: levanminh
+    password: 123456
+    server-url: http://localhost:9090
+    realm: eccom-app
+    client-id: admin-cli
+    client-uid: 356e5294-a49d-4370-b206-8c5d003058d0

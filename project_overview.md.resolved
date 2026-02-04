@@ -1,0 +1,204 @@
+# 🎫 TicketBox Clone - Tổng Quan Dự Án
+
+## 📌 Ứng Dụng Này Là Gì?
+
+**TicketBox Clone** là nền tảng mua bán vé sự kiện trực tuyến, cho phép:
+- **Người mua** dễ dàng tìm kiếm và đặt vé cho các sự kiện (concert, workshop, thể thao...)
+- **Người tổ chức** đăng bán vé và quản lý sự kiện của mình
+
+> 💡 *Tương tự như Ticketbox.vn, Eventbrite, nhưng có thêm AI chatbot hỗ trợ*
+
+---
+
+## 👥 Ai Sử Dụng Ứng Dụng Này?
+
+### 1. Khách Hàng (Người Mua Vé)
+| Họ muốn... | Ứng dụng giúp họ... |
+|------------|---------------------|
+| Tìm sự kiện hay | Tìm kiếm, lọc theo danh mục, địa điểm, ngày |
+| Mua vé nhanh | Chọn vé → Thanh toán online → Nhận vé điện tử |
+| Xem vé đã mua | Quản lý vé, mã QR để check-in |
+| Hỏi đáp nhanh | Chatbot AI trả lời 24/7 |
+
+### 2. Ban Tổ Chức Sự Kiện (Organizer)
+| Họ muốn... | Ứng dụng giúp họ... |
+|------------|---------------------|
+| Bán vé online | Tạo sự kiện, đặt giá vé, mở bán |
+| Quản lý doanh thu | Xem thống kê: số vé bán, doanh thu |
+| Check-in khách | Quét mã QR xác nhận người tham dự |
+
+### 3. Admin (Quản trị viên)
+| Họ muốn... | Ứng dụng giúp họ... |
+|------------|---------------------|
+| Quản lý nền tảng | Duyệt sự kiện, quản lý danh mục |
+
+---
+
+## ✨ Tính Năng Chính
+
+### Cho Người Mua Vé
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    🔍 TÌM KIẾM SỰ KIỆN                       │
+├─────────────────────────────────────────────────────────────┤
+│ • Tìm theo tên, mô tả                                       │
+│ • Lọc theo: Danh mục | Địa điểm | Ngày | Giá               │
+│ • Xem sự kiện nổi bật, xu hướng                            │
+│ • Hỏi chatbot: "Có gì hay ở SG cuối tuần này?"            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    🎟️ MUA VÉ                                 │
+├─────────────────────────────────────────────────────────────┤
+│ 1. Chọn sự kiện                                             │
+│ 2. Chọn loại vé (VIP, Thường, Early Bird...)               │
+│ 3. Chọn số lượng                                            │
+│ 4. Thanh toán online (VNPay)                               │
+│ 5. Nhận vé điện tử + Mã QR                                 │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    📱 QUẢN LÝ VÉ CỦA TÔI                     │
+├─────────────────────────────────────────────────────────────┤
+│ • Xem danh sách vé đã mua                                   │
+│ • Xem mã QR để check-in tại cửa                            │
+│ • Xem lịch sử mua hàng                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Cho Ban Tổ Chức
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    📅 QUẢN LÝ SỰ KIỆN                        │
+├─────────────────────────────────────────────────────────────┤
+│ • Tạo sự kiện mới (tiêu đề, mô tả, thời gian, địa điểm)   │
+│ • Tạo các loại vé với mức giá khác nhau                    │
+│ • Đặt số lượng vé giới hạn                                  │
+│ • Xuất bản / Hủy sự kiện                                    │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    📊 THỐNG KÊ BÁN HÀNG                      │
+├─────────────────────────────────────────────────────────────┤
+│ • Tổng số vé đã bán                                         │
+│ • Tổng doanh thu                                            │
+│ • Danh sách đơn hàng                                        │
+│ • Tỷ lệ lấp đầy (capacity)                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🤖 AI Chatbot - Trợ Lý Ảo
+
+### Chatbot Giúp Gì Cho Người Dùng?
+
+| Tình huống | Cách chatbot hỗ trợ |
+|------------|---------------------|
+| **Tìm sự kiện** | "Có concert rock nào ở Sài Gòn tháng 2 không?" → Bot tìm và gợi ý |
+| **Hỏi về sự kiện** | "Sự kiện ABC bắt đầu lúc mấy giờ?" → Bot trả lời dựa trên data |
+| **Hướng dẫn mua vé** | "Làm sao để mua vé?" → Bot hướng dẫn từng bước |
+| **Chính sách** | "Hoàn vé được không?" → Bot trả lời dựa trên FAQ |
+| **Kiểm tra đơn** | "Đơn hàng của tôi thế nào rồi?" → Bot tra cứu trạng thái |
+
+### Công Nghệ Đằng Sau
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    RAG (Retrieval-Augmented Generation)         │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   User hỏi: "Có sự kiện nhạc jazz ở Hà Nội không?"            │
+│                          │                                      │
+│                          ▼                                      │
+│   ┌──────────────────────────────┐                             │
+│   │ 1. Tìm trong database event  │                             │
+│   │    (vector search)           │                             │
+│   └──────────────┬───────────────┘                             │
+│                  ▼                                              │
+│   ┌──────────────────────────────┐                             │
+│   │ 2. Lấy các event liên quan   │                             │
+│   │    "Jazz Night HN", "..."    │                             │
+│   └──────────────┬───────────────┘                             │
+│                  ▼                                              │
+│   ┌──────────────────────────────┐                             │
+│   │ 3. AI viết câu trả lời       │                             │
+│   │    tự nhiên dựa trên data    │                             │
+│   └──────────────┬───────────────┘                             │
+│                  ▼                                              │
+│   "Có! Hiện có 2 sự kiện jazz ở Hà Nội:                       │
+│    1. Jazz Night - 15/02 tại Opera House                       │
+│    2. Jazz Festival - 20/02 tại Nhà hát Lớn"                  │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Tại Sao Chatbot Có Ý Nghĩa Với Ứng Dụng Này?
+
+1. **Giảm tải support** - Người dùng tự giải đáp thắc mắc 24/7
+2. **Tăng conversion** - Giúp tìm sự kiện nhanh → Mua vé nhiều hơn
+3. **Trải nghiệm hiện đại** - Gen Z quen chat hơn là browse menu
+4. **Điểm số cao** - Đáp ứng yêu cầu AI nâng cao của giảng viên
+
+---
+
+## 🔄 User Flow Chính
+
+### Flow 1: Mua Vé
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
+│  Tìm    │────▶│  Xem    │────▶│  Chọn   │────▶│  Thanh  │────▶│  Nhận   │
+│ sự kiện │     │chi tiết │     │   vé    │     │  toán   │     │   vé    │
+└─────────┘     └─────────┘     └─────────┘     └─────────┘     └─────────┘
+                                                    │
+                                                    ▼
+                                              ┌─────────┐
+                                              │  VNPay  │
+                                              └─────────┘
+```
+
+### Flow 2: Tổ Chức Sự Kiện
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
+│  Đăng   │────▶│  Tạo    │────▶│  Tạo    │────▶│  Xuất   │
+│   ký    │     │sự kiện  │     │loại vé  │     │  bản    │
+└─────────┘     └─────────┘     └─────────┘     └─────────┘
+                                                    │
+                                                    ▼
+                                              ┌─────────┐
+                                              │  Theo   │
+                                              │dõi bán  │
+                                              └─────────┘
+```
+
+---
+
+## 💡 Điểm Nổi Bật So Với Đồ Án Thông Thường
+
+| Đồ án thông thường | Dự án này |
+|--------------------|-----------|
+| Monolith | **Microservices** (kiến trúc enterprise) |
+| Form login thường | **OAuth2 + Keycloak** (authentication chuẩn) |
+| Không có AI | **AI Chatbot + RAG** (xu hướng công nghệ) |
+| Thanh toán giả | **VNPay sandbox** (tích hợp thực tế) |
+| Không có QR | **QR Code cho vé** (thực tế ngành) |
+
+---
+
+## 📱 Màn Hình Chính (Dự Kiến)
+
+1. **Trang chủ** - Banner, sự kiện nổi bật, danh mục
+2. **Tìm kiếm** - Danh sách + Filter
+3. **Chi tiết sự kiện** - Thông tin, loại vé, nút mua
+4. **Checkout** - Chọn vé, form thông tin, thanh toán
+5. **Vé của tôi** - Danh sách vé + QR
+6. **Dashboard Organizer** - Thống kê + Quản lý sự kiện
+7. **Chat widget** - Nổi góc phải màn hình
+
+---
+
+*Tài liệu này giải thích ứng dụng cho người không chuyên kỹ thuật (giảng viên, người review)*
