@@ -29,7 +29,7 @@ db.createCollection("users", {
           bsonType: "string",
           description: "Keycloak user UUID - dùng để sync với Identity Provider"
         },
-        
+
         // ========== Basic Information ==========
         email: {
           bsonType: "string",
@@ -40,7 +40,7 @@ db.createCollection("users", {
           bsonType: "bool",
           description: "Email đã verify chưa (từ Keycloak)"
         },
-        
+
         phone: {
           bsonType: ["string", "null"],
           pattern: "^\\+?[0-9]{10,15}$",
@@ -50,7 +50,7 @@ db.createCollection("users", {
           bsonType: "bool",
           description: "Phone đã verify chưa"
         },
-        
+
         // ========== Profile ==========
         profile: {
           bsonType: "object",
@@ -90,7 +90,7 @@ db.createCollection("users", {
             }
           }
         },
-        
+
         // ========== Address ==========
         addresses: {
           bsonType: "array",
@@ -132,7 +132,7 @@ db.createCollection("users", {
             }
           }
         },
-        
+
         // ========== Roles & Permissions ==========
         roles: {
           bsonType: "array",
@@ -142,13 +142,13 @@ db.createCollection("users", {
           },
           minItems: 1
         },
-        
+
         // ========== Status ==========
         status: {
           enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING_VERIFICATION"],
           description: "Trạng thái tài khoản"
         },
-        
+
         // ========== Preferences ==========
         preferences: {
           bsonType: "object",
@@ -196,7 +196,7 @@ db.createCollection("users", {
             }
           }
         },
-        
+
         // ========== OAuth Connections ==========
         oauthConnections: {
           bsonType: "array",
@@ -221,7 +221,7 @@ db.createCollection("users", {
             }
           }
         },
-        
+
         // ========== Security ==========
         security: {
           bsonType: "object",
@@ -246,7 +246,7 @@ db.createCollection("users", {
             }
           }
         },
-        
+
         // ========== Activity Tracking ==========
         lastLoginAt: {
           bsonType: ["date", "null"],
@@ -260,13 +260,13 @@ db.createCollection("users", {
           bsonType: "int",
           description: "Tổng số lần đăng nhập"
         },
-        
+
         // ========== Organizer Reference ==========
         organizerProfileId: {
           bsonType: ["string", "null"],
           description: "Reference tới organizer_profiles collection - nếu user là Organizer"
         },
-        
+
         // ========== Audit Fields ==========
         createdAt: {
           bsonType: "date",
@@ -332,7 +332,7 @@ db.createCollection("organizer_profiles", {
           bsonType: "string",
           description: "Reference tới users collection"
         },
-        
+
         // ========== Organization Info ==========
         organizerName: {
           bsonType: "string",
@@ -347,13 +347,13 @@ db.createCollection("organizer_profiles", {
           enum: ["individual", "company", "nonprofit", "government"],
           description: "Loại hình tổ chức"
         },
-        
+
         description: {
           bsonType: ["string", "null"],
           maxLength: 2000,
           description: "Mô tả về tổ chức"
         },
-        
+
         // ========== Branding ==========
         branding: {
           bsonType: "object",
@@ -375,7 +375,7 @@ db.createCollection("organizer_profiles", {
             }
           }
         },
-        
+
         // ========== Contact ==========
         contact: {
           bsonType: "object",
@@ -393,7 +393,7 @@ db.createCollection("organizer_profiles", {
             }
           }
         },
-        
+
         // ========== Social Links ==========
         socialLinks: {
           bsonType: "object",
@@ -405,7 +405,7 @@ db.createCollection("organizer_profiles", {
             tiktok: { bsonType: ["string", "null"] }
           }
         },
-        
+
         // ========== Business Registration (KYC) ==========
         businessInfo: {
           bsonType: "object",
@@ -429,7 +429,7 @@ db.createCollection("organizer_profiles", {
             }
           }
         },
-        
+
         // ========== Bank Account (for payout) ==========
         bankAccount: {
           bsonType: "object",
@@ -454,7 +454,7 @@ db.createCollection("organizer_profiles", {
             }
           }
         },
-        
+
         // ========== Verification Status ==========
         verification: {
           bsonType: "object",
@@ -489,7 +489,7 @@ db.createCollection("organizer_profiles", {
             }
           }
         },
-        
+
         // ========== Statistics (denormalized) ==========
         statistics: {
           bsonType: "object",
@@ -517,13 +517,13 @@ db.createCollection("organizer_profiles", {
             }
           }
         },
-        
+
         // ========== Status ==========
         status: {
           enum: ["PENDING", "ACTIVE", "SUSPENDED", "REJECTED"],
           description: "Trạng thái profile"
         },
-        
+
         // ========== Audit Fields ==========
         createdAt: {
           bsonType: "date"

@@ -1,10 +1,10 @@
 
 services:
   postgres:
-    container_name: postgres_container
-    image: postgres:14
+    container_name: postgres_flash_ticket
+    image: pgvector/pgvector:pg14
     environment:
-      POSTGRES_USER: levanminh
+      POSTGRES_USER:
       POSTGRES_PASSWORD: 123456
       PGDATA: /data/postgres
     volumes:
@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
 
   pdadmin:
-    container_name: pgadmin_container
+    container_name: pgadmin_flash_ticket
     image: dpage/pgadmin4
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin4@pgadmin.org}
@@ -31,7 +31,7 @@ services:
     restart: unless-stopped
 
   rabbitmq:
-    container_name: rabbitmq_container
+    container_name: rabbitmq_flash_ticket
     image: rabbitmq:4-management
     environment:
       RABBITMQ_DEFAULT_USER: guest
@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
 
   keycloak:
-    container_name: keycloak-ecom-app
+    container_name: keycloak-flash-ticket
     image: quay.io/keycloak/keycloak:26.0.0
     ports:
       - 9090:8080
@@ -60,7 +60,7 @@ services:
     restart: unless-stopped
 
   mongo:
-    container_name: mongodb_ecom-app
+    container_name: mongodb_flash_ticket
     image: mongodb/mongodb-community-server:latest
     ports:
       - "27017:27017"
@@ -69,7 +69,7 @@ services:
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: zookeeper
+    container_name: zookeeper_flash_ticket
     ports:
       - 2181:2181
     environment:
@@ -81,7 +81,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: kafka
+    container_name: kafka_flash_ticket
     depends_on:
       - zookeeper
     ports:
@@ -99,7 +99,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: redis_ticketbox
+    container_name: redis_flash_ticket
     ports:
       - "6379:6379"
     networks:
