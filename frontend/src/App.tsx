@@ -33,7 +33,7 @@ function App() {
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
           <Navbar />
-          <div className="pt-16">
+          <div>
             <Routes>
               <Route path="/" element={<HomePage />} />
               {/* Các route khác sẽ thêm sau */}
