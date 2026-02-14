@@ -9,5 +9,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 public class CoreServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(CoreServiceApplication.class, args);
+        System.out.println("CORE_SERVICE_STARTED");
+
     }
 }

@@ -1,0 +1,40 @@
+server:
+  port: 8085
+
+spring:
+  datasource:
+    url: jdbc:postgresql://13.239.118.235:5432/flash-ticket?currentSchema=ai_schema,public
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:123456}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      #  để 'none' hoặc 'validate'
+      # để tránh Hibernate tự ý thay đổi cấu trúc bảng đã tối ưu.
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Ép Hibernate sử dụng ai_schema cho các entity không khai báo schema cụ thể
+        default_schema: ai_schema
+        format_sql: true
+
+
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}
+
+# LangChain4j Configuration (will be configured later)
+#langchain4j:
+#  open-ai:
+#    api-key: ${OPENAI_API_KEY:your-api-key-here}
+#    model-name: gpt-3.5-turbo

@@ -92,4 +92,15 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:9090/realms/eccom-app
+          issuer-uri: http://13.239.118.235:9090/realms/flash-ticket
+          jwk-set-uri: http://13.239.118.235:9090/realms/flash-ticket/protocol/openid-connect/certs
+  data:
+    redis:
+      host: 13.239.118.235
+      port: 6379
+      timeout: 2000ms
+      lettuce: # Lettuce pool = Connection Pool cho Redis
+        pool:
+          max-active: 8 # tối đa 8 connection
+          max-idle: 8 # tối đa 8 rảnh Nếu số connection rảnh vượt quá 8, chúng sẽ bị đóng bớt.
+          min-idle: 0 # tối thiểu 0 rảnh

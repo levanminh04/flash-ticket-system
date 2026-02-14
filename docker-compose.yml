@@ -63,7 +63,7 @@ services:
     container_name: mongodb_flash_ticket
     image: mongodb/mongodb-community-server:latest
     ports:
-      - "27017:27017"
+      - "27018:27017"
     networks:
       - backend
 
