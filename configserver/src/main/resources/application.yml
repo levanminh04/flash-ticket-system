@@ -20,7 +20,7 @@ spring:
     config:
       server:
         native:
-          search-locations: file:/D:/Project/flash-ticket-system/configserver/src/main/resources/config/
+          search-locations: file:/D:/Ky_2_nam_4/TMDT/flash-ticket-system/configserver/src/main/resources/config/
 #   test/dev thì dùng native cho tiện
 
 management:
