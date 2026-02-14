@@ -104,7 +104,7 @@
   position: sticky;
   top: 0;
   z-index: 1000;
-  padding: 12px 0;
+  padding: 8px 0; /* Reduced padding */
 }
 .nav-container {
   display: grid;
@@ -127,7 +127,7 @@
   background-color: var(--bg-card);
   border-bottom: 1px solid var(--border);
   position: sticky;
-  top: 65px; /* Height of navbar approx */
+  top: 56px; /* Adjusted top to match new navbar height approx */
   z-index: 999;
   padding: 0;
 }
@@ -152,7 +152,7 @@
 
 .category-link {
   display: block;
-  padding: 16px 0;
+  padding: 12px 0; /* Reduced padding */
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -176,12 +176,17 @@
 }
 .search-input {
   width: 100%;
-  padding: 12px 16px 12px 48px;
+  padding: 8px 16px 8px 40px; /* Reduced padding */
   background: var(--bg-input);
   border: 1px solid transparent;
   border-radius: var(--radius-full);
-  font-size: 15px;
+  font-size: 14px; /* Slightly smaller font */
   transition: all 0.2s ease;
+  color: var(--text-primary); /* Ensure text is dark and clear */
+}
+.search-input::placeholder {
+  color: #64748b; /* Slate 500 - Darker than default placeholder */
+  opacity: 1; /* Firefox default opacity override */
 }
 .search-input:focus {
   background: white;
@@ -191,11 +196,11 @@
 }
 .search-icon {
   position: absolute;
-  left: 18px;
+  left: 14px; /* Adjusted left */
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-secondary);
-  font-size: 20px;
+  font-size: 18px; /* Slightly smaller icon */
 }
 
 .nav-actions {

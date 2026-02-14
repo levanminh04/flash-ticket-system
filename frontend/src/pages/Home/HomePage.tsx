@@ -48,7 +48,7 @@ const bannerGroups = [
     {
       id: 3,
       image:
-        "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=1000",
+        "https://i.ytimg.com/vi/BG26iYVppy8/maxresdefault.jpg",
       title: "Tomorrowland Experience",
       tag: "EDM",
       link: "#",
@@ -56,7 +56,7 @@ const bannerGroups = [
     {
       id: 4,
       image:
-        "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?q=80&w=1000",
+        "https://www.didongmy.com/vnt_upload/news/03_2024/chi-tiet-ve-taylor-swift-the-eras-tour-didongmy.png",
       title: "Taylor Swift - The Eras Tour",
       tag: "Tour",
       link: "#",
@@ -494,7 +494,7 @@ export default function HomePage() {
               <div className="dest-overlay">TP. HỒ CHÍ MINH</div>
             </div>
             <div className="dest-card">
-              <img src="https://images.unsplash.com/photo-1599587401326-40742d4a297e?q=80&w=800" />
+              <img src="https://cellphones.com.vn/sforum/wp-content/uploads/2024/01/dia-diem-du-lich-o-ha-noi-1.jpg" />
               <div className="dest-overlay">HÀ NỘI</div>
             </div>
             <div className="dest-card">

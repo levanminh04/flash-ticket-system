@@ -7,7 +7,7 @@ const Navbar = () => {
   const { keycloak, initialized } = useKeycloak();
 
   if (!initialized) {
-    return <div className="p-4 text-center">Đang kết nối...</div>;
+    return <div className="p-4 text-center">Đang kết nối</div>;
   }
 
   return (
