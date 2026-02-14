@@ -24,7 +24,12 @@ function App() {
         onLoad: "check-sso",
         silentCheckSsoRedirectUri:
           window.location.origin + "/silent-check-sso.html",
-        checkLoginIframe: false, 
+        checkLoginIframe: false,
+        pkceMethod: "S256",
+      }}
+      onEvent={(event, error) => {
+        if (event === "onAuthError")
+          console.error("Keycloak Auth Error:", error);
       }}
     >
       <QueryClientProvider client={queryClient}>
@@ -35,7 +40,6 @@ function App() {
           <div>
             <Routes>
               <Route path="/" element={<HomePage />} />
-              {/* Các route khác sẽ thêm sau */}
             </Routes>
           </div>
         </Router>

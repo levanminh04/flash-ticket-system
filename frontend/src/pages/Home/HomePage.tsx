@@ -17,7 +17,7 @@ const bannerGroups = [
   [
     {
       id: 1,
-      image: "https://salt.tkbcdn.com/ts/ds/79/87/b5/d594166cd9bc900a7acfbe3834c82d24.png",
+      image: "https://cdn-media.sforum.vn/storage/app/media/ctv_seo10/anh-trai-vuot-ngan-chong-gai-thumb.jpg",
       title: "Anh Trai Vượt Ngàn Chông Gai",
       date: "15 Thg 8, 2026",
       tag: "SẮP DIỄN RA"
