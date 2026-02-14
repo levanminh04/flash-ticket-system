@@ -1,32 +1,29 @@
-// File: src/App.tsx
 import { ReactKeycloakProvider } from '@react-keycloak/web';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import keycloak from './lib/keycloak';
 import HomePage from './pages/Home/HomePage';
+import Navbar from './components/layout/Navbar'; 
 
 function App() {
   return (
     <ReactKeycloakProvider 
       authClient={keycloak}
-      initOptions={{ onLoad: 'check-sso' }} // Tự động check xem user đã login chưa
+      initOptions={{ onLoad: 'check-sso' }}
+      LoadingComponent={
+        <div className="min-h-screen flex items-center justify-center bg-white text-gray-800 text-xl font-bold">
+          Đang tải hệ thống TicketBox
+        </div>
+      }
     >
       <BrowserRouter>
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
-          {/* Header (Navbar) sẽ nằm ở đây */}
+          <Navbar />
           
           <main>
             <Routes>
-              {/* Public Routes */}
               <Route path="/" element={<HomePage />} />
-              
-              {/* Các route tiếp theo sẽ thêm vào đây: 
-                  <Route path="/events/:id" element={<EventDetailPage />} />
-                  <Route path="/checkout" element={<CheckoutPage />} /> 
-              */}
             </Routes>
           </main>
-
-          {/* Footer sẽ nằm ở đây */}
         </div>
       </BrowserRouter>
     </ReactKeycloakProvider>
