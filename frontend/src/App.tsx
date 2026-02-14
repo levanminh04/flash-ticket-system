@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// Pages
 import HomePage from "./pages/Home/HomePage";
 
 import { ReactKeycloakProvider } from "@react-keycloak/web";
@@ -25,10 +24,10 @@ function App() {
         onLoad: "check-sso",
         silentCheckSsoRedirectUri:
           window.location.origin + "/silent-check-sso.html",
+        checkLoginIframe: false, 
       }}
     >
       <QueryClientProvider client={queryClient}>
-        {/* Thêm thuộc tính future để tắt 2 cảnh báo màu vàng của React Router */}
         <Router
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >

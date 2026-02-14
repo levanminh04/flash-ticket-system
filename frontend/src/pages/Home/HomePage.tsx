@@ -5,10 +5,6 @@ import {
   MapPin, Calendar, Heart, ArrowRight, 
   ChevronLeft, ChevronRight, CheckCircle2, ShieldCheck 
 } from 'lucide-react';
-
-// ==========================================
-// MOCK DATA (Dựa trên index.html của bạn)
-// ==========================================
 const categories = [
   { id: 1, name: 'Nhạc Sống', icon: <Music size={24} /> },
   { id: 2, name: 'Sân Khấu', icon: <Star size={24} /> },

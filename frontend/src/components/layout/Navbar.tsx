@@ -17,7 +17,6 @@ const Navbar = () => {
           to="/"
           className="flex items-center gap-2 text-white font-bold text-2xl"
         >
-          <Ticket size={28} />
           <span>FlashTicket</span>
         </Link>
 
