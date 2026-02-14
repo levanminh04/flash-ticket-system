@@ -446,6 +446,31 @@
   margin-top: 8px;
 }
 
+.card-heart-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  z-index: 5;
+  color: #94a3b8; /* Slate 400 */
+  transition: all 0.2s ease;
+}
+
+.card-heart-btn:hover {
+  color: #ef4444; /* Red-500 */
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 /* Trending Ranking */
 .trending-grid {
   display: grid;
@@ -614,6 +639,29 @@
   align-items: center;
   color: #64748b; /* Slate 500 */
   font-size: 13px;
+}
+
+/* --- 8. Payment Partners --- */
+.partner-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 20px;
+}
+.partner-logo {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.8;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+.partner-logo:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 /* Responsive */
