@@ -1,0 +1,602 @@
+/* --- 1. Navbar (Sticky & 3 Segments) --- */
+.navbar {
+  background-color: var(--primary);
+  border-bottom: 1px solid var(--primary-dark); /* Subtle border matching theme */
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  padding: 12px 0;
+}
+.nav-container {
+  display: grid;
+  grid-template-columns: 200px 1fr auto;
+  align-items: center;
+  gap: 24px;
+}
+.logo {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- Category Navigation (Below Navbar) --- */
+.category-nav {
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 65px; /* Height of navbar approx */
+  z-index: 999;
+  padding: 0;
+}
+
+.category-list {
+  display: flex;
+  justify-content: center;
+  list-style: none;
+  gap: 40px;
+  padding: 0;
+  overflow-x: auto;
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+.category-list::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Chrome, Safari, Opera */
+}
+
+.category-item {
+  white-space: nowrap;
+}
+
+.category-link {
+  display: block;
+  padding: 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.category-link:hover {
+  color: var(--primary);
+}
+
+.category-link.active {
+  color: var(--primary);
+}
+
+.search-bar {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+.search-input {
+  width: 100%;
+  padding: 12px 16px 12px 48px;
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: 15px;
+  transition: all 0.2s ease;
+}
+.search-input:focus {
+  background: white;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  outline: none;
+}
+.search-icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  font-size: 20px;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* --- Account Dropdown --- */
+.account-dropdown {
+  position: relative;
+}
+
+.account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  transition: background 0.2s;
+}
+
+.account-trigger:hover {
+  background: var(--bg-main);
+}
+
+.nav-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}
+
+.nav-account-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.account-trigger i {
+  font-size: 16px;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+}
+
+.account-dropdown:hover .account-trigger i {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  background: white;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  padding: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+}
+
+.account-dropdown:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.nav-actions .btn {
+  background: white;
+  color: var(--primary);
+  border: 1px solid white;
+  font-weight: 700;
+  padding: 8px 24px;
+  border-radius: var(--radius-full);
+}
+
+.nav-actions .btn:hover {
+  background: var(--bg-main);
+  color: var(--primary-dark);
+  border-color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Consolidated button styles are handled by .nav-actions .btn */
+
+.nav-actions .btn {
+  padding: 8px 20px;
+  font-size: 13px;
+  border-radius: var(--radius-full);
+  height: 38px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-main);
+  color: var(--primary);
+}
+
+.dropdown-item.active {
+  background: rgba(99, 102, 241, 0.05);
+  color: var(--primary);
+}
+
+.dropdown-item i {
+  font-size: 18px;
+}
+
+.dropdown-menu hr {
+  margin: 8px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.dropdown-item.logout {
+  color: var(--error);
+}
+
+.dropdown-item.logout:hover {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* --- 2. Hero Section (Carousel) --- */
+.hero-section {
+  margin-top: 24px;
+}
+.hero-carousel {
+  position: relative;
+  display: flex;
+  gap: 20px;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+.hero-slide {
+  min-width: 100%;
+  height: 400px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  border-radius: var(--radius-lg);
+}
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.8), transparent);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+  color: white;
+}
+.hero-tag {
+  color: var(--primary-light);
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+.hero-title {
+  font-size: 42px;
+  font-weight: 800;
+  max-width: 600px;
+  line-height: 1.1;
+  margin-bottom: 24px;
+}
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  cursor: pointer;
+}
+.dot.active {
+  background: var(--primary);
+  width: 24px;
+  border-radius: 4px;
+}
+
+/* --- 3. Section Styling --- */
+.section-container {
+  margin-top: 0;
+  margin-bottom: 48px;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.section-title {
+  font-size: 24px;
+  font-weight: 800;
+  position: relative;
+}
+.view-all {
+  font-size: 14px;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* --- 4. Card Designs --- */
+/* Event Grid */
+.event-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+/* Dạng 1: Poster Dọc */
+.poster-card {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  aspect-ratio: 2/3;
+  cursor: pointer;
+}
+.poster-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+.poster-card:hover img {
+  transform: scale(1.05);
+}
+.poster-card .overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent 60%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 20px;
+  color: white;
+}
+
+/* Dạng 2: Thẻ tiêu chuẩn (Landscape) */
+.standard-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+.standard-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+.thumb-wrapper {
+  position: relative;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+}
+.thumb-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.card-content {
+  padding: 16px;
+}
+.card-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 44px;
+}
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.card-price {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-top: 8px;
+}
+
+/* Trending Ranking */
+.trending-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+.trending-card {
+  display: flex;
+  align-items: center;
+}
+.trending-thumb-wrapper {
+  position: relative;
+  width: 120px;
+  height: 80px;
+}
+.rank-idx {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 32px;
+  height: 32px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  border: 2px solid white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  z-index: 10;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.trending-content {
+  display: flex;
+  gap: 16px;
+  background: var(--bg-card);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  flex: 1;
+  border: 1px solid var(--border); /* Added for definition */
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+.trending-content:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-light);
+}
+.trending-thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+/* --- 5. Promotional Banners --- */
+.promo-banner {
+  width: 100%;
+  height: 150px;
+  border-radius: var(--radius-lg);
+  margin: 60px 0;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  padding: 0 60px;
+}
+
+/* --- 6. Destinations --- */
+.dest-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.dest-card {
+  position: relative;
+  height: 200px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+}
+.dest-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dest-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  font-weight: 800;
+  transition: background 0.3s ease;
+}
+.dest-card:hover .dest-overlay {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* --- 7. Detailed Footer --- */
+.footer {
+  background: #0f172a; /* Slate 900 - Dark Theme */
+  border-top: 1px solid var(--primary-dark);
+  color: #94a3b8; /* Slate 400 */
+  padding: 80px 0 24px;
+  margin-top: 60px;
+}
+.footer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr;
+  gap: 40px;
+  margin-bottom: 60px;
+}
+.footer-col h4 {
+  color: white; /* White headings for contrast */
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+.footer-links {
+  list-style: none;
+}
+.footer-links li {
+  margin-bottom: 12px;
+}
+.footer-links a {
+  color: #94a3b8; /* Slate 400 */
+  font-size: 14px;
+  font-weight: 400;
+  transition: color 0.2s;
+}
+.footer-links a:hover {
+  color: var(--primary);
+  text-decoration: none;
+}
+.social-links {
+  display: flex;
+  gap: 16px;
+}
+.social-links i {
+  font-size: 24px;
+  color: white;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+.social-links i:hover {
+  background: var(--primary);
+  color: white;
+  transform: translateY(-2px);
+}
+.footer-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #64748b; /* Slate 500 */
+  font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .nav-container {
+    grid-template-columns: auto 1fr auto;
+  }
+  .footer-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .event-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .search-bar {
+    display: none;
+  }
+  .event-grid,
+  .trending-grid,
+  .dest-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .footer-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
