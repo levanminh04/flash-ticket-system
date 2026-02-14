@@ -5,7 +5,7 @@ spring:
   application:
     name: configserver
   rabbitmq:
-    host: localhost
+    host: 13.239.118.235  # AWS EC2
     port: 5672
     username: guest
     password: guest
@@ -20,8 +20,7 @@ spring:
     config:
       server:
         native:
-          #          search-locations: file:///file:/D:/Project/ecom-application/configserver/src/main/resources/config/
-          search-locations: file:/D:/Project/ecom-application/configserver/src/main/resources/config/
+          search-locations: file:/D:/Project/flash-ticket-system/configserver/src/main/resources/config/
 #   test/dev thì dùng native cho tiện
 
 management:

@@ -4,13 +4,13 @@ server:
 spring:
   data:
     mongodb:
-      uri: ${MONGO_URI}
+      uri: ${MONGO_URI:mongodb://13.239.118.235:27018/userdb}
       database: userdb
-    rabbitmq:
-      host: localhost
-      port: 5672
-      username: guest
-      password: guest
+  rabbitmq:
+    host: 13.239.118.235  # AWS EC2
+    port: 5672
+    username: guest
+    password: guest
 #      uri: mongodb+srv://levminh04:YpKyANcOQHCwQ5zz@userdb.eu0odxa.mongodb.net/?retryWrites=true&w=majority&appName=userdb
 #      database: userdb
 
@@ -56,12 +56,28 @@ management:
         include: "*"
 
 
-# KEYCLOAK
+## KEYCLOAK
+#keycloak:
+#  admin:
+#    server-url: http://13.239.118.235:9090
+#    realm: flash-ticket
+#    client-id: flash-ticket-backend
+#    client-secret: ${KEYCLOAK_CLIENT_SECRET}  # Set this in environment variables
+
+## Spring Security OAuth2
+#spring:
+#  security:
+#    oauth2:
+#      resourceserver:
+#        jwt:
+#          issuer-uri: http://13.239.118.235:9090/realms/flash-ticket
+#          jwk-set-uri: http://13.239.118.235:9090/realms/flash-ticket/protocol/openid-connect/certs
+
 keycloak:
   admin:
     username: levanminh
     password: 123456
-    server-url: http://localhost:9090
-    realm: eccom-app
+    server-url: http://13.239.118.235:9090
+    realm: flash-ticket
     client-id: admin-cli
     client-uid: 356e5294-a49d-4370-b206-8c5d003058d0
