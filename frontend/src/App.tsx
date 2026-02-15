@@ -1,11 +1,20 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Outlet,
+} from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
-import HomePage from "./pages/Home/HomePage";
-
 import { ReactKeycloakProvider } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
+
+// Components Layout
 import Navbar from "./components/layout/Navbar";
+import AdminLayout from "./components/layout/AdminLayout";
+
+// Pages
+import HomePage from "./pages/Home/HomePage";
+import Dashboard from "./pages/Admin/Dashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,6 +24,18 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Layout dành cho Khách hàng (Hiển thị Navbar trên cùng)
+const PublicLayout = () => {
+  return (
+    <>
+      <Navbar />
+      <div className="min-h-screen">
+        <Outlet />
+      </div>
+    </>
+  );
+};
 
 function App() {
   return (
@@ -36,12 +57,46 @@ function App() {
         <Router
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
-          <Navbar />
-          <div>
-            <Routes>
+          <Routes>
+            <Route element={<PublicLayout />}>
               <Route path="/" element={<HomePage />} />
-            </Routes>
-          </div>
+            </Route>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route
+                path="users"
+                element={
+                  <div className="p-8 text-xl font-bold">
+                    Giao diện Quản lý User
+                  </div>
+                }
+              />
+              <Route
+                path="organizers"
+                element={
+                  <div className="p-8 text-xl font-bold">
+                    Giao diện Duyệt Ban Tổ chức
+                  </div>
+                }
+              />
+              <Route
+                path="events"
+                element={
+                  <div className="p-8 text-xl font-bold">
+                    Giao diện Quản lý Sự kiện
+                  </div>
+                }
+              />
+              <Route
+                path="orders"
+                element={
+                  <div className="p-8 text-xl font-bold">
+                    Giao diện Quản lý Đơn hàng (Đang xây dựng)
+                  </div>
+                }
+              />
+            </Route>
+          </Routes>
         </Router>
       </QueryClientProvider>
     </ReactKeycloakProvider>
