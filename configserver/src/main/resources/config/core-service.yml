@@ -99,6 +99,6 @@ management:
 # Logging
 logging:
   level:
-    com.ticketbox.core: DEBUG
+    com.flashticket.core: DEBUG
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
