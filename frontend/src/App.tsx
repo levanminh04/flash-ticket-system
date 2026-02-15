@@ -7,14 +7,11 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactKeycloakProvider } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
-
-// Components Layout
 import Navbar from "./components/layout/Navbar";
 import AdminLayout from "./components/layout/AdminLayout";
-
-// Pages
 import HomePage from "./pages/Home/HomePage";
 import Dashboard from "./pages/Admin/Dashboard";
+import UserManagement from "./pages/Admin/UserManagement";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,8 +21,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-// Layout dành cho Khách hàng (Hiển thị Navbar trên cùng)
 const PublicLayout = () => {
   return (
     <>
@@ -63,14 +58,7 @@ function App() {
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
-              <Route
-                path="users"
-                element={
-                  <div className="p-8 text-xl font-bold">
-                    Giao diện Quản lý User
-                  </div>
-                }
-              />
+              <Route path="users" element={<UserManagement />} />
               <Route
                 path="organizers"
                 element={
