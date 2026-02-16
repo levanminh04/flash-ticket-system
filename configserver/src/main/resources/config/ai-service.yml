@@ -1,40 +1,51 @@
 server:
-  port: 8085
+  port: ${SERVER_PORT:8085}
 
 spring:
+  # PostgreSQL Database
   datasource:
-    url: jdbc:postgresql://13.239.118.235:5432/flash-ticket?currentSchema=ai_schema,public
+    url: ${POSTGRES_URL:jdbc:postgresql://13.239.118.235:5432/flash-ticket?currentSchema=ai_schema,public}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
 
+  # JPA Configuration
   jpa:
     hibernate:
-      #  để 'none' hoặc 'validate'
-      # để tránh Hibernate tự ý thay đổi cấu trúc bảng đã tối ưu.
-      ddl-auto: validate
-    show-sql: true
+      ddl-auto: validate  # Use 'validate' to prevent auto schema changes
+    show-sql: ${JPA_SHOW_SQL:true}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        # Ép Hibernate sử dụng ai_schema cho các entity không khai báo schema cụ thể
         default_schema: ai_schema
         format_sql: true
 
-
-
+# Eureka Client
 eureka:
   client:
     serviceUrl:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
   instance:
     prefer-ip-address: true
     instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}
 
-# LangChain4j Configuration (will be configured later)
-#langchain4j:
-#  open-ai:
-#    api-key: ${OPENAI_API_KEY:your-api-key-here}
-#    model-name: gpt-3.5-turbo
+# Management & Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+# LangChain4j Configuration (Optional - for AI features)
+langchain4j:
+  open-ai:
+    api-key: ${OPENAI_API_KEY:}
+    model-name: ${OPENAI_MODEL:gpt-3.5-turbo}
+
+# Logging
+logging:
+  level:
+    com.flashticket.ai: ${LOG_LEVEL:DEBUG}
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}

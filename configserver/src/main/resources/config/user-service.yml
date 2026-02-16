@@ -1,83 +1,50 @@
 server:
-  port: 8082
+  port: ${SERVER_PORT:8082}
 
 spring:
+  # MongoDB Configuration
   data:
     mongodb:
       uri: ${MONGO_URI:mongodb://13.239.118.235:27018/userdb}
-      database: userdb
+      database: ${MONGO_DATABASE:userdb}
+  
+  # RabbitMQ Configuration
   rabbitmq:
-    host: 13.239.118.235  # AWS EC2
-    port: 5672
-    username: guest
-    password: guest
-#      uri: mongodb+srv://levminh04:YpKyANcOQHCwQ5zz@userdb.eu0odxa.mongodb.net/?retryWrites=true&w=majority&appName=userdb
-#      database: userdb
+    host: ${RABBITMQ_HOST:13.239.118.235}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
 
-
-
-#  datasource:
-#    url: jdbc:postgresql://localhost:5432/userdb
-#    username: levanminh
-#    password: 123456
-#
-#  jpa:
-#    database: POSTGRESQL
-#    hibernate:
-#      ddl-auto: update
-#    database-platform: org.hibernate.dialect.PostgreSQLDialect
-#    show-sql: true
-
-#  h2:
-#    console:
-#      enabled: true
-#  datasource:
-#    url: jdbc:h2:mem:test
-#  jpa:
-#    show-sql: true
-#    hibernate:
-#      ddl-auto: create
-
-
+# Eureka Client
 eureka:
   client:
     serviceUrl:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
   instance:
     prefer-ip-address: true
     instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}
 
+# Management & Monitoring
 management:
   endpoints:
     web:
       exposure:
         include: "*"
 
-
-## KEYCLOAK
-#keycloak:
-#  admin:
-#    server-url: http://13.239.118.235:9090
-#    realm: flash-ticket
-#    client-id: flash-ticket-backend
-#    client-secret: ${KEYCLOAK_CLIENT_SECRET}  # Set this in environment variables
-
-## Spring Security OAuth2
-#spring:
-#  security:
-#    oauth2:
-#      resourceserver:
-#        jwt:
-#          issuer-uri: http://13.239.118.235:9090/realms/flash-ticket
-#          jwk-set-uri: http://13.239.118.235:9090/realms/flash-ticket/protocol/openid-connect/certs
-
+# Keycloak Admin Configuration
 keycloak:
   admin:
-    username: levanminh
-    password: 123456
-    server-url: http://13.239.118.235:9090
-    realm: flash-ticket
-    client-id: admin-cli
-    client-uid: 356e5294-a49d-4370-b206-8c5d003058d0
+    username: ${KEYCLOAK_ADMIN_USERNAME:levanminh}
+    password: ${KEYCLOAK_ADMIN_PASSWORD:123456}
+    server-url: ${KEYCLOAK_SERVER_URL:http://13.239.118.235:9090}
+    realm: ${KEYCLOAK_REALM:flash-ticket}
+    client-id: ${KEYCLOAK_CLIENT_ID:admin-cli}
+    client-uid: ${KEYCLOAK_CLIENT_UID:356e5294-a49d-4370-b206-8c5d003058d0}
+
+# Logging
+logging:
+  level:
+    com.flashticket.user: ${LOG_LEVEL:DEBUG}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:DEBUG}
