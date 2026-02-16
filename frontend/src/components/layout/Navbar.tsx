@@ -1,6 +1,5 @@
-// File: src/components/layout/Navbar.tsx
 import { useKeycloak } from "@react-keycloak/web";
-import { Search } from "lucide-react"; // Using Lucide instead of Phosphor for React consistency
+import { Search } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Navbar = () => {

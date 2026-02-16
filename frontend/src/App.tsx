@@ -12,6 +12,11 @@ import AdminLayout from "./components/layout/AdminLayout";
 import HomePage from "./pages/Home/HomePage";
 import Dashboard from "./pages/Admin/Dashboard";
 import UserManagement from "./pages/Admin/UserManagement";
+import OrganizerManagement from "./pages/Admin/OrganizerManagement";
+import EventManagement from "./pages/Admin/EventManagement";
+import OrderManagement from "./pages/Admin/OrderManagement";
+import PromotionManagement from "./pages/Admin/PromotionManagement";
+import AiManagement from "./pages/Admin/AiManagement";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,30 +64,11 @@ function App() {
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="users" element={<UserManagement />} />
-              <Route
-                path="organizers"
-                element={
-                  <div className="p-8 text-xl font-bold">
-                    Giao diện Duyệt Ban Tổ chức
-                  </div>
-                }
-              />
-              <Route
-                path="events"
-                element={
-                  <div className="p-8 text-xl font-bold">
-                    Giao diện Quản lý Sự kiện
-                  </div>
-                }
-              />
-              <Route
-                path="orders"
-                element={
-                  <div className="p-8 text-xl font-bold">
-                    Giao diện Quản lý Đơn hàng (Đang xây dựng)
-                  </div>
-                }
-              />
+              <Route path="organizers" element={<OrganizerManagement />} />
+              <Route path="events" element={<EventManagement />} />
+              <Route path="orders" element={<OrderManagement />} />
+              <Route path="promotions" element={<PromotionManagement />} />
+              <Route path="ai" element={<AiManagement />} />
             </Route>
           </Routes>
         </Router>

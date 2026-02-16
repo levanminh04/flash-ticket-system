@@ -5,12 +5,13 @@ import {
   Users,
   UserCheck,
   CalendarDays,
-  Ticket,
   LogOut,
   Ticket as TicketIcon,
   Bell,
   CircleChevronLeft,
   CircleChevronRight,
+  Package,
+  Bot,
 } from "lucide-react";
 import { useKeycloak } from "@react-keycloak/web";
 
@@ -23,19 +24,29 @@ const sidebarLinks = [
   },
   { name: "Quản lý User", path: "/admin/users", icon: <Users size={20} /> },
   {
-    name: "Duyệt Ban Tổ chức",
+    name: "Quản lý ban tổ chức",
     path: "/admin/organizers",
     icon: <UserCheck size={20} />,
   },
   {
-    name: "Quản lý Sự kiện",
+    name: "Quản lý sự kiện",
     path: "/admin/events",
     icon: <CalendarDays size={20} />,
   },
   {
-    name: "Quản lý Đơn hàng",
+    name: "Quản lý đơn hàng",
     path: "/admin/orders",
-    icon: <Ticket size={20} />,
+    icon: <Package size={20} />,
+  },
+  {
+    name: "Quản lý khuyến mãi",
+    path: "/admin/promotions",
+    icon: <TicketIcon size={20} />,
+  },
+  {
+    name: "Trợ lý ảo",
+    path: "/admin/ai",
+    icon: <Bot size={20} />,
   },
 ];
 
