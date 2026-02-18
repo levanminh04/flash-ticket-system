@@ -830,10 +830,10 @@ db.organizer_profiles.insertOne({
     verifiedBy: "admin",
     documents: [
       {
-        type: "business_license",
+        type: "BUSINESS_LICENSE",    // ← UPPERCASE: khớp DocumentType enum
         url: "/documents/business_license.pdf",
         uploadedAt: new Date(),
-        status: "approved"
+        status: "APPROVED"           // ← UPPERCASE: khớp DocumentStatus enum
       }
     ]
   },

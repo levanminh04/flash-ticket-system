@@ -3,6 +3,7 @@ package com.flashticket.core.event.entity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.Type;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
@@ -169,10 +170,35 @@ public class Event {
     @Column(name = "banner_url", length = 500)
     private String bannerUrl;
 
-    // Relationships
-    
+    // ============================================================
+    // RELATIONSHIPS — Tất cả LAZY + @BatchSize
+    //
+    // TẠI SAO KHÔNG DÙNG @EntityGraph để fetch cả 3 cùng lúc?
+    //   → Gây MultipleBagFetchException: Hibernate không thể JOIN
+    //     nhiều List (Bag) cùng lúc vì tạo Cartesian Product.
+    //     Ví dụ: 4 images × 3 ticketTypes × 5 categories = 60 rows
+    //     cho chỉ 1 event → sai dữ liệu hoặc exception.
+    //
+    // GIẢI PHÁP — @BatchSize(size = 20):
+    //   Mỗi collection được load bằng 1 query riêng khi được access.
+    //   Hibernate gom IDs của các parent entities trong persistence
+    //   context thành 1 IN clause (tối đa 20 IDs mỗi batch):
+    //
+    //   Query 1: SELECT * FROM events JOIN venues ...          ← @EntityGraph
+    //   Query 2: SELECT * FROM event_categories                ← @BatchSize
+    //            WHERE event_id IN ('id1', 'id2', ...)         (khi getCategories())
+    //   Query 3: SELECT * FROM ticket_types                    ← @BatchSize
+    //            WHERE event_id IN ('id1', 'id2', ...)         (khi getTicketTypes())
+    //   Query 4: SELECT * FROM event_images                    ← @BatchSize
+    //            WHERE event_id IN ('id1', 'id2', ...)         (khi getImages())
+    //
+    //   Tổng: 4 queries nhỏ, không Cartesian, không exception.
+    //   size=20: phù hợp với page size mặc định (12), có buffer.
+    // ============================================================
+
     /**
-     * Many-to-Many relationship với event_schema.event_categories
+     * Many-to-Many với event_schema.event_categories.
+     * @BatchSize: load categories cho tối đa 20 events trong 1 IN query.
      */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -181,20 +207,23 @@ public class Event {
         joinColumns = @JoinColumn(name = "event_id"),
         inverseJoinColumns = @JoinColumn(name = "category_id")
     )
+    @BatchSize(size = 20)
     private List<Category> categories;
 
     /**
-     * One-to-Many relationship với TicketType
-     * Dùng cho price range filter
+     * One-to-Many với TicketType.
+     * @BatchSize: load ticket types cho tối đa 20 events trong 1 IN query.
      */
     @OneToMany(mappedBy = "event", fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
     private List<TicketType> ticketTypes;
-    
+
     /**
-     * One-to-Many relationship với EventImage
-     * Dùng cho image gallery
+     * One-to-Many với EventImage.
+     * @BatchSize: load images cho tối đa 20 events trong 1 IN query.
      */
     @OneToMany(mappedBy = "event", fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
     private List<EventImage> images;
 
     // Enums
