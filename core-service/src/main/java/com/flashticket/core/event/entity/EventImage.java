@@ -1,5 +1,6 @@
 package com.flashticket.core.event.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -30,7 +31,10 @@ public class EventImage {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    // Relationship
+    // Parent Event — @JsonIgnore để tránh circular reference:
+    // EventImage.event → Event.images → EventImage.event → ∞
+    // và EventImage.event → Event.ticketTypes → TicketType.event → ∞
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;

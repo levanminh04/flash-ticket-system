@@ -1,5 +1,6 @@
 package com.flashticket.core.event.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -68,6 +69,7 @@ public class Event {
     // Location
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "venue_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Venue venue;
 
     @Column(name = "online_event_url", length = 500)
