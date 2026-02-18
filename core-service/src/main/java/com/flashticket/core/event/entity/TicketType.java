@@ -1,5 +1,6 @@
 package com.flashticket.core.event.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -34,7 +35,9 @@ public class TicketType {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    // Parent Event
+    // Parent Event — @JsonIgnore để tránh circular reference - VÒNG LẶP VÔ TẬN:
+    // EventImage → event → ticketTypes → TicketType → event → ticketTypes → TicketType → event → ... → ∞
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;

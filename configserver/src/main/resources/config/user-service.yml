@@ -5,8 +5,8 @@ spring:
   # MongoDB Configuration
   data:
     mongodb:
-      uri: ${MONGO_URI:mongodb://13.239.118.235:27018/userdb}
-      database: ${MONGO_DATABASE:userdb}
+      uri: ${MONGO_URI:mongodb://13.239.118.235:27018/ticketbox_users}
+      database: ${MONGO_DATABASE:ticketbox_users}
   
   # RabbitMQ Configuration
   rabbitmq:

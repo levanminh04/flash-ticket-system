@@ -2,6 +2,9 @@ package com.flashticket.user.dto;
 
 import lombok.Data;
 
+/**
+ * Request DTO for creating/updating a User
+ */
 @Data
 public class UserRequest {
     private String username;
