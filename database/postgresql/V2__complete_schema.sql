@@ -256,13 +256,13 @@ CREATE TABLE event_schema.events (
     
     -- Status & Visibility
     status VARCHAR(50) DEFAULT 'DRAFT' NOT NULL,
-    visibility VARCHAR(50) DEFAULT 'PUBLIC',
+    visibility VARCHAR(50) DEFAULT 'PUBLIC', -- kiểm soát ai có quyền tìm thấy và nhìn thấy sự kiện trên ứng dụng/website. PUBLIC, PRIVATE, UNLISTED: có thể bán sự kiện nội bộ, pre-sale cho fan cứng
     is_featured BOOLEAN DEFAULT FALSE,
     
     -- Statistics (denormalized for performance)
     total_capacity INT DEFAULT 0,
     tickets_sold INT DEFAULT 0,
-    view_count INT DEFAULT 0,
+    view_count INT DEFAULT 0, -- Số lượt xem
     
     -- SEO
     meta_title VARCHAR(255),
@@ -353,13 +353,18 @@ COMMENT ON TABLE event_schema.event_images IS 'Ảnh event lưu trên Cloudinary
 -- Table: event_schema.ticket_types
 -- Mô tả: Loại vé của mỗi sự kiện (VIP, Regular, Early Bird, etc.)
 -- ----------------------------------------------------------------------------
+-- ticket_types là "loại vé" chứ không phải "tấm vé"
+-- booking_schema.tickets - tấm vé thực
+--
+--
+--
 CREATE TABLE event_schema.ticket_types (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
     -- Parent Event
     event_id UUID NOT NULL REFERENCES event_schema.events(id) ON DELETE CASCADE,
     
-    -- Sector (optional - for seat-based events)
+    -- Sector (optional - for seat-based events) --  khu vực
     sector_id UUID REFERENCES event_schema.venue_sectors(id) ON DELETE SET NULL,
     
     -- Basic Information

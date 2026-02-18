@@ -138,7 +138,7 @@ db.createCollection("users", {
           bsonType: "array",
           description: "Danh sách roles - sync từ Keycloak",
           items: {
-            enum: ["CUSTOMER", "ORGANIZER", "ADMIN", "SUPER_ADMIN"]
+            enum: ["BUYER", "ORGANIZER", "ADMIN", "SUPER_ADMIN"]
           },
           minItems: 1
         },
@@ -676,7 +676,7 @@ db.user_activity_logs.createIndex({ "timestamp": 1 }, { expireAfterSeconds: 7776
 db.users.insertOne({
   _id: "550e8400-e29b-41d4-a716-446655440001",
   keycloakId: "550e8400-e29b-41d4-a716-446655440001",
-  email: "customer@example.com",
+  email: "buyer@example.com",
   emailVerified: true,
   phone: "+84901234567",
   phoneVerified: false,
@@ -699,7 +699,7 @@ db.users.insertOne({
       country: "Vietnam"
     }
   ],
-  roles: ["CUSTOMER"],
+  roles: ["BUYER"],
   status: "ACTIVE",
   preferences: {
     language: "vi",
@@ -751,7 +751,7 @@ db.users.insertOne({
     bio: "Event Organizer chuyên nghiệp"
   },
   addresses: [],
-  roles: ["CUSTOMER", "ORGANIZER"],
+  roles: ["BUYER", "ORGANIZER"],
   status: "ACTIVE",
   preferences: {
     language: "vi",
