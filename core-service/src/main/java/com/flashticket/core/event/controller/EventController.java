@@ -1,5 +1,6 @@
 package com.flashticket.core.event.controller;
 
+import com.flashticket.core.event.dto.EventDetailResponse;
 import com.flashticket.core.event.dto.EventResponse;
 import com.flashticket.core.event.dto.EventSearchRequest;
 import com.flashticket.core.event.service.EventService;
@@ -76,8 +77,29 @@ public class EventController {
     }
     
     /**
+     * Get event detail by ID or slug
+     * ví dụ:
+     * - GET /api/events/rock-storm-2026
+     * - GET /api/events/a1b2c3d4-e5f6-7890-abcd-ef1234567890
+     * @param eventIdOrSlug UUID or slug
+     */
+    @GetMapping("/{eventIdOrSlug}")
+    public ResponseEntity<EventDetailResponse> getEventDetail(
+        @PathVariable String eventIdOrSlug
+    ) {
+        log.info("GET /api/events/{} - Fetching event detail", eventIdOrSlug);
+        
+        EventDetailResponse event = eventService.getEventByIdOrSlug(eventIdOrSlug);
+        
+        log.info("GET /api/events/{} - Successfully returned event: {}", 
+            eventIdOrSlug, event.getTitle());
+        
+        return ResponseEntity.ok(event);
+    }
+    
+    /**
      * Sort format: "field,direction"
-     * Examples:
+     * ví dụ:
      * - "startDatetime,asc"
      * - "createdAt,desc"
      * - "title,asc"

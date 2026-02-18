@@ -1,5 +1,11 @@
 package com.flashticket.user.model;
 
+/**
+ * User Role Enum
+ */
 public enum UserRole {
-    CUSTOMER, ADMIN
+    BUYER,
+    ORGANIZER,
+    ADMIN,
+    SUPER_ADMIN
 }

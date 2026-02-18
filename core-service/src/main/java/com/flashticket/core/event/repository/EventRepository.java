@@ -31,9 +31,24 @@ public interface EventRepository extends JpaRepository<Event, UUID>,
     Page<Event> findAll(Specification<Event> spec, Pageable pageable);
     
     /**
-     * Tìm event theo slug (không bị xóa)
-     * Eager load venue, images, ticketTypes cho detail page
+     * Find event by ID with eager loading
+     * 
+     * PERFORMANCE OPTIMIZATION:
+     * - @EntityGraph prevents N+1 queries
+     * - Single query with LEFT JOIN FETCH
+     * - Loads: venue, images, ticketTypes, categories in 1 query
      */
-    @EntityGraph(attributePaths = {"venue", "images", "ticketTypes"})
+    @EntityGraph(attributePaths = {"venue", "images", "ticketTypes", "categories"})
+    Optional<Event> findByIdAndIsDeletedFalse(UUID id);
+    
+    /**
+     * Find event by slug with eager loading
+     * 
+     * PERFORMANCE OPTIMIZATION:
+     * - @EntityGraph prevents N+1 queries
+     * - Single query with LEFT JOIN FETCH
+     * - Loads: venue, images, ticketTypes, categories in 1 query
+     */
+    @EntityGraph(attributePaths = {"venue", "images", "ticketTypes", "categories"})
     Optional<Event> findBySlugAndIsDeletedFalse(String slug);
 }

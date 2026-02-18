@@ -106,7 +106,7 @@ public class Event {
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private EventVisibility visibility = EventVisibility.PUBLIC;
+    private EventVisibility visibility = EventVisibility.PUBLIC; // kiểm soát ai có quyền tìm thấy và nhìn thấy sự kiện trên ứng dụng/website. PUBLIC, PRIVATE, UNLISTED: có thể bán sự kiện nội bộ, pre-sale cho fan cứng
 
     @Column(name = "is_featured")
     private Boolean isFeatured = false;
