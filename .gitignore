@@ -1,6 +1,7 @@
 # ============================================================================
 # TicketBox .gitignore
 # ============================================================================
+.gitignore
 
 # Environment Variables (CRITICAL - NEVER COMMIT SECRETS)
 .env
@@ -64,3 +65,4 @@ yarn-error.log*
 !gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
+/AI_CONTEXT.md
