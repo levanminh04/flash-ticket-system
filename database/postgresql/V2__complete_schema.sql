@@ -395,7 +395,8 @@ CREATE TABLE event_schema.ticket_types (
     
     -- Status
     status VARCHAR(50) DEFAULT 'ACTIVE',
-    is_visible BOOLEAN DEFAULT TRUE,
+    -- Không phải loại vé nào cũng được công khai cho tất cả mọi người trên website. 
+    is_visible BOOLEAN DEFAULT TRUE, -- true: hiển thị, false: không hiển thị
     
     -- Audit Columns
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,

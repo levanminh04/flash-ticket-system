@@ -115,8 +115,14 @@ logging:
     org.hibernate.SQL: DEBUG
 
 # Cloudinary Configuration
-# IMPORTANT: Set these as environment variables, NEVER commit secrets to Git
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:}
   api-key: ${CLOUDINARY_API_KEY:}
   api-secret: ${CLOUDINARY_API_SECRET:}
+
+
+# QR Code Signing Secret — HMAC-SHA256
+app:
+  qr:
+    secret-key: ${QR_SECRET_KEY:flashticket-qr-secret-change-in-prod-min32chars}
+
