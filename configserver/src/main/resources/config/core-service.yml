@@ -9,6 +9,14 @@ spring:
     password: 123456
     driver-class-name: org.postgresql.Driver
   
+  # File Upload Configuration
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB        # Max size per file
+      max-request-size: 10MB    # Max total request size
+      file-size-threshold: 1MB  # Threshold for writing to disk
+  
   jpa:
     database: POSTGRESQL
     hibernate:
@@ -46,6 +54,14 @@ spring:
     username: guest
     password: guest
 
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://13.239.118.235:9090/realms/flash-ticket
+
+
   # Kafka
   # kafka:
   #   bootstrap-servers: 13.239.118.235:9092
@@ -80,13 +96,8 @@ management:
       show-details: always
 
 # Spring Security OAuth2 - Keycloak
-# spring:
-#   security:
-#     oauth2:
-#       resourceserver:
-#         jwt:
-#           issuer-uri: http://13.239.118.235:9090/realms/flash-ticket
-#           jwk-set-uri: http://13.239.118.235:9090/realms/flash-ticket/protocol/openid-connect/certs
+
+
 
 # # Keycloak Client Config
 # keycloak:
@@ -102,3 +113,16 @@ logging:
     com.flashticket.core: DEBUG
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
+
+# Cloudinary Configuration
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+
+
+# QR Code Signing Secret — HMAC-SHA256
+app:
+  qr:
+    secret-key: ${QR_SECRET_KEY:flashticket-qr-secret-change-in-prod-min32chars}
+

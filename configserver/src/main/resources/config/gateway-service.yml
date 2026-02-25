@@ -1,57 +1,18 @@
 server:
   port: 8080
-
-spring:
-  cloud:
-    gateway:
-      routes:
-        # Route cho Core Service (Events, Categories, Bookings)
-        - id: core-service
-          uri: lb://CORE-SERVICE
-          predicates:
-            - Path=/api/v1/events/**, /api/v1/categories/**, /api/v1/venues/**, /api/v1/bookings/**
-        
-        # Route cho User Service
-        - id: user-service
-          uri: lb://USER-SERVICE
-          predicates:
-            - Path=/api/v1/users/**
-            
-        # Route cho Order Service (Thanh toán, Đơn hàng, Vé)
-        - id: order-service
-          uri: lb://ORDER-SERVICE
-          predicates:
-            - Path=/api/v1/orders/**, /api/v1/tickets/**, /api/v1/payments/**
-
-  # SECURITY & REDIS
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: http://13.239.118.235:9090/realms/flash-ticket
-          jwk-set-uri: http://13.239.118.235:9090/realms/flash-ticket/protocol/openid-connect/certs
-  data:
-    redis:
-      host: 13.239.118.235
-      port: 6379
-      timeout: 2000ms
-      lettuce: # Lettuce pool = Connection Pool cho Redis
-        pool:
-          max-active: 8 # tối đa 8 connection
-          max-idle: 8 # tối đa 8 rảnh. Nếu số connection rảnh vượt quá 8, chúng sẽ bị đóng bớt.
-          min-idle: 0 # tối thiểu 0 rảnh
-
 management:
   endpoints:
     web:
       exposure:
-        include: "*"  # Mở tất cả các cổng giám sát (health, info, beans, metrics...) qua HTTP
+        include: "*"
   endpoint:
     health:
-      show-details: always # Luôn hiển thị chi tiết trạng thái sức khỏe (thay vì chỉ hiện "UP")
+      show-details: always
   health:
-    circuitbreakers: # Tích hợp trạng thái của Circuit Breaker vào hệ thống Health Check
+    circuitbreakers:
       enabled: true
+
+
 
 # Circuit Breaker
 resilience4j:
@@ -66,3 +27,43 @@ resilience4j:
         failureRateThreshold: 50
         automaticTransitionFromOpenToHalfOpenEnabled: true
         slidingWindowType: count_based
+#logging:
+#  level:
+#    root: info
+#    org.springframework.cloud.gateway.route.RouteDefinitionLocator: INFO
+#    org.springframework.cloud.gateway: TRACE
+
+
+
+#spring.cloud.gateway.routes[0].id=product-service
+#spring.cloud.gateway.routes[0].uri=http://localhost:8081
+#spring.cloud.gateway.routes[0].predicates[0]=Path=/api/products/**
+#
+#spring.cloud.gateway.routes[1].id=user-service
+#spring.cloud.gateway.routes[1].uri=http://localhost:8082
+#spring.cloud.gateway.routes[1].predicates[0]=Path=/api/users/**
+#
+#spring.cloud.gateway.routes[2].id=order-service
+#spring.cloud.gateway.routes[2].uri=http://localhost:8083
+#spring.cloud.gateway.routes[2].predicates[0]=Path=/api/orders/**
+#spring.cloud.gateway.routes[2].predicates[1]=Path=/api/cart/**
+
+
+# SECURITY
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://13.239.118.235:9090/realms/flash-ticket
+          jwk-set-uri: http://13.239.118.235:9090/realms/flash-ticket/protocol/openid-connect/certs
+  data:
+    redis:
+      host: 13.239.118.235
+      port: 6379
+      timeout: 2000ms
+      lettuce: # Lettuce pool = Connection Pool cho Redis
+        pool:
+          max-active: 8 # tối đa 8 connection
+          max-idle: 8 # tối đa 8 rảnh Nếu số connection rảnh vượt quá 8, chúng sẽ bị đóng bớt.
+          min-idle: 0 # tối thiểu 0 rảnh
