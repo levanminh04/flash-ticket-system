@@ -17,6 +17,7 @@ import EventManagement from "./pages/Admin/EventManagement";
 import OrderManagement from "./pages/Admin/OrderManagement";
 import PromotionManagement from "./pages/Admin/PromotionManagement";
 import AiManagement from "./pages/Admin/AiManagement";
+import EventDetailPage from "./pages/Event/EventDetailPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,6 +61,7 @@ function App() {
           <Routes>
             <Route element={<PublicLayout />}>
               <Route path="/" element={<HomePage />} />
+              <Route path="/events/:id" element={<EventDetailPage />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
