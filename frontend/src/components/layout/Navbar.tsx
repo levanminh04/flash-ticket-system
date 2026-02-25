@@ -1,9 +1,10 @@
 import { useKeycloak } from "@react-keycloak/web";
 import { Search } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const Navbar = () => {
   const { keycloak, initialized } = useKeycloak();
+  const navigate = useNavigate();
 
   if (!initialized) {
     return <div className="p-4 text-center">Đang kết nối</div>;
@@ -24,6 +25,16 @@ const Navbar = () => {
               type="text"
               className="search-input"
               placeholder="Tìm sự kiện, nghệ sĩ, địa điểm"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const val = e.currentTarget.value.trim();
+                  if (val) {
+                    navigate(`/search?q=${encodeURIComponent(val)}`);
+                  } else {
+                    navigate("/search");
+                  }
+                }
+              }}
             />
           </div>
         </div>

@@ -9,7 +9,10 @@ import { ReactKeycloakProvider } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
 import Navbar from "./components/layout/Navbar";
 import AdminLayout from "./components/layout/AdminLayout";
+// User Pages
 import HomePage from "./pages/Home/HomePage";
+import SearchPage from "./pages/Search/SearchPage";
+import EventDetailPage from "./pages/Event/EventDetailPage";
 import Dashboard from "./pages/Admin/Dashboard";
 import UserManagement from "./pages/Admin/UserManagement";
 import OrganizerManagement from "./pages/Admin/OrganizerManagement";
@@ -17,7 +20,6 @@ import EventManagement from "./pages/Admin/EventManagement";
 import OrderManagement from "./pages/Admin/OrderManagement";
 import PromotionManagement from "./pages/Admin/PromotionManagement";
 import AiManagement from "./pages/Admin/AiManagement";
-import EventDetailPage from "./pages/Event/EventDetailPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,9 +61,11 @@ function App() {
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
           <Routes>
+            {/* Wrap other pages that should share the Navbar/Footer layout */}
             <Route element={<PublicLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/events/:id" element={<EventDetailPage />} />
+              <Route path="/search" element={<SearchPage />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
