@@ -126,3 +126,23 @@ app:
   qr:
     secret-key: ${QR_SECRET_KEY:flashticket-qr-secret-change-in-prod-min32chars}
 
+
+# ============================================================================
+# VNPay Payment Gateway — Sandbox Configuration
+# ============================================================================
+# Tài liệu: https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html
+# Merchant Admin: https://sandbox.vnpayment.vn/merchantv2/
+# SIT Test (IPN): https://sandbox.vnpayment.vn/vnpaygw-sit-testing/user/login
+#
+# Thẻ test NCB: 9704198526191432198 / NGUYEN VAN A / 07/15 / OTP: 123456
+# ============================================================================
+vnpay:
+  tmn-code: ${VNPAY_TMN_CODE:UVPHUAJF}
+  hash-secret: ${VNPAY_HASH_SECRET:ETWXSW8TEI0A4YLR58QBJJKC4WMOD3UW}
+  payment-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+  return-url: http://localhost:5173/payment/result
+  api-url: https://sandbox.vnpayment.vn/merchant_webapi/api/transaction
+  version: "2.1.0"
+  command: "pay"
+  locale: "vn"
+  currency-code: "VND"
