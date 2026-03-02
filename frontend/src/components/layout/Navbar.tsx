@@ -4,11 +4,7 @@ import { Search } from "lucide-react"; // Using Lucide instead of Phosphor for R
 import { Link } from "react-router-dom";
 
 const Navbar = () => {
-  const { keycloak, initialized } = useKeycloak();
-
-  if (!initialized) {
-    return <div className="p-4 text-center">Đang kết nối</div>;
-  }
+  const { keycloak } = useKeycloak();
 
   return (
     <nav className="navbar">
@@ -19,27 +15,51 @@ const Navbar = () => {
           </Link>
         </div>
         <div className="nav-center">
-          <div className="search-bar">
+          <form
+            className="search-bar"
+            autoComplete="off"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const searchStr = formData.get("search");
+              if (searchStr) {
+                window.location.href = `/search?search=${encodeURIComponent(searchStr.toString())}`;
+              } else {
+                window.location.href = "/search";
+              }
+            }}
+          >
             <Search className="search-icon" size={20} />
             <input
+              name="search"
               type="text"
               className="search-input"
               placeholder="Tìm sự kiện, nghệ sĩ, địa điểm"
             />
-          </div>
+          </form>
         </div>
         <div className="nav-right nav-actions">
-          {!keycloak.authenticated ? (
+          {!keycloak?.authenticated ? (
             <>
               <button
-                onClick={() => keycloak.login()}
+                onClick={() => keycloak?.login()}
                 className="btn btn-outline"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
                 Đăng nhập
               </button>
               <button
-                onClick={() => keycloak.register()}
+                onClick={() => keycloak?.register()}
                 className="btn btn-primary"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
                 Đăng ký
               </button>

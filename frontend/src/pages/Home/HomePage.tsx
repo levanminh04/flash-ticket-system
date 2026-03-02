@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { eventService } from "../../services/eventService";
+import { categoryService } from "../../services/categoryService";
+import { Category, EventSummary } from "../../types/api";
 import {
   Music,
   Trophy,
@@ -274,6 +277,10 @@ const paymentPartners = [
 
 export default function HomePage() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [featuredEvents, setFeaturedEvents] = useState<EventSummary[]>([]);
+  const [otherEvents, setOtherEvents] = useState<EventSummary[]>([]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) =>
@@ -281,6 +288,24 @@ export default function HomePage() {
       );
     }, 5000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const catRes = await categoryService.getCategories();
+        if (catRes && Array.isArray(catRes)) setCategories(catRes);
+
+        const featRes = await eventService.getFeaturedEvents(4);
+        if (featRes && Array.isArray(featRes)) setFeaturedEvents(featRes);
+
+        const evtsRes = await eventService.getEvents({ size: 8 });
+        if (evtsRes && evtsRes.content) setOtherEvents(evtsRes.content);
+      } catch (err) {
+        console.error("Lỗi fetch HomePage API", err);
+      }
+    };
+    loadData();
   }, []);
 
   const nextSlide = () =>
@@ -302,13 +327,27 @@ export default function HomePage() {
       <nav className="category-nav">
         <div className="container">
           <ul className="category-list">
-            {categories.map((cat) => (
-              <li className="category-item" key={cat.id}>
-                <a href="#" className="category-link">
-                  {cat.name}
-                </a>
+            <li className="category-item">
+              <Link to="/search" className="category-link">
+                Tất cả
+              </Link>
+            </li>
+            {categories.length > 0 ? (
+              categories.map((cat) => (
+                <li className="category-item" key={cat.id}>
+                  <Link
+                    to={`/search?category=${cat.slug || cat.id}`}
+                    className="category-link"
+                  >
+                    {cat.name}
+                  </Link>
+                </li>
+              ))
+            ) : (
+              <li className="category-item">
+                <span className="category-link">Đang tải...</span>
               </li>
-            ))}
+            )}
           </ul>
         </div>
       </nav>
@@ -360,19 +399,35 @@ export default function HomePage() {
             </a>
           </div>
           <div className="event-grid">
-            {mockEvents.map((event) => (
-              <article className="poster-card" key={event.id}>
-                <img src={event.image} alt={event.title} />
-                <div className="overlay">
-                  <h3 style={{ fontSize: "18px", marginBottom: "8px" }}>
-                    {event.title}
-                  </h3>
-                  <p style={{ color: "var(--primary-light)", fontWeight: 700 }}>
-                    {event.price}
-                  </p>
-                </div>
-              </article>
-            ))}
+            {(featuredEvents.length > 0
+              ? featuredEvents
+              : (mockEvents as any[])
+            )
+              .slice(0, 4)
+              .map((event) => (
+                <Link
+                  to={`/event/${event.slug || event.id}`}
+                  className="poster-card"
+                  key={event.id}
+                >
+                  <img
+                    src={event.bannerUrl || event.thumbnailUrl || event.image}
+                    alt={event.title}
+                  />
+                  <div className="overlay">
+                    <h3 style={{ fontSize: "18px", marginBottom: "8px" }}>
+                      {event.title}
+                    </h3>
+                    <p
+                      style={{ color: "var(--primary-light)", fontWeight: 700 }}
+                    >
+                      {event.minPrice
+                        ? `Từ ${event.minPrice.toLocaleString("vi-VN")} đ`
+                        : event.price || "Miễn phí"}
+                    </p>
+                  </div>
+                </Link>
+              ))}
           </div>
         </section>
 
@@ -458,36 +513,56 @@ export default function HomePage() {
             </a>
           </div>
           <div className="event-grid">
-            {liveMusicEvents.map((event) => (
-              <div
-                className="standard-card"
-                key={event.id}
-                style={{
-                  background: "white",
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                <div className="thumb-wrapper">
-                  <img src={event.image} alt={event.title} />
-                  <button className="card-heart-btn">
-                    <Heart size={18} />
-                  </button>
-                </div>
-                <div className="card-content">
-                  <h4 className="card-title">{event.title}</h4>
-                  <p className="card-meta">
-                    <Calendar size={14} className="inline mr-1" /> {event.date}
-                  </p>
-                  <p className="card-meta">
-                    <MapPin size={14} className="inline mr-1" />{" "}
-                    {event.location}
-                  </p>
-                  <p className="card-price">{event.price}</p>
-                </div>
-              </div>
-            ))}
+            {(otherEvents.length > 0 ? otherEvents : (liveMusicEvents as any[]))
+              .slice(0, 4)
+              .map((event) => (
+                <Link
+                  to={`/event/${event.slug || event.id}`}
+                  className="standard-card"
+                  key={event.id}
+                  style={{
+                    background: "white",
+                    borderRadius: "12px",
+                    overflow: "hidden",
+                    border: "1px solid var(--border)",
+                    display: "block",
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
+                  <div className="thumb-wrapper">
+                    <img
+                      src={event.thumbnailUrl || event.bannerUrl || event.image}
+                      alt={event.title}
+                    />
+                    <button className="card-heart-btn">
+                      <Heart size={18} />
+                    </button>
+                  </div>
+                  <div className="card-content">
+                    <h4 className="card-title">{event.title}</h4>
+                    <p className="card-meta">
+                      <Calendar size={14} className="inline mr-1" />{" "}
+                      {event.startDatetime
+                        ? new Date(event.startDatetime).toLocaleDateString(
+                            "vi-VN",
+                          )
+                        : event.date}
+                    </p>
+                    <p className="card-meta">
+                      <MapPin size={14} className="inline mr-1" />{" "}
+                      {event.venue
+                        ? `${event.venue.name}, ${event.venue.city}`
+                        : event.location}
+                    </p>
+                    <p className="card-price">
+                      {event.minPrice
+                        ? `Từ ${event.minPrice.toLocaleString("vi-VN")} đ`
+                        : event.price || "Miễn phí"}
+                    </p>
+                  </div>
+                </Link>
+              ))}
           </div>
         </section>
 
