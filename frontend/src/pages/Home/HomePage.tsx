@@ -9,21 +9,21 @@ import {
   MapPin,
   Calendar,
   Heart,
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
   CheckCircle2,
+  type LucideIcon,
 } from "lucide-react";
 
-const categories = [
-  { id: 1, name: "Nhạc sống", icon: null },
-  { id: 2, name: "Sân khấu và nghệ thuật", icon: null },
-  { id: 3, name: "Thể thao", icon: null },
-  { id: 4, name: "Hội thảo và workshop", icon: null },
-  { id: 5, name: "Tham quan và trải nghiệm", icon: null },
-  { id: 6, name: "Khác", icon: null },
-  { id: 7, name: "Vé bán lại", icon: null },
+const categories: { id: number; name: string; icon: LucideIcon }[] = [
+  { id: 1, name: "Nhạc sống", icon: Music },
+  { id: 2, name: "Sân khấu và nghệ thuật", icon: Star },
+  { id: 3, name: "Thể thao", icon: Trophy },
+  { id: 4, name: "Hội thảo và workshop", icon: MonitorPlay },
+  { id: 5, name: "Tham quan và trải nghiệm", icon: MapPin },
+  { id: 6, name: "Khác", icon: ShieldCheck },
+  { id: 7, name: "Vé bán lại", icon: Ticket },
 ];
 
 const bannerGroups = [
@@ -305,6 +305,7 @@ export default function HomePage() {
             {categories.map((cat) => (
               <li className="category-item" key={cat.id}>
                 <a href="#" className="category-link">
+                  <cat.icon size={16} className="inline mr-1" />
                   {cat.name}
                 </a>
               </li>
