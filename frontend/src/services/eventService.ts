@@ -5,7 +5,7 @@ export const eventService = {
   // Get all events with filters
   getEvents: async (params?: Record<string, any>) => {
     const response = await axiosClient.get<SpringPage<EventSummary>>(
-      "/api/v1/events",
+      "/api/events",
       { params },
     );
     return response.data;
@@ -14,7 +14,7 @@ export const eventService = {
   // Get featured events
   getFeaturedEvents: async (limit = 8) => {
     const response = await axiosClient.get<EventSummary[]>(
-      "/api/v1/events/featured",
+      "/api/events/featured",
       {
         params: { limit },
       },
@@ -24,7 +24,7 @@ export const eventService = {
 
   // Get event by Slug or ID
   getEventDetails: async (idOrSlug: string) => {
-    const response = await axiosClient.get<any>(`/api/v1/events/${idOrSlug}`);
+    const response = await axiosClient.get<any>(`/api/events/${idOrSlug}`);
     return response.data;
   },
 };

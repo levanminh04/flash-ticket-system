@@ -9,7 +9,7 @@ export const promotionService = {
     orderValue: number,
   ) => {
     const response = await axiosClient.post<PromotionValidation>(
-      "/api/v1/promotions/validate",
+      "/api/promotions/validate",
       { code, eventId, orderValue },
     );
     return response.data;

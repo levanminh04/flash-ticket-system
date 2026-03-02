@@ -5,7 +5,7 @@ export const paymentService = {
   // Create VNPay payment URL
   createPaymentUrl: async (orderId: string) => {
     const response = await axiosClient.post<PaymentUrlResponse>(
-      "/api/v1/payments/create-url",
+      "/api/payments/create-url",
       { orderId },
     );
     return response.data;
@@ -14,7 +14,7 @@ export const paymentService = {
   // Get payment result (verify callback from VNPay)
   getPaymentResult: async (queryParams: string) => {
     const response = await axiosClient.get<PaymentResult>(
-      `/api/v1/payments/result?${queryParams}`,
+      `/api/payments/result?${queryParams}`,
     );
     return response.data;
   },

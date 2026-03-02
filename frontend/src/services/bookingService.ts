@@ -28,7 +28,7 @@ export const bookingService = {
   // Get seat inventory for an event (seat map)
   getEventSeats: async (eventId: string) => {
     const response = await axiosClient.get<SeatInventory[]>(
-      `/api/v1/events/${eventId}/seats`,
+      `/api/events/${eventId}/seats`,
     );
     return response.data;
   },
@@ -36,7 +36,7 @@ export const bookingService = {
   // Get venue sectors for an event
   getEventSectors: async (eventId: string) => {
     const response = await axiosClient.get<VenueSector[]>(
-      `/api/v1/events/${eventId}/sectors`,
+      `/api/events/${eventId}/sectors`,
     );
     return response.data;
   },
@@ -44,7 +44,7 @@ export const bookingService = {
   // Lock a seat (temporary hold while selecting)
   lockSeat: async (eventId: string, seatId: string) => {
     const response = await axiosClient.post<{ success: boolean }>(
-      `/api/v1/events/${eventId}/seats/${seatId}/lock`,
+      `/api/events/${eventId}/seats/${seatId}/lock`,
     );
     return response.data;
   },
@@ -52,7 +52,7 @@ export const bookingService = {
   // Unlock a seat
   unlockSeat: async (eventId: string, seatId: string) => {
     const response = await axiosClient.post<{ success: boolean }>(
-      `/api/v1/events/${eventId}/seats/${seatId}/unlock`,
+      `/api/events/${eventId}/seats/${seatId}/unlock`,
     );
     return response.data;
   },
@@ -60,7 +60,7 @@ export const bookingService = {
   // Create a reservation (hold tickets/seats for checkout)
   createReservation: async (data: CreateReservationRequest) => {
     const response = await axiosClient.post<Reservation>(
-      "/api/v1/reservations",
+      "/api/reservations",
       data,
     );
     return response.data;
@@ -68,10 +68,7 @@ export const bookingService = {
 
   // Create an order from a reservation
   createOrder: async (data: CreateOrderRequest) => {
-    const response = await axiosClient.post<OrderResponse>(
-      "/api/v1/orders",
-      data,
-    );
+    const response = await axiosClient.post<OrderResponse>("/api/orders", data);
     return response.data;
   },
 };
