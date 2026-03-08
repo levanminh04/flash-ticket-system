@@ -49,6 +49,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/events/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/venues/**").permitAll()
+
+                        // VNPay IPN callback — server-to-server, không có JWT
+                        .requestMatchers(HttpMethod.GET, "/api/payments/vnpay-ipn").permitAll()
                         
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().authenticated()
