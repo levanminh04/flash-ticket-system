@@ -1,36 +1,29 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  type MouseEvent,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import {
   bookingService,
-  CreateOrderRequest,
+  CreateBookingRequest,
+  BookingItemRequest,
 } from "../../services/bookingService";
 import { paymentService } from "../../services/paymentService";
-import { promotionService } from "../../services/promotionService";
-import {
-  EventSummary,
-  Reservation,
-  TicketType,
-  PromotionValidation,
-} from "../../types/api";
-import {
-  Clock,
-  User,
-  Tag,
-  CreditCard,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-} from "lucide-react";
+import { EventSummary, TicketType } from "../../types/api";
+import { Clock, User, Tag, CreditCard, AlertTriangle } from "lucide-react";
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { keycloak } = useKeycloak();
+  const { keycloak, initialized } = useKeycloak();
 
   // Data from session
-  const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [bookingItems, setBookingItems] = useState<BookingItemRequest[]>([]);
   const [event, setEvent] = useState<EventSummary | null>(null);
-  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
 
   // Form
   const [customerName, setCustomerName] = useState("");
@@ -40,12 +33,9 @@ export default function CheckoutPage() {
 
   // Voucher
   const [voucherCode, setVoucherCode] = useState("");
-  const [voucherResult, setVoucherResult] =
-    useState<PromotionValidation | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
 
-  // Countdown
-  const [timeLeft, setTimeLeft] = useState<number>(0);
+  // Countdown (client-side 15 min)
+  const [timeLeft, setTimeLeft] = useState<number>(15 * 60);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
 
   // Submit
@@ -53,20 +43,20 @@ export default function CheckoutPage() {
 
   // ─── Load session data ──────────────────────────────────
   useEffect(() => {
-    const resData = sessionStorage.getItem("reservation");
+    const itemsData = sessionStorage.getItem("bookingItems");
     const eventData = sessionStorage.getItem("bookingEvent");
     const typesData = sessionStorage.getItem("bookingTicketTypes");
 
-    if (!resData || !eventData) {
+    if (!itemsData || !eventData) {
       navigate("/");
       return;
     }
 
-    const res = JSON.parse(resData) as Reservation;
+    const items = JSON.parse(itemsData) as BookingItemRequest[];
     const evt = JSON.parse(eventData) as EventSummary;
     const types = typesData ? (JSON.parse(typesData) as TicketType[]) : [];
 
-    setReservation(res);
+    setBookingItems(items);
     setEvent(evt);
     setTicketTypes(types);
 
@@ -79,16 +69,16 @@ export default function CheckoutPage() {
       setCustomerEmail(keycloak.tokenParsed.email || "");
     }
 
-    // Setup countdown
-    const expiresAt = new Date(res.expiresAt).getTime();
+    // Setup client-side countdown (15 min)
+    const expiresAt = Date.now() + 15 * 60 * 1000;
     const updateTimer = () => {
       const now = Date.now();
       const diff = Math.max(0, Math.floor((expiresAt - now) / 1000));
       setTimeLeft(diff);
       if (diff <= 0) {
         clearInterval(timerRef.current);
-        alert("Thời gian giữ chỗ đã hết! Vui lòng chọn vé lại.");
-        sessionStorage.removeItem("reservation");
+        alert("Thời gian đã hết! Vui lòng chọn vé lại.");
+        sessionStorage.removeItem("bookingItems");
         navigate(-1);
       }
     };
@@ -102,88 +92,119 @@ export default function CheckoutPage() {
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const countdownStr = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-  const isLowTime = timeLeft <= 120; // less than 2 minutes
+  const isLowTime = timeLeft <= 120;
 
-  // ─── Subtotal and discount ──────────────────────────────
-  const subtotal = reservation?.totalAmount || 0;
-  const discountAmount = voucherResult?.valid
-    ? voucherResult.calculatedDiscount || 0
-    : 0;
-  const totalAmount = Math.max(0, subtotal - discountAmount);
+  // ─── Subtotal computed from items + ticket types ────────
+  const subtotal = bookingItems.reduce((sum, item) => {
+    const tt = ticketTypes.find((t) => t.id === item.ticketTypeId);
+    return sum + (tt?.price || 0) * item.quantity;
+  }, 0);
 
   // ─── Validate Form ──────────────────────────────────────
   const validateForm = useCallback((): boolean => {
     const errors: Record<string, string> = {};
+
     if (!customerName.trim()) errors.customerName = "Vui lòng nhập họ tên";
+
     if (!customerEmail.trim()) {
       errors.customerEmail = "Vui lòng nhập email";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
       errors.customerEmail = "Email không hợp lệ";
     }
-    if (!customerPhone.trim()) {
+
+    const rawPhone = customerPhone.replace(/\s/g, "");
+    if (!rawPhone) {
       errors.customerPhone = "Vui lòng nhập số điện thoại";
-    } else if (!/^[0-9]{9,11}$/.test(customerPhone.replace(/\s/g, ""))) {
-      errors.customerPhone = "Số điện thoại không hợp lệ";
+    } else if (!/^(?:\+84|0)[0-9]{8,10}$/.test(rawPhone)) {
+      errors.customerPhone =
+        "Số điện thoại không hợp lệ (bắt đầu bằng 0 hoặc +84).";
     }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [customerName, customerEmail, customerPhone]);
 
-  // ─── Voucher Validation ─────────────────────────────────
-  const handleValidateVoucher = async () => {
-    if (!voucherCode.trim()) return;
-    setIsValidating(true);
-    try {
-      const result = await promotionService.validateVoucher(
-        voucherCode.trim().toUpperCase(),
-        event!.id,
-        subtotal,
-      );
-      setVoucherResult(result);
-    } catch (err: any) {
-      setVoucherResult({
-        valid: false,
-        message: err.response?.data?.message || "Mã voucher không hợp lệ.",
-      });
-    } finally {
-      setIsValidating(false);
-    }
-  };
+  // ─── Submit: createBooking → initiatePayment → redirect ─
+  const handlePayment = async (e?: MouseEvent<HTMLButtonElement>) => {
+    e?.preventDefault();
+    e?.stopPropagation();
 
-  // ─── Submit Payment ─────────────────────────────────────
-  const handlePayment = async () => {
     if (!validateForm()) return;
-    if (!reservation) return;
+    if (!event || bookingItems.length === 0) return;
 
     setIsSubmitting(true);
     try {
-      // 1. Create order
-      const orderData: CreateOrderRequest = {
-        reservationId: reservation.id,
+      // 1. Create booking (POST /api/bookings)
+      const normalizedPhone = customerPhone.replace(/\s/g, "");
+
+      const bookingRequest: CreateBookingRequest = {
+        eventId: event.id,
+        items: bookingItems,
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim(),
-        customerPhone: customerPhone.trim(),
-        promotionCode: voucherResult?.valid
-          ? voucherCode.trim().toUpperCase()
-          : undefined,
+        customerPhone: normalizedPhone,
+        promotionCode: voucherCode.trim() || undefined,
       };
 
-      const order = await bookingService.createOrder(orderData);
+      let orderId = "";
+      let orderNumber = "";
+      let paymentUrl = "";
 
-      // 2. Get VNPay URL
-      const paymentData = await paymentService.createPaymentUrl(order.id);
+      // Backend source hiện tại: create booking -> initiate payment.
+      const booking = await bookingService.createBooking(bookingRequest);
+      orderId = booking.orderId;
+      orderNumber = booking.orderNumber;
+
+      const payment = await paymentService.initiatePayment(orderId);
+      paymentUrl = payment.paymentUrl?.trim() || "";
 
       // 3. Clean up session
-      sessionStorage.removeItem("reservation");
+      sessionStorage.removeItem("bookingItems");
       sessionStorage.removeItem("bookingEvent");
       sessionStorage.removeItem("bookingTicketTypes");
 
-      // 4. Redirect to VNPay
-      window.location.href = paymentData.paymentUrl;
+      // Save order info for payment result page
+      if (orderId) {
+        sessionStorage.setItem("lastOrderId", orderId);
+      }
+      if (orderNumber) {
+        sessionStorage.setItem("lastOrderNumber", orderNumber);
+      }
+
+      // 4. Redirect to VNPay when URL is available.
+      if (paymentUrl) {
+        if (/^https?:\/\//i.test(paymentUrl)) {
+          window.location.assign(paymentUrl);
+        } else {
+          navigate(paymentUrl.startsWith("/") ? paymentUrl : `/${paymentUrl}`);
+        }
+        return;
+      }
+
+      // Fallback: still show payment result page if payment URL is missing.
+      navigate("/payment-result", {
+        replace: true,
+        state: { fromCheckout: true },
+      });
     } catch (err: any) {
       console.error("Payment error:", err);
+      const status = err?.response?.status;
+      if (status === 503) {
+        alert(
+          "Hệ thống thanh toán đang tạm bận (503). Vui lòng thử lại sau vài giây.",
+        );
+        return;
+      }
+      if (status === 405) {
+        alert(
+          "Gateway/backend đang lệch cấu hình endpoint thanh toán (405). Vui lòng thử lại hoặc kiểm tra service backend.",
+        );
+        return;
+      }
       alert(
-        err.response?.data?.message ||
+        err?.response?.data?.message ||
+          err?.response?.data?.error?.message ||
+          err?.response?.data?.error?.code ||
           "Có lỗi xảy ra khi tạo thanh toán. Vui lòng thử lại.",
       );
     } finally {
@@ -199,10 +220,43 @@ export default function CheckoutPage() {
     ? new Date((event as any)?.schedule?.startDatetime || event.startDatetime)
     : null;
 
-  if (!reservation || !event) {
+  if (!event || bookingItems.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
         <p>Đang tải...</p>
+      </div>
+    );
+  }
+
+  if (!initialized) {
+    return (
+      <div style={{ textAlign: "center", padding: "100px" }}>
+        <div className="loading-spinner" style={{ margin: "0 auto 16px" }} />
+        <p>Đang xác thực đăng nhập...</p>
+      </div>
+    );
+  }
+
+  if (!keycloak?.authenticated) {
+    return (
+      <div style={{ textAlign: "center", padding: "100px" }}>
+        <p style={{ marginBottom: 8 }}>Phiên đăng nhập chưa sẵn sàng.</p>
+        <p
+          style={{ color: "var(--text-muted)", fontSize: 14, marginBottom: 16 }}
+        >
+          Vui lòng đăng nhập để tiếp tục thanh toán.
+        </p>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            keycloak?.login({
+              redirectUri: window.location.origin + "/checkout",
+            });
+          }}
+        >
+          Đăng nhập
+        </button>
       </div>
     );
   }
@@ -259,7 +313,9 @@ export default function CheckoutPage() {
             <div className={`countdown-box ${isLowTime ? "warning" : ""}`}>
               <Clock size={20} className="countdown-icon" />
               <span className="countdown-time">{countdownStr}</span>
-              <span className="countdown-text">Thời gian giữ chỗ còn lại</span>
+              <span className="countdown-text">
+                Thời gian còn lại để hoàn tất
+              </span>
               {isLowTime && <AlertTriangle size={16} />}
             </div>
 
@@ -338,44 +394,22 @@ export default function CheckoutPage() {
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="Nhập mã voucher"
+                  placeholder="Nhập mã voucher (nếu có)"
                   value={voucherCode}
                   onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && handleValidateVoucher()
-                  }
                 />
-                <button
-                  className="btn btn-primary btn-apply"
-                  onClick={handleValidateVoucher}
-                  disabled={!voucherCode.trim() || isValidating}
-                >
-                  {isValidating ? "Đang kiểm tra..." : "Áp dụng"}
-                </button>
               </div>
 
-              {voucherResult && (
+              {voucherCode.trim() && (
                 <div
-                  className={`voucher-result ${voucherResult.valid ? "success" : "error"}`}
+                  className="voucher-result"
+                  style={{
+                    color: "var(--text-muted)",
+                    fontSize: 13,
+                    marginTop: 8,
+                  }}
                 >
-                  {voucherResult.valid ? (
-                    <>
-                      <CheckCircle size={16} />
-                      <span>
-                        Áp dụng thành công! Giảm{" "}
-                        {voucherResult.discountType === "PERCENTAGE"
-                          ? `${voucherResult.discountValue}%`
-                          : `${voucherResult.calculatedDiscount?.toLocaleString("vi-VN")} đ`}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <XCircle size={16} />
-                      <span>
-                        {voucherResult.message || "Mã voucher không hợp lệ"}
-                      </span>
-                    </>
-                  )}
+                  <span>Mã sẽ được áp dụng khi thanh toán</span>
                 </div>
               )}
             </div>
@@ -406,17 +440,24 @@ export default function CheckoutPage() {
               </div>
 
               <div className="checkout-items">
-                {reservation.items.map((item, idx) => (
-                  <div key={idx} className="checkout-item">
-                    <span className="item-label">
-                      {item.ticketTypeName} x{item.quantity}
-                    </span>
-                    <span className="item-value">
-                      {(item.unitPrice * item.quantity).toLocaleString("vi-VN")}{" "}
-                      đ
-                    </span>
-                  </div>
-                ))}
+                {bookingItems.map((item, idx) => {
+                  const tt = ticketTypes.find(
+                    (t) => t.id === item.ticketTypeId,
+                  );
+                  return (
+                    <div key={idx} className="checkout-item">
+                      <span className="item-label">
+                        {tt?.name || "Vé"} x{item.quantity}
+                      </span>
+                      <span className="item-value">
+                        {((tt?.price || 0) * item.quantity).toLocaleString(
+                          "vi-VN",
+                        )}{" "}
+                        đ
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="checkout-pricing">
@@ -425,22 +466,16 @@ export default function CheckoutPage() {
                   <span>{subtotal.toLocaleString("vi-VN")} đ</span>
                 </div>
 
-                {discountAmount > 0 && (
-                  <div className="pricing-row discount">
-                    <span>Giảm giá ({voucherCode})</span>
-                    <span>-{discountAmount.toLocaleString("vi-VN")} đ</span>
-                  </div>
-                )}
-
                 <div className="pricing-row total">
                   <span>Tổng cộng</span>
                   <span className="amount">
-                    {totalAmount.toLocaleString("vi-VN")} đ
+                    {subtotal.toLocaleString("vi-VN")} đ
                   </span>
                 </div>
               </div>
 
               <button
+                type="button"
                 className="btn-pay"
                 onClick={handlePayment}
                 disabled={isSubmitting || timeLeft <= 0}
@@ -453,7 +488,7 @@ export default function CheckoutPage() {
                 ) : (
                   <>
                     <CreditCard size={18} />
-                    Thanh toán {totalAmount.toLocaleString("vi-VN")} đ
+                    Thanh toán {subtotal.toLocaleString("vi-VN")} đ
                   </>
                 )}
               </button>

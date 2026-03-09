@@ -1,47 +1,110 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { paymentService } from "../../services/paymentService";
-import { PaymentResult as PaymentResultType } from "../../types/api";
+import {
+  paymentService,
+  PaymentStatusResponse,
+} from "../../services/paymentService";
 import { CheckCircle, XCircle, Home, Ticket } from "lucide-react";
+
+interface DisplayResult {
+  success: boolean;
+  orderNumber?: string;
+  transactionNumber?: string;
+  amount?: number;
+  message?: string;
+}
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
-  const [result, setResult] = useState<PaymentResultType | null>(null);
+  const [result, setResult] = useState<DisplayResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   useEffect(() => {
-    const queryString = searchParams.toString();
+    const vnpResponseCode = searchParams.get("vnp_ResponseCode");
+    const vnpAmount = searchParams.get("vnp_Amount");
+    const orderId = sessionStorage.getItem("lastOrderId");
+    const orderNumber = sessionStorage.getItem("lastOrderNumber");
 
-    if (!queryString) {
+    // If no VNPay params and no saved order, nothing to show
+    if (!vnpResponseCode && !orderId) {
       setResult({ success: false, message: "Không có dữ liệu thanh toán." });
       setIsLoading(false);
       return;
     }
 
-    // Call backend to verify VNPay callback
-    paymentService
-      .getPaymentResult(queryString)
-      .then((data) => {
-        setResult(data);
-      })
-      .catch((err) => {
-        console.error("Failed to verify payment:", err);
-        // Fallback: parse VNPay params directly
-        const responseCode = searchParams.get("vnp_ResponseCode");
-        const txnRef = searchParams.get("vnp_TxnRef");
-        const amount = searchParams.get("vnp_Amount");
+    // Quick display from VNPay redirect params
+    const quickSuccess = vnpResponseCode === "00";
+    const quickAmount = vnpAmount ? parseInt(vnpAmount) / 100 : undefined;
 
-        setResult({
-          success: responseCode === "00",
-          orderNumber: txnRef || undefined,
-          amount: amount ? parseInt(amount) / 100 : undefined,
-          message:
-            responseCode === "00"
-              ? "Thanh toán thành công!"
-              : "Thanh toán không thành công. Vui lòng thử lại.",
-        });
-      })
-      .finally(() => setIsLoading(false));
+    // If we have orderId, poll backend for confirmed status
+    if (orderId) {
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      const pollStatus = async () => {
+        try {
+          const status: PaymentStatusResponse =
+            await paymentService.getPaymentStatus(orderId);
+
+          if (status.orderStatus !== "PENDING" || attempts >= maxAttempts) {
+            clearInterval(pollRef.current);
+            const isConfirmed = status.orderStatus === "CONFIRMED";
+            const latestTx = status.transactions?.[0];
+
+            setResult({
+              success: isConfirmed,
+              orderNumber: orderNumber || undefined,
+              transactionNumber: latestTx?.transactionNumber,
+              amount: Number(status.totalAmount) || quickAmount,
+              message: isConfirmed
+                ? "Thanh toán thành công!"
+                : `Thanh toán không thành công (${status.orderStatus}). Vui lòng thử lại.`,
+            });
+            setIsLoading(false);
+            sessionStorage.removeItem("lastOrderId");
+            sessionStorage.removeItem("lastOrderNumber");
+            return;
+          }
+          attempts++;
+        } catch (err) {
+          console.error("Failed to poll payment status:", err);
+          clearInterval(pollRef.current);
+          const status = (err as any)?.response?.status;
+          const unavailableMessage =
+            "Hệ thống thanh toán đang xử lý chậm. Vui lòng vào Đơn hàng của tôi để kiểm tra lại sau.";
+          // Fallback to VNPay params
+          setResult({
+            success: quickSuccess && status !== 503,
+            orderNumber: orderNumber || undefined,
+            amount: quickAmount,
+            message:
+              status === 503
+                ? unavailableMessage
+                : quickSuccess
+                  ? "Thanh toán thành công!"
+                  : "Thanh toán không thành công. Vui lòng thử lại.",
+          });
+          setIsLoading(false);
+        }
+      };
+
+      // First poll immediately, then every 3 seconds
+      pollStatus();
+      pollRef.current = setInterval(pollStatus, 3000);
+    } else {
+      // No orderId saved, use VNPay params only
+      setResult({
+        success: quickSuccess,
+        amount: quickAmount,
+        message: quickSuccess
+          ? "Thanh toán thành công!"
+          : "Thanh toán không thành công. Vui lòng thử lại.",
+      });
+      setIsLoading(false);
+    }
+
+    return () => clearInterval(pollRef.current);
   }, [searchParams]);
 
   if (isLoading) {

@@ -2,8 +2,10 @@
 import axios from "axios";
 import keycloak from "./keycloak";
 
+const baseURL = import.meta.env.VITE_API_GATEWAY_URL;
+
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_GATEWAY_URL,
+  baseURL: baseURL || undefined,
   headers: {
     "Content-Type": "application/json",
   },
