@@ -200,7 +200,7 @@ public class VNPayGateway implements PaymentGateway {
     private String buildHashData(Map<String, String> params) {
         return params.entrySet().stream()
             .filter(e -> e.getValue() != null && !e.getValue().isBlank())
-            .map(e -> e.getKey() + "=" + e.getValue())
+            .map(e -> e.getKey() + "=" + encodeValue(e.getValue()))
             .collect(Collectors.joining("&"));
     }
 
@@ -211,8 +211,11 @@ public class VNPayGateway implements PaymentGateway {
     private String buildQueryString(Map<String, String> params) {
         return params.entrySet().stream()
             .filter(e -> e.getValue() != null && !e.getValue().isBlank())
-            .map(e -> e.getKey() + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
+            .map(e -> e.getKey() + "=" + encodeValue(e.getValue()))
             .collect(Collectors.joining("&"));
+    }
+    private String encodeValue(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     /**

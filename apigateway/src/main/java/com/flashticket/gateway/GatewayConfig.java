@@ -41,9 +41,9 @@ public class GatewayConfig {
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
                 // Core Service - Events, Bookings, Payments, Categories
-                .route("core-service", r -> r
-                        .path("/api/events/**", "/api/bookings/**", "/api/payments/**", 
-                              "/api/categories/**", "/api/organizer/**", "/api/admin/**")
+                .route("core-service-read", r -> r
+                        .path("/api/events/**", "/api/categories/**").and().method(HttpMethod.GET)
+                        
                         .filters(f -> f
                                 .retry(retryConfig -> retryConfig
                                         .setRetries(3)
@@ -60,7 +60,15 @@ public class GatewayConfig {
                         )
                         .uri("lb://CORE-SERVICE")
                 )
-                
+                                .route("core-service-write", r -> r
+                                                .path("/api/bookings/**", "/api/orders/**", "/api/tickets/**",
+                                                                "/api/payments/**",
+                                                                "/api/organizer/**", "/api/admin/**")
+                                                .filters(f -> f
+                                                                .requestRateLimiter(config -> config
+                                                                                .setRateLimiter(redisRateLimiter())
+                                                                                .setKeyResolver(hostNameKeyResolver())))
+                                                .uri("lb://CORE-SERVICE"))
                 // User Service - User profiles, authentication
                 .route("user-service", r -> r
                         .path("/api/users/**")

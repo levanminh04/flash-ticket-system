@@ -58,6 +58,7 @@ public class SecurityConfig {
                         // Infrastructure
                         .pathMatchers("/actuator/health", "/actuator/info").permitAll()
                         .pathMatchers("/eureka/**").permitAll()
+                        .pathMatchers("/fallback/**").permitAll()
                         
                         // User Service 
                         .pathMatchers("/api/users/admin/**").hasAuthority("ROLE_ADMIN")
@@ -87,6 +88,8 @@ public class SecurityConfig {
                         
                         // Core Service
                         .pathMatchers("/api/bookings/**").authenticated()
+                        .pathMatchers("/api/orders/**").authenticated()
+                        .pathMatchers("/api/tickets/**").authenticated()
                         .pathMatchers("/api/payments/**").authenticated()
                         
                         // AI Service 

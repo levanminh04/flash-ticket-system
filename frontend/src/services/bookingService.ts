@@ -1,22 +1,14 @@
 import axiosClient from "../lib/axiosClient";
-import {
-  SeatInventory,
-  Reservation,
-  OrderResponse,
-  VenueSector,
-} from "../types/api";
 
-export interface CreateReservationRequest {
-  eventId: string;
-  items: {
-    ticketTypeId: string;
-    quantity: number;
-    seatIds?: string[];
-  }[];
+export interface BookingItemRequest {
+  ticketTypeId: string;
+  quantity: number;
+  seatIds?: string[];
 }
 
-export interface CreateOrderRequest {
-  reservationId: string;
+export interface CreateBookingRequest {
+  eventId: string;
+  items: BookingItemRequest[];
   customerName: string;
   customerEmail: string;
   customerPhone: string;
@@ -24,51 +16,37 @@ export interface CreateOrderRequest {
   customerNote?: string;
 }
 
+export interface BookingResponseItem {
+  id: string;
+  ticketTypeId: string;
+  ticketTypeName: string;
+  sectorName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface BookingResponse {
+  orderId: string;
+  orderNumber: string;
+  subtotal: number;
+  discountAmount: number;
+  totalAmount: number;
+  currency: string;
+  expiresAt: string;
+  status: string;
+  items: BookingResponseItem[];
+}
+
 export const bookingService = {
-  // Get seat inventory for an event (seat map)
-  getEventSeats: async (eventId: string) => {
-    const response = await axiosClient.get<SeatInventory[]>(
-      `/api/events/${eventId}/seats`,
-    );
-    return response.data;
-  },
-
-  // Get venue sectors for an event
-  getEventSectors: async (eventId: string) => {
-    const response = await axiosClient.get<VenueSector[]>(
-      `/api/events/${eventId}/sectors`,
-    );
-    return response.data;
-  },
-
-  // Lock a seat (temporary hold while selecting)
-  lockSeat: async (eventId: string, seatId: string) => {
-    const response = await axiosClient.post<{ success: boolean }>(
-      `/api/events/${eventId}/seats/${seatId}/lock`,
-    );
-    return response.data;
-  },
-
-  // Unlock a seat
-  unlockSeat: async (eventId: string, seatId: string) => {
-    const response = await axiosClient.post<{ success: boolean }>(
-      `/api/events/${eventId}/seats/${seatId}/unlock`,
-    );
-    return response.data;
-  },
-
-  // Create a reservation (hold tickets/seats for checkout)
-  createReservation: async (data: CreateReservationRequest) => {
-    const response = await axiosClient.post<Reservation>(
-      "/api/reservations",
+  // Backend source hiện tại: chỉ có POST /api/bookings
+  createBooking: async (
+    data: CreateBookingRequest,
+  ): Promise<BookingResponse> => {
+    const response = await axiosClient.post<BookingResponse>(
+      "/api/bookings",
       data,
     );
-    return response.data;
-  },
-
-  // Create an order from a reservation
-  createOrder: async (data: CreateOrderRequest) => {
-    const response = await axiosClient.post<OrderResponse>("/api/orders", data);
     return response.data;
   },
 };

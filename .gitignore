@@ -66,3 +66,11 @@ yarn-error.log*
 !**/src/main/**/build/
 !**/src/test/**/build/
 /AI_CONTEXT.md
+API_DATABASE_DOCS.md
+API_Docs.md
+BACKEND_CHANGES.md
+BACKEND_RUN_GUIDE.md
+Frontend_Docs.md
+FRONTEND_PAGES_PLAN.md
+database/postgresql/Database.sql
+run-all-services.ps1
