@@ -7,6 +7,9 @@ import EventDetailPage from "./pages/EventDetail/EventDetailPage";
 import SelectTicketPage from "./pages/SelectTicket/SelectTicketPage";
 import CheckoutPage from "./pages/Checkout/CheckoutPage";
 import PaymentResultPage from "./pages/Payment/PaymentResultPage";
+import ProfilePage from "./pages/Profile/ProfilePage";
+import MyTicketsPage from "./pages/MyTickets/MyTicketsPage";
+import MyOrdersPage from "./pages/MyOrders/MyOrdersPage";
 
 import { ReactKeycloakProvider } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
@@ -26,15 +29,9 @@ function App() {
     <ReactKeycloakProvider
       authClient={keycloak}
       initOptions={{
-        onLoad: "check-sso",
-        silentCheckSsoRedirectUri:
-          window.location.origin + "/silent-check-sso.html",
         checkLoginIframe: false,
         pkceMethod: "S256",
-      }}
-      onEvent={(event, error) => {
-        if (event === "onAuthError")
-          console.error("Keycloak Auth Error:", error);
+        useNonce: false,
       }}
     >
       <QueryClientProvider client={queryClient}>
@@ -50,6 +47,10 @@ function App() {
               <Route path="/events/:slug/book" element={<SelectTicketPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/payment-result" element={<PaymentResultPage />} />
+              <Route path="/payment/result" element={<PaymentResultPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/my-tickets" element={<MyTicketsPage />} />
+              <Route path="/my-orders" element={<MyOrdersPage />} />
             </Routes>
           </div>
         </Router>

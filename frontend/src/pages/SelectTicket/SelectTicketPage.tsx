@@ -2,13 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { eventService } from "../../services/eventService";
-import { bookingService } from "../../services/bookingService";
-import {
-  EventSummary,
-  TicketType,
-  VenueSector,
-  SeatInventory,
-} from "../../types/api";
+import { EventSummary, TicketType } from "../../types/api";
 import {
   MapPin,
   Calendar,
@@ -115,15 +109,12 @@ export default function SelectTicketPage() {
   // Data
   const [event, setEvent] = useState<EventSummary | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
-  const [apiSectors, setApiSectors] = useState<VenueSector[]>([]);
-  const [seatInventory, setSeatInventory] = useState<SeatInventory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Selection
   const [quantities, setQuantities] = useState<TicketSelection>({});
   const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Zoom/Pan
   const [zoom, setZoom] = useState(1);
@@ -132,7 +123,6 @@ export default function SelectTicketPage() {
   const panStart = useRef({ x: 0, y: 0 });
   const mapRef = useRef<HTMLDivElement>(null);
 
-  const hasApiSeats = seatInventory.length > 0;
   const generated = useMemo(
     () => generateSeatsFromTicketTypes(ticketTypes),
     [ticketTypes],
@@ -155,21 +145,6 @@ export default function SelectTicketPage() {
           initQty[t.id] = 0;
         });
         setQuantities(initQty);
-
-        if (data.id) {
-          try {
-            const [seatsData, sectorsData] = await Promise.all([
-              bookingService.getEventSeats(data.id),
-              bookingService.getEventSectors(data.id),
-            ]);
-            if (seatsData && seatsData.length > 0) {
-              setSeatInventory(seatsData);
-              setApiSectors(sectorsData);
-            }
-          } catch {
-            // No seat data — use generated
-          }
-        }
         setError(null);
       })
       .catch((err: any) => {
@@ -184,48 +159,6 @@ export default function SelectTicketPage() {
     Object.values(quantities).reduce((a, b) => a + b, 0) + selectedSeats.length;
   const minPerOrder = (event as any)?.minTicketsPerOrder || 1;
   const maxPerOrder = (event as any)?.maxTicketsPerOrder || 10;
-
-  // API seat click
-  const handleApiSeatClick = useCallback(
-    async (seat: SeatInventory) => {
-      if (seat.status !== "AVAILABLE") return;
-
-      const already = selectedSeats.find((s) => s.seatId === seat.seatId);
-      if (already) {
-        setSelectedSeats((prev) =>
-          prev.filter((s) => s.seatId !== seat.seatId),
-        );
-        try {
-          await bookingService.unlockSeat(seat.eventId, seat.seatId);
-        } catch (err) {
-          console.error(err);
-        }
-        return;
-      }
-      if (totalSelected >= maxPerOrder) return;
-
-      const tt = ticketTypes.find((t) => t.id === seat.ticketTypeId);
-      if (!tt) return;
-
-      try {
-        await bookingService.lockSeat(seat.eventId, seat.seatId);
-        setSelectedSeats((prev) => [
-          ...prev,
-          {
-            seatId: seat.seatId,
-            ticketTypeId: seat.ticketTypeId!,
-            seatLabel:
-              seat.seat?.seatLabel ||
-              `${seat.seat?.rowName}${seat.seat?.seatNumber}`,
-            price: tt.price,
-          },
-        ]);
-      } catch {
-        alert("Không thể chọn ghế này. Vui lòng thử lại.");
-      }
-    },
-    [selectedSeats, totalSelected, maxPerOrder, ticketTypes],
-  );
 
   // Generated seat click
   const handleGenSeatClick = useCallback(
@@ -270,14 +203,12 @@ export default function SelectTicketPage() {
       const seat = selectedSeats.find((s) => s.seatId === seatId);
       if (!seat) return;
       setSelectedSeats((prev) => prev.filter((s) => s.seatId !== seatId));
-      if (!hasApiSeats) {
-        setQuantities((prev) => ({
-          ...prev,
-          [seat.ticketTypeId]: Math.max(0, (prev[seat.ticketTypeId] || 0) - 1),
-        }));
-      }
+      setQuantities((prev) => ({
+        ...prev,
+        [seat.ticketTypeId]: Math.max(0, (prev[seat.ticketTypeId] || 0) - 1),
+      }));
     },
-    [selectedSeats, hasApiSeats],
+    [selectedSeats],
   );
 
   // Zoom/Pan
@@ -313,63 +244,28 @@ export default function SelectTicketPage() {
   };
 
   // ─── Submit ──────────────────────────────────────────────
-  const handleContinue = async () => {
-    if (!keycloak?.authenticated) {
-      keycloak?.login();
-      return;
-    }
+  const handleContinue = () => {
     if (totalSelected < minPerOrder) {
       alert(`Vui lòng chọn ít nhất ${minPerOrder} vé.`);
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const items = [
-        ...Object.entries(quantities)
-          .filter(([, qty]) => qty > 0)
-          .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
-        ...(hasApiSeats
-          ? Object.entries(
-              selectedSeats.reduce(
-                (acc, s) => {
-                  if (!acc[s.ticketTypeId])
-                    acc[s.ticketTypeId] = {
-                      quantity: 0,
-                      seatIds: [] as string[],
-                    };
-                  acc[s.ticketTypeId].quantity += 1;
-                  acc[s.ticketTypeId].seatIds.push(s.seatId);
-                  return acc;
-                },
-                {} as Record<string, { quantity: number; seatIds: string[] }>,
-              ),
-            ).map(([ticketTypeId, data]) => ({
-              ticketTypeId,
-              quantity: data.quantity,
-              seatIds: data.seatIds,
-            }))
-          : []),
-      ];
+    const items = Object.entries(quantities)
+      .filter(([, qty]) => qty > 0)
+      .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity }));
 
-      const reservation = await bookingService.createReservation({
-        eventId: event!.id,
-        items,
+    sessionStorage.setItem("bookingItems", JSON.stringify(items));
+    sessionStorage.setItem("bookingEvent", JSON.stringify(event));
+    sessionStorage.setItem("bookingTicketTypes", JSON.stringify(ticketTypes));
+
+    if (!keycloak?.authenticated) {
+      keycloak?.login({
+        redirectUri: `${window.location.origin}/checkout`,
       });
-
-      sessionStorage.setItem("reservation", JSON.stringify(reservation));
-      sessionStorage.setItem("bookingEvent", JSON.stringify(event));
-      sessionStorage.setItem("bookingTicketTypes", JSON.stringify(ticketTypes));
-      navigate("/checkout");
-    } catch (err: any) {
-      console.error("Failed to create reservation:", err);
-      alert(
-        err.response?.data?.message ||
-          "Không thể tạo đặt chỗ. Vui lòng thử lại.",
-      );
-    } finally {
-      setIsSubmitting(false);
+      return;
     }
+
+    navigate("/checkout");
   };
 
   // ─── Computed ────────────────────────────────────────────
@@ -389,13 +285,6 @@ export default function SelectTicketPage() {
     (event as any)?.venue?.address || (event as any)?.venueAddress || "";
 
   // Group seats
-  const seatsBySector: Record<string, SeatInventory[]> = {};
-  seatInventory.forEach((si) => {
-    const sid = si.seat?.sectorId || "unknown";
-    if (!seatsBySector[sid]) seatsBySector[sid] = [];
-    seatsBySector[sid].push(si);
-  });
-
   const genSeatsBySector: Record<string, GeneratedSeat[]> = {};
   generated.seats.forEach((gs) => {
     if (!genSeatsBySector[gs.ticketTypeId])
@@ -502,137 +391,69 @@ export default function SelectTicketPage() {
                     <div className="stage-box">SÂN KHẤU</div>
                   </div>
 
-                  {/* API Seats */}
-                  {hasApiSeats &&
-                    apiSectors
-                      .sort((a, b) => a.displayOrder - b.displayOrder)
-                      .map((sector) => {
-                        const seatsIn = seatsBySector[sector.id] || [];
-                        const rows: Record<string, SeatInventory[]> = {};
-                        seatsIn.forEach((si) => {
-                          const r = si.seat?.rowName || "?";
-                          if (!rows[r]) rows[r] = [];
-                          rows[r].push(si);
-                        });
-
-                        return (
-                          <div
-                            key={sector.id}
-                            className="sector-block"
-                            style={{
-                              borderColor: sector.colorCode || "#cbd5e1",
-                            }}
-                          >
-                            <div
-                              className="sector-label"
-                              style={{
-                                backgroundColor: sector.colorCode || "#94a3b8",
-                              }}
-                            >
-                              {sector.name} ({sector.code})
-                            </div>
-                            {Object.entries(rows)
-                              .sort(([a], [b]) => a.localeCompare(b))
-                              .map(([rowName, seats]) => (
-                                <div key={rowName} className="seat-row">
-                                  <span className="seat-row-label">
-                                    {rowName}
-                                  </span>
-                                  {seats
-                                    .sort(
-                                      (a, b) =>
-                                        (a.seat?.coordX || 0) -
-                                        (b.seat?.coordX || 0),
-                                    )
-                                    .map((si) => {
-                                      const isSelected = selectedSeats.some(
-                                        (s) => s.seatId === si.seatId,
-                                      );
-                                      let cls = si.status.toLowerCase();
-                                      if (isSelected) cls = "selected";
-                                      return (
-                                        <div
-                                          key={si.seatId}
-                                          className={`seat ${cls}`}
-                                          onClick={() => handleApiSeatClick(si)}
-                                          title={`${si.seat?.seatLabel || `${si.seat?.rowName || ""}${si.seat?.seatNumber || ""}`} (${si.status})`}
-                                        >
-                                          {si.seat?.seatNumber}
-                                        </div>
-                                      );
-                                    })}
-                                </div>
-                              ))}
-                          </div>
-                        );
-                      })}
-
                   {/* Generated Seats */}
-                  {!hasApiSeats &&
-                    generated.sectors.map((sector) => {
-                      const seatsIn = genSeatsBySector[sector.id] || [];
-                      const rows: Record<string, GeneratedSeat[]> = {};
-                      seatsIn.forEach((gs) => {
-                        if (!rows[gs.rowName]) rows[gs.rowName] = [];
-                        rows[gs.rowName].push(gs);
-                      });
+                  {generated.sectors.map((sector) => {
+                    const seatsIn = genSeatsBySector[sector.id] || [];
+                    const rows: Record<string, GeneratedSeat[]> = {};
+                    seatsIn.forEach((gs) => {
+                      if (!rows[gs.rowName]) rows[gs.rowName] = [];
+                      rows[gs.rowName].push(gs);
+                    });
 
-                      return (
+                    return (
+                      <div
+                        key={sector.id}
+                        className="sector-block"
+                        style={{ borderColor: sector.colorCode || "#cbd5e1" }}
+                      >
                         <div
-                          key={sector.id}
-                          className="sector-block"
-                          style={{ borderColor: sector.colorCode || "#cbd5e1" }}
+                          className="sector-label"
+                          style={{
+                            backgroundColor: sector.colorCode || "#94a3b8",
+                          }}
                         >
-                          <div
-                            className="sector-label"
-                            style={{
-                              backgroundColor: sector.colorCode || "#94a3b8",
-                            }}
-                          >
-                            {sector.name} ({sector.code})
-                          </div>
-
-                          {Object.entries(rows)
-                            .sort(([a], [b]) => a.localeCompare(b))
-                            .map(([rowName, seats]) => (
-                              <div key={rowName} className="seat-row">
-                                <span className="seat-row-label">
-                                  {rowName}
-                                </span>
-                                {seats
-                                  .sort((a, b) => a.seatNumber - b.seatNumber)
-                                  .map((gs) => {
-                                    const isSelected = selectedSeats.some(
-                                      (s) => s.seatId === gs.id,
-                                    );
-                                    let cls = gs.status.toLowerCase();
-                                    if (isSelected) cls = "selected";
-                                    return (
-                                      <div
-                                        key={gs.id}
-                                        className={`seat ${cls}`}
-                                        onClick={() => handleGenSeatClick(gs)}
-                                        title={`${gs.seatLabel} - ${sector.name}`}
-                                        style={{
-                                          ...(gs.status === "AVAILABLE" &&
-                                          !isSelected
-                                            ? {
-                                                background: `${sector.colorCode}30`,
-                                                borderColor: `${sector.colorCode}80`,
-                                                color: sector.colorCode,
-                                              }
-                                            : {}),
-                                        }}
-                                      >
-                                        {gs.seatNumber}
-                                      </div>
-                                    );
-                                  })}
-                              </div>
-                            ))}
+                          {sector.name} ({sector.code})
                         </div>
-                      );
-                    })}
+
+                        {Object.entries(rows)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([rowName, seats]) => (
+                            <div key={rowName} className="seat-row">
+                              <span className="seat-row-label">{rowName}</span>
+                              {seats
+                                .sort((a, b) => a.seatNumber - b.seatNumber)
+                                .map((gs) => {
+                                  const isSelected = selectedSeats.some(
+                                    (s) => s.seatId === gs.id,
+                                  );
+                                  let cls = gs.status.toLowerCase();
+                                  if (isSelected) cls = "selected";
+                                  return (
+                                    <div
+                                      key={gs.id}
+                                      className={`seat ${cls}`}
+                                      onClick={() => handleGenSeatClick(gs)}
+                                      title={`${gs.seatLabel} - ${sector.name}`}
+                                      style={{
+                                        ...(gs.status === "AVAILABLE" &&
+                                        !isSelected
+                                          ? {
+                                              background: `${sector.colorCode}30`,
+                                              borderColor: `${sector.colorCode}80`,
+                                              color: sector.colorCode,
+                                            }
+                                          : {}),
+                                      }}
+                                    >
+                                      {gs.seatNumber}
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -829,11 +650,9 @@ export default function SelectTicketPage() {
                   <button
                     className="action-btn active-state"
                     onClick={handleContinue}
-                    disabled={isSubmitting || totalSelected < minPerOrder}
+                    disabled={totalSelected < minPerOrder}
                   >
-                    <span className="btn-label">
-                      {isSubmitting ? "Đang xử lý..." : "Thanh toán ngay"}
-                    </span>
+                    <span className="btn-label">{"Thanh toán ngay"}</span>
                     <span className="btn-total">
                       {subtotal.toLocaleString("vi-VN")} đ
                     </span>

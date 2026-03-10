@@ -84,6 +84,9 @@ const Navbar = () => {
                 <Link to="/my-tickets" className="dropdown-item">
                   Vé của tôi
                 </Link>
+                <Link to="/my-orders" className="dropdown-item">
+                  Đơn hàng của tôi
+                </Link>
                 <hr />
                 <button
                   onClick={() => keycloak.logout()}
