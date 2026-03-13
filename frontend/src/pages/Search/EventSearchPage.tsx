@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import AppPagination from "../../components/common/AppPagination";
 import { eventService } from "../../services/eventService";
 import { categoryService } from "../../services/categoryService";
 import { EventSummary, SpringPage, Category } from "../../types/api";
-import { Search, MapPin, Calendar, Filter, X, ChevronDown } from "lucide-react";
+import { Search, MapPin, Calendar, X, ChevronDown } from "lucide-react";
 
 export default function EventSearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -136,7 +137,7 @@ export default function EventSearchPage() {
   };
 
   return (
-    <>
+    <div className="event-search-page">
       <nav className="category-nav">
         <div className="container">
           <ul
@@ -238,7 +239,7 @@ export default function EventSearchPage() {
                   alignItems: "center",
                 }}
               >
-                <Filter size={18} style={{ marginRight: "8px" }} /> Bộ lọc
+                Bộ lọc
               </h3>
               <button
                 onClick={clearFilters}
@@ -604,9 +605,14 @@ export default function EventSearchPage() {
                 marginBottom: "24px",
               }}
             >
-              <p style={{ color: "var(--text-secondary)" }}>
+              <p
+                style={{
+                  color: "#FFFFFF",
+                  fontWeight: 600,
+                }}
+              >
                 {isLoading
-                  ? "Đang tìm kiếm..."
+                  ? "Đang tìm kiếm"
                   : `Tìm thấy ${(eventsPage as unknown as SpringPage<EventSummary>)?.totalElements || 0} sự kiện`}
               </p>
               <div
@@ -619,7 +625,7 @@ export default function EventSearchPage() {
                 ref={sortDropdownRef}
               >
                 <label
-                  style={{ fontSize: "14px", color: "var(--text-secondary)" }}
+                  style={{ fontSize: "14px", color: "#FFFFFF" }}
                 >
                   Sắp xếp:
                 </label>
@@ -1034,86 +1040,20 @@ export default function EventSearchPage() {
                 </div>
 
                 {/* PAGINATION */}
-                {eventsPage?.totalPages && eventsPage.totalPages > 1 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      marginTop: "40px",
-                      gap: "8px",
-                    }}
-                  >
-                    <button
-                      className="btn btn-outline"
-                      disabled={queryPage === 0}
-                      onClick={() => handlePageChange(queryPage - 1)}
-                      style={{ padding: "8px 16px" }}
-                    >
-                      Trước
-                    </button>
-
-                    {Array.from({
-                      length: Math.min(5, eventsPage.totalPages),
-                    }).map((_, idx) => {
-                      // Hiển thị tối đa 5 trang xung quanh trang hiện tại
-                      let pageNum = idx;
-                      if (eventsPage.totalPages && eventsPage.totalPages > 5) {
-                        if (
-                          queryPage > 2 &&
-                          queryPage < eventsPage.totalPages - 2
-                        ) {
-                          pageNum = queryPage - 2 + idx;
-                        } else if (queryPage >= eventsPage.totalPages - 2) {
-                          pageNum = eventsPage.totalPages - 5 + idx;
-                        }
-                      }
-
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => handlePageChange(pageNum)}
-                          style={{
-                            padding: "8px 16px",
-                            border: "1px solid var(--border)",
-                            borderRadius: "4px",
-                            background:
-                              queryPage === pageNum
-                                ? "var(--primary)"
-                                : "white",
-                            color:
-                              queryPage === pageNum
-                                ? "white"
-                                : "var(--text-primary)",
-                            fontWeight:
-                              queryPage === pageNum ? "bold" : "normal",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {pageNum + 1}
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      className="btn btn-outline"
-                      disabled={
-                        eventsPage.totalPages
-                          ? queryPage >= eventsPage.totalPages - 1
-                          : true
-                      }
-                      onClick={() => handlePageChange(queryPage + 1)}
-                      style={{ padding: "8px 16px" }}
-                    >
-                      Sau
-                    </button>
-                  </div>
-                )}
+                <AppPagination
+                  currentPage={queryPage}
+                  pageCount={eventsPage.totalPages}
+                  onPageChange={handlePageChange}
+                  pageRangeDisplayed={4}
+                  marginPagesDisplayed={1}
+                  showPageInfo={false}
+                />
               </>
             )}
           </main>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

@@ -1,9 +1,7 @@
-/* ============================================
-   PAYMENT RESULT PAGE - Booking Flow Step 3
-   ============================================ */
-
 .payment-result-page {
   min-height: calc(100vh - 80px);
+  background: var(--page-gradient-booking);
+  background-repeat: no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -35,15 +33,19 @@
 
 /* Success / Failure Icon */
 .result-icon {
-  width: 100px;
-  height: 100px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 24px;
-  font-size: 48px;
   animation: iconBounce 0.6s ease-out 0.2s both;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.14);
+}
+
+.result-icon svg {
+  color: #ffffff;
 }
 
 @keyframes iconBounce {
@@ -61,15 +63,11 @@
 }
 
 .result-icon.success {
-  background: #ecfdf5;
-  color: #10b981;
-  border: 3px solid #a7f3d0;
+  background: linear-gradient(135deg, #10b981, #059669);
 }
 
 .result-icon.failure {
-  background: #fef2f2;
-  color: #ef4444;
-  border: 3px solid #fecaca;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
 /* Checkmark animation */
@@ -113,16 +111,16 @@
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .result-order-info .info-row .label {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .result-order-info .info-row .value {
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .result-order-info .info-row.total {
@@ -133,8 +131,8 @@
 }
 
 .result-order-info .info-row.total .value {
-  color: var(--primary);
-  font-weight: 800;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 /* Action Buttons */

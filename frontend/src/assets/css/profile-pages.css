@@ -4,6 +4,8 @@
 .my-tickets-page,
 .my-orders-page {
   min-height: calc(100vh - 80px);
+  background: var(--page-gradient-account);
+  background-repeat: no-repeat;
   padding: 32px 20px 48px;
 }
 
@@ -12,6 +14,68 @@
 .my-orders-page .container {
   max-width: 720px;
   margin: 0 auto;
+}
+
+.profile-page .container.account-layout-container,
+.my-tickets-page .container.account-layout-container,
+.my-orders-page .container.account-layout-container {
+  max-width: 1100px;
+}
+
+.account-layout-container {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.account-main-content {
+  min-width: 0;
+}
+
+.profile-sidebar {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px 16px;
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 96px;
+}
+
+.profile-sidebar-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+  padding: 0 8px;
+}
+
+.profile-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+}
+
+.profile-sidebar-link:hover {
+  background: #f8fafc;
+  color: var(--text-primary);
+}
+
+.profile-sidebar-link.active {
+  color: var(--primary);
 }
 
 .back-link {
@@ -32,9 +96,9 @@
 .profile-page-title,
 .page-title {
   font-size: 28px;
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: 24px;
-  color: var(--text-primary);
+  color: #FFFFFF;
 }
 
 /* Profile Card */
@@ -67,19 +131,23 @@
 }
 
 .profile-header {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
   margin-bottom: 32px;
 }
 
 .profile-avatar {
-  width: 96px;
-  height: 96px;
+  width: 112px;
+  height: 112px;
   border-radius: 50%;
-  background: #f1f5f9;
+  background: #f8fafc;
+  border: 3px solid #ffffff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
   overflow: hidden;
 }
 
@@ -89,22 +157,57 @@
   object-fit: cover;
 }
 
-.profile-avatar svg {
-  color: var(--text-muted);
+.profile-identity {
+  text-align: center;
 }
 
 .profile-name {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   color: var(--text-primary);
 }
 
-.profile-email,
-.profile-phone {
+.profile-username {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0;
+}
+
+.profile-contact-grid {
+  width: 100%;
+  max-width: 320px;
+  margin: 6px auto 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.profile-main-card {
+  max-width: 580px;
+}
+
+.profile-contact-item {
+  width: 100%;
+  max-width: 320px;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 42px;
+  padding: 10px 12px;
   font-size: 14px;
   color: var(--text-muted);
-  margin-bottom: 4px;
+}
+
+.profile-contact-item svg {
+  flex-shrink: 0;
+  color: var(--primary);
 }
 
 .profile-roles {
@@ -153,12 +256,42 @@
   color: var(--primary);
 }
 
+@media (max-width: 640px) {
+  .profile-card {
+    padding: 22px 16px;
+  }
+
+  .profile-contact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-name {
+    font-size: 21px;
+  }
+}
+
+@media (max-width: 900px) {
+  .account-layout-container {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-sidebar {
+    position: static;
+  }
+}
+
 /* Ticket / Order List */
 .ticket-list,
 .order-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.order-list {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto 0 0;
 }
 
 .ticket-card,
@@ -173,6 +306,10 @@
   gap: 16px;
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.2s;
+}
+
+.order-card {
+  align-items: stretch;
 }
 
 .ticket-card {
@@ -190,18 +327,23 @@
   min-width: 0;
 }
 
+.order-card-main {
+  display: flex;
+  flex-direction: column;
+}
+
 .ticket-event-title,
 .order-event-title {
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 4px;
   color: var(--text-primary);
 }
 
 .ticket-meta,
 .order-meta {
-  font-size: 13px;
-  color: var(--text-muted);
+  font-size: 14px;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
@@ -211,6 +353,28 @@
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+}
+
+.order-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.order-card-footer .order-status {
+  order: 1;
+}
+
+.order-card-actions {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.order-event-title {
+  margin-top: 0;
 }
 
 .ticket-type,
@@ -239,19 +403,19 @@
 }
 
 .status-pending {
-  background: #fef3c7;
-  color: #92400e;
+  background: #d4b94c;
+  color: #FFFFFF;
 }
 
 .status-cancelled,
 .status-expired,
 .status-refunded {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #ec6d6d;
+  color: #FFFFFF;
 }
 
 .order-amount {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--primary);
 }
 
@@ -286,25 +450,6 @@
 .list-error {
   color: var(--text-muted);
   margin-bottom: 20px;
-}
-
-/* Pagination */
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 32px;
-}
-
-.pagination-info {
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
-.pagination .btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Modal */
@@ -350,15 +495,15 @@
 }
 
 .modal-content h2 {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   margin-bottom: 8px;
   padding-right: 36px;
 }
 
 .modal-meta {
   font-size: 14px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-bottom: 20px;
 }
 
@@ -380,13 +525,24 @@
 
 .ticket-detail-info .info-row .label,
 .order-detail-info .info-row .label {
-  color: var(--text-muted);
+  font-weight: 700;
+  color: var(--text-secondary);
 }
 
 .ticket-detail-info .info-row .value,
 .order-detail-info .info-row .value {
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.order-detail-info .info-row .value.order-detail-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  color: #ffffff;
 }
 
 .order-detail-info .info-row.total {
@@ -398,7 +554,7 @@
 
 .order-detail-info .info-row.total .value {
   color: var(--primary);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .order-items {
@@ -408,17 +564,35 @@
 }
 
 .items-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .order-item-row {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   font-size: 14px;
   padding: 6px 0;
+}
+
+.order-item-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-item-qty {
+  flex: 0 0 72px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-item-subtotal {
+  flex: 0 0 140px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .qr-section {
@@ -448,6 +622,6 @@
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #df3333;
+  color: #FFFFFF;
 }

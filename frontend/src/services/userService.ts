@@ -24,11 +24,22 @@ export interface UpdateProfileRequest {
   phone?: string;
 }
 
+type UserProfileApiResponse = UserProfile | { data?: UserProfile };
+
+function unwrapUserProfileResponse(payload: UserProfileApiResponse | null | undefined): UserProfile | null {
+  if (!payload) return null;
+  if (Object.prototype.hasOwnProperty.call(payload, "data")) {
+    return (payload as { data?: UserProfile }).data ?? null;
+  }
+
+  return payload as UserProfile;
+}
+
 export const userService = {
   getProfile: async (): Promise<UserProfile | null> => {
     try {
-      const response = await axiosClient.get<{ data?: UserProfile }>("/api/users/me");
-      return response.data?.data ?? response.data ?? null;
+      const response = await axiosClient.get<UserProfileApiResponse>("/api/users/me");
+      return unwrapUserProfileResponse(response.data);
     } catch {
       return null;
     }
@@ -36,8 +47,8 @@ export const userService = {
 
   updateProfile: async (data: UpdateProfileRequest): Promise<UserProfile | null> => {
     try {
-      const response = await axiosClient.patch<{ data?: UserProfile }>("/api/users/me", data);
-      return response.data?.data ?? response.data ?? null;
+      const response = await axiosClient.patch<UserProfileApiResponse>("/api/users/me", data);
+      return unwrapUserProfileResponse(response.data);
     } catch {
       return null;
     }
