@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link } from "react-router-dom";
+import { toast } from "react-toastify";
+import AccountSidebar from "../../components/account/AccountSidebar";
+import AppPagination from "../../components/common/AppPagination";
+import { confirmDestructiveAction } from "../../lib/swal";
 import {
   orderService,
   OrderSummary,
   OrderDetail,
 } from "../../services/orderService";
-import {
-  ShoppingBag,
-  ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  X,
-} from "lucide-react";
+import { ShoppingBag, X } from "lucide-react";
 
 function formatDate(iso: string | null | undefined): string {
   if (iso == null || iso === "") return "-";
@@ -52,9 +50,6 @@ export default function MyOrdersPage() {
   const { keycloak } = useKeycloak();
   const [content, setContent] = useState<OrderSummary[]>([]);
   const [totalPages, setTotalPages] = useState(0);
-  const [number, setNumber] = useState(0);
-  const [first, setFirst] = useState(true);
-  const [last, setLast] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -72,12 +67,12 @@ export default function MyOrdersPage() {
         if (!cancelled) {
           setContent(res.content);
           setTotalPages(res.totalPages);
-          setNumber(res.number);
-          setFirst(res.first);
-          setLast(res.last);
         }
       } catch (e) {
-        if (!cancelled) setError("Không thể tải danh sách đơn hàng.");
+        if (!cancelled) {
+          setError("Không thể tải danh sách đơn hàng.");
+          toast.error("Không thể tải danh sách đơn hàng.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -92,23 +87,29 @@ export default function MyOrdersPage() {
       setSelectedOrder(detail ?? null);
     } catch {
       setSelectedOrder(null);
+      toast.error("Không thể tải chi tiết đơn hàng.");
     }
   };
 
   const handleCancel = async (orderId: string) => {
-    if (!confirm("Bạn có chắc muốn hủy đơn hàng này?")) return;
+    const confirmed = await confirmDestructiveAction({
+      title: "Hủy đơn hàng?",
+      text: "Thao tác này sẽ hủy đơn hàng đang chờ thanh toán và không thể hoàn tác.",
+      confirmButtonText: "Hủy đơn hàng",
+      cancelButtonText: "Giữ đơn hàng",
+    });
+    if (!confirmed) return;
+
     setCancelling(orderId);
     try {
       await orderService.cancelOrder(orderId);
       setSelectedOrder(null);
+      toast.success("Đã hủy đơn hàng thành công.");
       const res = await orderService.getMyOrders(page, 10);
       setContent(res.content);
       setTotalPages(res.totalPages);
-      setNumber(res.number);
-      setFirst(res.first);
-      setLast(res.last);
     } catch {
-      alert("Không thể hủy đơn hàng.");
+      toast.error("Không thể hủy đơn hàng.");
     } finally {
       setCancelling(null);
     }
@@ -129,89 +130,69 @@ export default function MyOrdersPage() {
 
   return (
     <div className="my-orders-page">
-      <div className="container">
-        <Link to="/" className="back-link">
-          <ArrowLeft size={18} />
-          Về trang chủ
-        </Link>
+      <div className="container account-layout-container">
+        <AccountSidebar />
 
-        <h1 className="page-title">Đơn hàng của tôi</h1>
-
-        {loading ? (
-          <div className="list-loading">
-            <div className="loading-spinner"></div>
-            <span>Đang tải...</span>
-          </div>
-        ) : error ? (
-          <div className="list-error">{error}</div>
-        ) : content.length === 0 ? (
-          <div className="list-empty">
-            <ShoppingBag size={48} />
-            <p>Bạn chưa có đơn hàng nào.</p>
-            <Link to="/search" className="btn btn-primary">
-              Khám phá sự kiện
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="order-list">
-              {content.map((o) => {
-                const sl = statusLabel(o.status);
-                return (
-                  <div key={o.id} className="order-card">
-                    <div className="order-card-main">
-                      <h3 className="order-event-title">{o.eventTitle}</h3>
-                      <p className="order-meta">
-                        {formatDate(o.eventStartDatetime)} • Mã đơn:{" "}
-                        {o.orderNumber}
-                      </p>
-                      <div className="order-card-footer">
+        <div className="account-main-content">
+          <h1 className="page-title">Đơn hàng của tôi</h1>
+          {loading ? (
+            <div className="list-loading">
+              <div className="loading-spinner"></div>
+              <span>Đang tải</span>
+            </div>
+          ) : error ? (
+            <div className="list-error">{error}</div>
+          ) : content.length === 0 ? (
+            <div className="list-empty">
+              <ShoppingBag size={48} />
+              <p>Bạn chưa có đơn hàng nào.</p>
+              <Link to="/search" className="btn btn-primary">
+                Khám phá sự kiện
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="order-list">
+                {content.map((o) => {
+                  const sl = statusLabel(o.status);
+                  return (
+                    <div key={o.id} className="order-card">
+                      <div className="order-card-main">
+                        <h3 className="order-event-title">{o.eventTitle}</h3>
+                        <p className="order-meta">
+                          {formatDate(o.eventStartDatetime)} • {" "}
+                          {o.orderNumber}
+                        </p>
+                        <div className="order-card-footer">
+                          <span className={`order-status ${sl.cls}`}>
+                            {sl.text}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="order-card-actions">
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => openDetail(o.id)}
+                        >
+                          Chi tiết
+                        </button>
                         <span className="order-amount">
                           {Number(o.totalAmount).toLocaleString("vi-VN")} đ
                         </span>
-                        <span className={`order-status ${sl.cls}`}>
-                          {sl.text}
-                        </span>
                       </div>
                     </div>
-                    <div className="order-card-actions">
-                      <button
-                        className="btn btn-outline btn-sm"
-                        onClick={() => openDetail(o.id)}
-                      >
-                        Chi tiết
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {totalPages > 1 && (
-              <div className="pagination">
-                <button
-                  className="btn btn-outline"
-                  disabled={first}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                >
-                  <ChevronLeft size={18} />
-                  Trước
-                </button>
-                <span className="pagination-info">
-                  Trang {number + 1} / {totalPages}
-                </span>
-                <button
-                  className="btn btn-outline"
-                  disabled={last}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Sau
-                  <ChevronRight size={18} />
-                </button>
+                  );
+                })}
               </div>
-            )}
-          </>
-        )}
+
+              <AppPagination
+                currentPage={page}
+                pageCount={totalPages}
+                onPageChange={setPage}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {selectedOrder && (
@@ -242,7 +223,7 @@ export default function MyOrdersPage() {
               <div className="info-row">
                 <span className="label">Trạng thái</span>
                 <span
-                  className={`value ${statusLabel(selectedOrder.status).cls}`}
+                  className={`value order-detail-status ${statusLabel(selectedOrder.status).cls}`}
                 >
                   {statusLabel(selectedOrder.status).text}
                 </span>
@@ -252,9 +233,9 @@ export default function MyOrdersPage() {
                   <p className="items-label">Chi tiết vé</p>
                   {selectedOrder.items.map((item) => (
                     <div key={item.id} className="order-item-row">
-                      <span>{item.ticketTypeName}</span>
-                      <span>x{item.quantity}</span>
-                      <span>
+                      <span className="order-item-name">{item.ticketTypeName}</span>
+                      <span className="order-item-qty">x{item.quantity}</span>
+                      <span className="order-item-subtotal">
                         {Number(item.subtotal).toLocaleString("vi-VN")} đ
                       </span>
                     </div>
@@ -271,10 +252,10 @@ export default function MyOrdersPage() {
             {selectedOrder.status === "PENDING" && (
               <button
                 className="btn btn-outline btn-danger"
-                onClick={() => handleCancel(selectedOrder.id)}
+                onClick={() => void handleCancel(selectedOrder.id)}
                 disabled={cancelling === selectedOrder.id}
               >
-                {cancelling === selectedOrder.id ? "Đang hủy..." : "Hủy đơn hàng"}
+                {cancelling === selectedOrder.id ? "Đang hủy" : "Hủy đơn hàng"}
               </button>
             )}
           </div>

@@ -4,7 +4,7 @@ import {
   paymentService,
   PaymentStatusResponse,
 } from "../../services/paymentService";
-import { CheckCircle, XCircle, Home, Ticket } from "lucide-react";
+import { Check, X, Home } from "lucide-react";
 
 interface DisplayResult {
   success: boolean;
@@ -134,7 +134,7 @@ export default function PaymentResultPage() {
         <div
           className={`result-icon ${result.success ? "success" : "failure"}`}
         >
-          {result.success ? <CheckCircle size={48} /> : <XCircle size={48} />}
+          {result.success ? <Check size={28} strokeWidth={3.2} /> : <X size={28} strokeWidth={3.2} />}
         </div>
 
         {/* Title */}
@@ -146,7 +146,7 @@ export default function PaymentResultPage() {
 
         <p className="result-subtitle">
           {result.success
-            ? "Vé của bạn đã được xác nhận. Chúng tôi đã gửi thông tin vé đến email của bạn."
+            ? "Chúng tôi đã gửi thông tin vé đến email của bạn."
             : result.message ||
               "Đã có lỗi xảy ra trong quá trình thanh toán. Vui lòng thử lại hoặc liên hệ hỗ trợ."}
         </p>
@@ -185,7 +185,6 @@ export default function PaymentResultPage() {
           </Link>
           {result.success && (
             <Link to="/my-tickets" className="btn btn-primary">
-              <Ticket size={16} />
               Xem vé của tôi
             </Link>
           )}

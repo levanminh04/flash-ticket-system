@@ -1,4 +1,20 @@
 /* --- 1. CSS CHO CAROUSEL MỚI (2 Banner/Slide) --- */
+.home-page,
+.event-search-page,
+.event-detail-page {
+  min-height: calc(100vh - 56px);
+  background: var(--page-gradient-discovery);
+  background-repeat: no-repeat;
+}
+
+.home-page > .container,
+.event-search-page > .container,
+.event-detail-page > .container,
+.home-page > main.container {
+  position: relative;
+  z-index: 1;
+}
+
 .hero-section {
   position: relative;
   overflow: hidden;
@@ -273,6 +289,7 @@
   visibility: visible;
   transform: translateY(0);
 }
+
 .nav-actions .btn {
   background: white;
   color: var(--primary);
@@ -353,6 +370,7 @@
   font-size: 24px;
   font-weight: 800;
   position: relative;
+  color: white;
 }
 .view-all {
   font-size: 14px;
@@ -401,6 +419,8 @@
   background: var(--bg-card);
   border-radius: var(--radius-md);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   transition: all 0.3s ease;
 }
 .standard-card:hover {
@@ -419,6 +439,9 @@
 }
 .card-content {
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 .card-title {
   font-size: 16px;
@@ -433,17 +456,29 @@
 }
 .card-meta {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.card-meta svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.card-meta-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .card-price {
   font-size: 15px;
   font-weight: 700;
   color: var(--primary);
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 10px;
 }
 
 .card-heart-btn {

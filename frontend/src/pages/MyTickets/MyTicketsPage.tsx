@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link } from "react-router-dom";
+import AccountSidebar from "../../components/account/AccountSidebar";
+import AppPagination from "../../components/common/AppPagination";
 import {
   ticketService,
   TicketSummary,
   TicketsPageResponse,
 } from "../../services/ticketService";
-import { Ticket, ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Ticket, X } from "lucide-react";
 
 function formatDate(iso: string | null | undefined): string {
   if (iso == null || iso === "") return "-";
@@ -80,89 +82,70 @@ export default function MyTicketsPage() {
 
   return (
     <div className="my-tickets-page">
-      <div className="container">
-        <Link to="/" className="back-link">
-          <ArrowLeft size={18} />
-          Về trang chủ
-        </Link>
+      <div className="container account-layout-container">
+        <AccountSidebar />
 
-        <h1 className="page-title">Vé của tôi</h1>
+        <div className="account-main-content">
+          <h1 className="page-title">Vé của tôi</h1>
 
-        {loading ? (
-          <div className="list-loading">
-            <div className="loading-spinner"></div>
-            <span>Đang tải...</span>
-          </div>
-        ) : error ? (
-          <div className="list-error">{error}</div>
-        ) : !data || data.content.length === 0 ? (
-          <div className="list-empty">
-            <Ticket size={48} />
-            <p>Bạn chưa có vé nào.</p>
-            <Link to="/search" className="btn btn-primary">
-              Khám phá sự kiện
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="ticket-list">
-              {data.content.map((t) => {
-                const sl = statusLabel(t.status);
-                return (
-                  <div
-                    key={t.id}
-                    className="ticket-card"
-                    onClick={() => setSelectedTicket(t)}
-                  >
-                    <div className="ticket-card-main">
-                      <h3 className="ticket-event-title">{t.eventTitle}</h3>
-                      <p className="ticket-meta">
-                        {formatDate(t.eventStartDatetime)}
-                        {t.eventVenueName && ` • ${t.eventVenueName}`}
-                      </p>
-                      <div className="ticket-card-footer">
-                        <span className="ticket-type">{t.ticketTypeName}</span>
-                        {t.seatLabel && (
-                          <span className="ticket-seat">Ghế: {t.seatLabel}</span>
-                        )}
-                        <span className={`ticket-status ${sl.cls}`}>
-                          {sl.text}
-                        </span>
+          {loading ? (
+            <div className="list-loading">
+              <div className="loading-spinner"></div>
+              <span>Đang tải</span>
+            </div>
+          ) : error ? (
+            <div className="list-error">{error}</div>
+          ) : !data || data.content.length === 0 ? (
+            <div className="list-empty">
+              <Ticket size={48} />
+              <p>Bạn chưa có vé nào.</p>
+              <Link to="/search" className="btn btn-primary">
+                Khám phá sự kiện
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="ticket-list">
+                {data.content.map((t) => {
+                  const sl = statusLabel(t.status);
+                  return (
+                    <div
+                      key={t.id}
+                      className="ticket-card"
+                      onClick={() => setSelectedTicket(t)}
+                    >
+                      <div className="ticket-card-main">
+                        <h3 className="ticket-event-title">{t.eventTitle}</h3>
+                        <p className="ticket-meta">
+                          {formatDate(t.eventStartDatetime)}
+                          {t.eventVenueName && ` • ${t.eventVenueName}`}
+                        </p>
+                        <div className="ticket-card-footer">
+                          <span className="ticket-type">{t.ticketTypeName}</span>
+                          {t.seatLabel && (
+                            <span className="ticket-seat">Ghế: {t.seatLabel}</span>
+                          )}
+                          <span className={`ticket-status ${sl.cls}`}>
+                            {sl.text}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="ticket-card-action">
+                        <span className="view-detail">Xem chi tiết</span>
                       </div>
                     </div>
-                    <div className="ticket-card-action">
-                      <span className="view-detail">Xem chi tiết</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {data.totalPages > 1 && (
-              <div className="pagination">
-                <button
-                  className="btn btn-outline"
-                  disabled={data.first}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                >
-                  <ChevronLeft size={18} />
-                  Trước
-                </button>
-                <span className="pagination-info">
-                  Trang {data.number + 1} / {data.totalPages}
-                </span>
-                <button
-                  className="btn btn-outline"
-                  disabled={data.last}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Sau
-                  <ChevronRight size={18} />
-                </button>
+                  );
+                })}
               </div>
-            )}
-          </>
-        )}
+
+              <AppPagination
+                currentPage={data.number}
+                pageCount={data.totalPages}
+                onPageChange={setPage}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {selectedTicket && (

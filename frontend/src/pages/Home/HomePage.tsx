@@ -4,30 +4,13 @@ import { eventService } from "../../services/eventService";
 import { categoryService } from "../../services/categoryService";
 import { Category, EventSummary } from "../../types/api";
 import {
-  Music,
-  Trophy,
-  MonitorPlay,
-  Ticket,
-  Star,
   MapPin,
   Calendar,
   Heart,
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
   CheckCircle2,
 } from "lucide-react";
-
-const categories = [
-  { id: 1, name: "Nhạc sống", icon: null },
-  { id: 2, name: "Sân khấu và nghệ thuật", icon: null },
-  { id: 3, name: "Thể thao", icon: null },
-  { id: 4, name: "Hội thảo và workshop", icon: null },
-  { id: 5, name: "Tham quan và trải nghiệm", icon: null },
-  { id: 6, name: "Khác", icon: null },
-  { id: 7, name: "Vé bán lại", icon: null },
-];
 
 const bannerGroups = [
   [
@@ -322,8 +305,20 @@ export default function HomePage() {
     else prevSlide();
   };
 
+  const formatEventLocation = (event: any) => {
+    const venueName = event?.venue?.name || event?.venueName || event?.location;
+    const cityName = event?.venue?.city || event?.city;
+
+    const parts = [venueName, cityName]
+      .filter((part) => typeof part === "string" && part.trim().length > 0)
+      .map((part) => part.trim());
+
+    const uniqueParts = Array.from(new Set(parts));
+    return uniqueParts.join(", ") || "Đang cập nhật địa điểm";
+  };
+
   return (
-    <>
+    <div className="home-page">
       <nav className="category-nav">
         <div className="container">
           <ul className="category-list">
@@ -507,7 +502,7 @@ export default function HomePage() {
         {/* NHẠC SỐNG */}
         <section className="section-container">
           <div className="section-header">
-            <h3 className="section-title">Nhạc sống</h3>
+            <h3 className="section-title">Sự kiện giải trí</h3>
             <a href="#" className="view-all">
               Xem thêm
             </a>
@@ -525,7 +520,8 @@ export default function HomePage() {
                     borderRadius: "12px",
                     overflow: "hidden",
                     border: "1px solid var(--border)",
-                    display: "block",
+                    display: "flex",
+                    flexDirection: "column",
                     textDecoration: "none",
                     color: "inherit",
                   }}
@@ -543,17 +539,19 @@ export default function HomePage() {
                     <h4 className="card-title">{event.title}</h4>
                     <p className="card-meta">
                       <Calendar size={14} className="inline mr-1" />{" "}
-                      {event.startDatetime
-                        ? new Date(event.startDatetime).toLocaleDateString(
-                            "vi-VN",
-                          )
-                        : event.date}
+                      <span className="card-meta-text">
+                        {event.startDatetime
+                          ? new Date(event.startDatetime).toLocaleDateString(
+                              "vi-VN",
+                            )
+                          : event.date}
+                      </span>
                     </p>
                     <p className="card-meta">
                       <MapPin size={14} className="inline mr-1" />{" "}
-                      {event.venue
-                        ? `${event.venue.name}, ${event.venue.city}`
-                        : event.location}
+                      <span className="card-meta-text">
+                        {formatEventLocation(event)}
+                      </span>
                     </p>
                     <p className="card-price">
                       {event.minPrice
@@ -633,11 +631,12 @@ export default function HomePage() {
                 <div className="card-content">
                   <h4 className="card-title">{event.title}</h4>
                   <p className="card-meta">
-                    <Calendar size={14} className="inline mr-1" /> {event.date}
+                    <Calendar size={14} className="inline mr-1" />{" "}
+                    <span className="card-meta-text">{event.date}</span>
                   </p>
                   <p className="card-meta">
                     <MapPin size={14} className="inline mr-1" />{" "}
-                    {event.location}
+                    <span className="card-meta-text">{event.location}</span>
                   </p>
                   <p className="card-price">{event.price}</p>
                 </div>
@@ -924,6 +923,6 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
-    </>
+    </div>
   );
 }

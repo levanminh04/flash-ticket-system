@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
+import { toast } from "react-toastify";
 import { eventService } from "../../services/eventService";
 import { EventSummary, TicketType } from "../../types/api";
 import {
@@ -150,6 +151,7 @@ export default function SelectTicketPage() {
       .catch((err: any) => {
         console.error("Failed to load event:", err);
         setError("Không thể tải thông tin sự kiện.");
+        toast.error("Không thể tải thông tin sự kiện.");
       })
       .finally(() => setIsLoading(false));
   }, [slug]);
@@ -174,11 +176,21 @@ export default function SelectTicketPage() {
         }));
         return;
       }
-      if (totalSelected >= maxPerOrder) return;
+      if (totalSelected >= maxPerOrder) {
+        toast.warning(`Bạn chỉ được chọn tối đa ${maxPerOrder} vé.`, {
+          toastId: "max-ticket-limit",
+        });
+        return;
+      }
 
       const tt = ticketTypes.find((t) => t.id === seat.ticketTypeId);
       if (!tt) return;
-      if ((quantities[tt.id] || 0) >= tt.quantityAvailable) return;
+      if ((quantities[tt.id] || 0) >= tt.quantityAvailable) {
+        toast.warning("Loại vé này không còn số lượng phù hợp.", {
+          toastId: `ticket-available-${tt.id}`,
+        });
+        return;
+      }
 
       setSelectedSeats((prev) => [
         ...prev,
@@ -246,17 +258,26 @@ export default function SelectTicketPage() {
   // ─── Submit ──────────────────────────────────────────────
   const handleContinue = () => {
     if (totalSelected < minPerOrder) {
-      alert(`Vui lòng chọn ít nhất ${minPerOrder} vé.`);
+      toast.warning(`Vui lòng chọn ít nhất ${minPerOrder} vé.`);
       return;
     }
 
     const items = Object.entries(quantities)
       .filter(([, qty]) => qty > 0)
       .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity }));
+    const selectedSeatSnapshot = selectedSeats.map((seat) => ({
+      seatId: seat.seatId,
+      ticketTypeId: seat.ticketTypeId,
+      seatLabel: seat.seatLabel,
+    }));
 
     sessionStorage.setItem("bookingItems", JSON.stringify(items));
     sessionStorage.setItem("bookingEvent", JSON.stringify(event));
     sessionStorage.setItem("bookingTicketTypes", JSON.stringify(ticketTypes));
+    sessionStorage.setItem(
+      "bookingSelectedSeats",
+      JSON.stringify(selectedSeatSnapshot),
+    );
 
     if (!keycloak?.authenticated) {
       keycloak?.login({
@@ -329,9 +350,9 @@ export default function SelectTicketPage() {
               {startDate && (
                 <div className="event-date">
                   {startDate.toLocaleDateString("vi-VN", {
-                    weekday: "short",
+                    weekday: "long",
                     day: "numeric",
-                    month: "short",
+                    month: "long",
                     year: "numeric",
                   })}
                 </div>

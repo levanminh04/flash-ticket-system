@@ -2,6 +2,12 @@
    SELECT TICKET PAGE - Booking Flow Step 1
    ============================================ */
 
+.select-ticket-page {
+  min-height: calc(100vh - 56px);
+  background: var(--page-gradient-booking);
+  background-repeat: no-repeat;
+}
+
 /* Focus Mode Header */
 .booking-focus-header {
   background: #ffffff;
