@@ -140,3 +140,102 @@ body {
 .login-footer a:hover {
     text-decoration: underline;
 }
+
+/* --- Social Login Styles --- */
+.social-login {
+    margin-top: 24px;
+}
+
+.social-separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.social-separator::before,
+.social-separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.social-separator span {
+    padding: 0 16px;
+    color: #718096;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.social-buttons {
+    display: flex;
+    gap: 16px;
+}
+
+.btn-social {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #4a5568;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.btn-social:hover {
+    background: #f7fafc;
+    border-color: #cbd5e0;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.btn-social svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* --- OTP Input Styles --- */
+.otp-container {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+.otp-input {
+    width: 48px !important;
+    height: 56px;
+    font-size: 24px !important;
+    text-align: center;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    transition: all 0.2s;
+    font-weight: 600;
+    color: #2d3748;
+    padding: 0 !important;
+}
+
+.otp-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* --- Register Form Styles --- */
+.form-row {
+    display: flex;
+    gap: 16px;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
