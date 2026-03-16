@@ -288,6 +288,82 @@
   gap: 16px;
 }
 
+.ticket-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ticket-summary-pill {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ticket-summary-pill span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ticket-summary-pill strong {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.ticket-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ticket-search-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.ticket-search-field svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ticket-search-field input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.ticket-status-filter {
+  min-height: 42px;
+  min-width: 170px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.ticket-filter-empty {
+  margin-bottom: 16px;
+}
+
 .order-list {
   width: 100%;
   max-width: 600px;
@@ -501,6 +577,21 @@
   padding-right: 36px;
 }
 
+.modal-inline-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.modal-inline-loading .loading-spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
 .modal-meta {
   font-size: 14px;
   color: var(--text-secondary);
@@ -539,10 +630,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 12px;
   padding: 4px 10px;
   border-radius: 9999px;
   white-space: nowrap;
-  color: #ffffff;
+  color: #166534;
 }
 
 .order-detail-info .info-row.total {
@@ -624,4 +716,28 @@
 .btn-danger:hover:not(:disabled) {
   background: #df3333;
   color: #FFFFFF;
+}
+
+@media (max-width: 900px) {
+  .ticket-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ticket-tools {
+    flex-wrap: wrap;
+  }
+
+  .ticket-search-field {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .ticket-summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-status-filter {
+    width: 100%;
+  }
 }

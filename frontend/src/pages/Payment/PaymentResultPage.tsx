@@ -1,10 +1,12 @@
-import { useEffect, useState, useRef } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useKeycloak } from "@react-keycloak/web";
+import { Link, useSearchParams } from "react-router-dom";
+import { Check, Home, X } from "lucide-react";
+import axiosClient from "../../lib/axiosClient";
 import {
   paymentService,
   PaymentStatusResponse,
 } from "../../services/paymentService";
-import { Check, X, Home } from "lucide-react";
 
 interface DisplayResult {
   success: boolean;
@@ -16,31 +18,80 @@ interface DisplayResult {
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
+  const { initialized, keycloak } = useKeycloak();
   const [result, setResult] = useState<DisplayResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
+  const paymentQuery = searchParams.toString();
 
   useEffect(() => {
-    const vnpResponseCode = searchParams.get("vnp_ResponseCode");
-    const vnpAmount = searchParams.get("vnp_Amount");
+    if (!initialized) return;
+
+    const params = new URLSearchParams(paymentQuery);
+    const vnpResponseCode = params.get("vnp_ResponseCode");
+    const vnpAmount = params.get("vnp_Amount");
+    const hasTxnRef = Boolean(params.get("vnp_TxnRef"));
+    const hasSecureHash = Boolean(params.get("vnp_SecureHash"));
     const orderId = sessionStorage.getItem("lastOrderId");
     const orderNumber = sessionStorage.getItem("lastOrderNumber");
 
-    if (!vnpResponseCode && !orderId) {
-      setResult({ success: false, message: "Không có dữ liệu thanh toán." });
-      setIsLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    const quickSuccess = vnpResponseCode === "00";
-    const quickAmount = vnpAmount ? parseInt(vnpAmount) / 100 : undefined;
-    if (orderId) {
+    const run = async () => {
+      setIsLoading(true);
+      if (!vnpResponseCode && !orderId) {
+        setResult({ success: false, message: "Không có dữ liệu thanh toán." });
+        setIsLoading(false);
+        return;
+      }
+
+      const quickSuccess = vnpResponseCode === "00";
+      const quickAmount = vnpAmount ? parseInt(vnpAmount, 10) / 100 : undefined;
+
+      // Local/dev fallback:
+      // khi VNPay không gọi được IPN vào localhost, frontend chủ động forward callback params về backend 1 lần.
+      if (hasTxnRef && hasSecureHash) {
+        try {
+          await axiosClient.get(`/api/payments/vnpay-ipn?${paymentQuery}`);
+        } catch (error) {
+          // Không chặn luồng polling; có thể callback này đã được xử lý trước đó hoặc bị retry.
+          console.warn("Failed to forward VNPay callback from frontend:", error);
+        }
+      }
+
+      if (!orderId) {
+        setResult({
+          success: false,
+          amount: quickAmount,
+          message: quickSuccess
+            ? "Đã nhận phản hồi thành công từ VNPay, nhưng không tìm thấy mã đơn hàng trong phiên để đối soát tự động. Vui lòng kiểm tra lại trong Đơn hàng của tôi."
+            : "Thanh toán không thành công. Vui lòng thử lại.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (!keycloak.authenticated) {
+        setResult({
+          success: false,
+          orderNumber: orderNumber || undefined,
+          amount: quickAmount,
+          message:
+            "Phiên đăng nhập đã hết. Vui lòng đăng nhập lại để hệ thống xác nhận trạng thái thanh toán.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
       let attempts = 0;
       const maxAttempts = 10;
+
       const pollStatus = async () => {
         try {
           const status: PaymentStatusResponse =
             await paymentService.getPaymentStatus(orderId);
+
+          if (cancelled) return;
 
           if (status.orderStatus !== "PENDING" || attempts >= maxAttempts) {
             clearInterval(pollRef.current);
@@ -54,49 +105,51 @@ export default function PaymentResultPage() {
               amount: Number(status.totalAmount) || quickAmount,
               message: isConfirmed
                 ? "Thanh toán thành công!"
-                : `Thanh toán không thành công (${status.orderStatus}). Vui lòng thử lại.`,
+                : `Thanh toán chưa hoàn tất (${status.orderStatus}). Vui lòng kiểm tra lại trong Đơn hàng của tôi.`,
             });
             setIsLoading(false);
             sessionStorage.removeItem("lastOrderId");
             sessionStorage.removeItem("lastOrderNumber");
             return;
           }
+
           attempts++;
-        } catch (err) {
-          console.error("Failed to poll payment status:", err);
+        } catch (error: any) {
+          if (cancelled) return;
+          console.error("Failed to poll payment status:", error);
           clearInterval(pollRef.current);
-          const status = (err as any)?.response?.status;
-          const unavailableMessage =
-            "Hệ thống thanh toán đang xử lý chậm. Vui lòng vào Đơn hàng của tôi để kiểm tra lại sau.";
+
+          const statusCode = error?.response?.status;
+          const message =
+            statusCode === 401 || statusCode === 403
+              ? "Không thể xác nhận đơn hàng vì phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại và kiểm tra Đơn hàng của tôi."
+              : statusCode === 503
+                ? "Hệ thống thanh toán đang xử lý chậm. Vui lòng kiểm tra lại trong Đơn hàng của tôi sau ít phút."
+                : "Không thể xác nhận trạng thái thanh toán lúc này. Vui lòng kiểm tra lại trong Đơn hàng của tôi.";
+
           setResult({
-            success: quickSuccess && status !== 503,
+            success: false,
             orderNumber: orderNumber || undefined,
             amount: quickAmount,
-            message:
-              status === 503
-                ? unavailableMessage
-                : quickSuccess
-                  ? "Thanh toán thành công!"
-                  : "Thanh toán không thành công. Vui lòng thử lại.",
+            message,
           });
           setIsLoading(false);
         }
       };
-      pollStatus();
-      pollRef.current = setInterval(pollStatus, 3000);
-    } else {
-      setResult({
-        success: quickSuccess,
-        amount: quickAmount,
-        message: quickSuccess
-          ? "Thanh toán thành công!"
-          : "Thanh toán không thành công. Vui lòng thử lại.",
-      });
-      setIsLoading(false);
-    }
 
-    return () => clearInterval(pollRef.current);
-  }, [searchParams]);
+      await pollStatus();
+      if (!cancelled) {
+        pollRef.current = setInterval(pollStatus, 3000);
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollRef.current);
+    };
+  }, [initialized, keycloak.authenticated, paymentQuery]);
 
   if (isLoading) {
     return (
@@ -130,17 +183,15 @@ export default function PaymentResultPage() {
         className={`result-card ${result.success ? "success-state" : ""}`}
         style={{ position: "relative", overflow: "hidden" }}
       >
-        {/* Icon */}
-        <div
-          className={`result-icon ${result.success ? "success" : "failure"}`}
-        >
-          {result.success ? <Check size={28} strokeWidth={3.2} /> : <X size={28} strokeWidth={3.2} />}
+        <div className={`result-icon ${result.success ? "success" : "failure"}`}>
+          {result.success ? (
+            <Check size={28} strokeWidth={3.2} />
+          ) : (
+            <X size={28} strokeWidth={3.2} />
+          )}
         </div>
 
-        {/* Title */}
-        <h1
-          className={`result-title ${result.success ? "success" : "failure"}`}
-        >
+        <h1 className={`result-title ${result.success ? "success" : "failure"}`}>
           {result.success ? "Thanh toán thành công!" : "Thanh toán thất bại"}
         </h1>
 
@@ -151,50 +202,44 @@ export default function PaymentResultPage() {
               "Đã có lỗi xảy ra trong quá trình thanh toán. Vui lòng thử lại hoặc liên hệ hỗ trợ."}
         </p>
 
-        {/* Order Info */}
-        {(result.orderNumber || result.amount) && (
+        {result.orderNumber || result.amount !== undefined ? (
           <div className="result-order-info">
-            {result.orderNumber && (
+            {result.orderNumber ? (
               <div className="info-row">
                 <span className="label">Mã đơn hàng</span>
                 <span className="value">{result.orderNumber}</span>
               </div>
-            )}
-            {result.transactionNumber && (
+            ) : null}
+            {result.transactionNumber ? (
               <div className="info-row">
                 <span className="label">Mã giao dịch</span>
                 <span className="value">{result.transactionNumber}</span>
               </div>
-            )}
-            {result.amount !== undefined && (
+            ) : null}
+            {result.amount !== undefined ? (
               <div className="info-row total">
                 <span className="label">Số tiền</span>
                 <span className="value">
                   {result.amount.toLocaleString("vi-VN")} đ
                 </span>
               </div>
-            )}
+            ) : null}
           </div>
-        )}
+        ) : null}
 
-        {/* Actions */}
         <div className="result-actions">
           <Link to="/" className="btn btn-outline">
             <Home size={16} />
             Về trang chủ
           </Link>
-          {result.success && (
+          {result.success ? (
             <Link to="/my-tickets" className="btn btn-primary">
               Xem vé của tôi
             </Link>
-          )}
-          {!result.success && (
-            <button
-              className="btn btn-primary"
-              onClick={() => window.history.back()}
-            >
-              Thử lại
-            </button>
+          ) : (
+            <Link to="/my-orders" className="btn btn-primary">
+              Kiểm tra đơn hàng
+            </Link>
           )}
         </div>
       </div>
