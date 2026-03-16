@@ -150,7 +150,7 @@ export default function SelectTicketPage() {
       })
       .catch((err: any) => {
         console.error("Failed to load event:", err);
-        setError("Không thể tải thông tin sự kiện.");
+        setError("Vui lòng tải lại trang");
         toast.error("Không thể tải thông tin sự kiện.");
       })
       .finally(() => setIsLoading(false));
@@ -317,7 +317,7 @@ export default function SelectTicketPage() {
   if (isLoading) {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
-        <p>Đang tải thông tin vé...</p>
+        <p>Đang tải thông tin vé</p>
       </div>
     );
   }

@@ -340,7 +340,7 @@ export default function HomePage() {
               ))
             ) : (
               <li className="category-item">
-                <span className="category-link">Đang tải...</span>
+                <span className="category-link">Đang tải</span>
               </li>
             )}
           </ul>

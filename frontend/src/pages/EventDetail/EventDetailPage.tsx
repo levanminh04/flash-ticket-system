@@ -1,4 +1,11 @@
-import { useEffect, useState } from "react";
+import {
+  CSSProperties,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { eventService } from "../../services/eventService";
 import { categoryService } from "../../services/categoryService";
@@ -8,10 +15,18 @@ import { MapPin, Calendar, Ticket } from "lucide-react";
 export default function EventDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const heroCardRef = useRef<HTMLElement | null>(null);
+  const heroDividerRef = useRef<HTMLDivElement | null>(null);
+  const heroMaskId = useId().replace(/:/g, "");
   const [event, setEvent] = useState<EventSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [heroMask, setHeroMask] = useState<{
+    width: number;
+    height: number;
+    dividerCenterX: number;
+  } | null>(null);
 
   useEffect(() => {
     categoryService
@@ -41,10 +56,61 @@ export default function EventDetailPage() {
       });
   }, [slug]);
 
+  useLayoutEffect(() => {
+    if (!heroCardRef.current || !heroDividerRef.current) return;
+
+    const updateHeroMask = () => {
+      if (!heroCardRef.current || !heroDividerRef.current) return;
+
+      const cardRect = heroCardRef.current.getBoundingClientRect();
+      const dividerRect = heroDividerRef.current.getBoundingClientRect();
+
+      if (cardRect.width === 0 || cardRect.height === 0) return;
+
+      const nextMask = {
+        width: Math.round(cardRect.width),
+        height: Math.round(cardRect.height),
+        dividerCenterX: Math.round(
+          dividerRect.left - cardRect.left + dividerRect.width / 2
+        ),
+      };
+
+      setHeroMask((currentMask) => {
+        if (
+          currentMask &&
+          currentMask.width === nextMask.width &&
+          currentMask.height === nextMask.height &&
+          currentMask.dividerCenterX === nextMask.dividerCenterX
+        ) {
+          return currentMask;
+        }
+
+        return nextMask;
+      });
+    };
+
+    updateHeroMask();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateHeroMask);
+      return () => window.removeEventListener("resize", updateHeroMask);
+    }
+
+    const resizeObserver = new ResizeObserver(updateHeroMask);
+    resizeObserver.observe(heroCardRef.current);
+    resizeObserver.observe(heroDividerRef.current);
+    window.addEventListener("resize", updateHeroMask);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateHeroMask);
+    };
+  }, [event]);
+
   if (isLoading) {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
-        <p>Đang tải thông tin sự kiện...</p>
+        <p>Đang tải thông tin sự kiện</p>
       </div>
     );
   }
@@ -87,6 +153,7 @@ export default function EventDetailPage() {
   const city = event.venue?.city || event.city;
   const totalCapacity = event.statistics?.totalCapacity || event.totalCapacity;
   const ticketsSold = event.statistics?.ticketsSold || event.ticketsSold;
+  const detailAddressLine = [venueName, city].filter(Boolean).join(" • ");
 
   // Find min price from ticketTypes or fallback to minPrice
   const minPrice =
@@ -100,8 +167,53 @@ export default function EventDetailPage() {
     event.images?.find((i: any) => i.type === "POSTER")?.url ||
     event.thumbnailUrl;
 
+  const heroCardStyle = heroMask
+    ? ({
+        "--event-hero-mask": `url(#${heroMaskId})`,
+      } as CSSProperties)
+    : undefined;
+
   return (
     <div className="event-detail-page" style={{ paddingBottom: "60px" }}>
+      {heroMask && (
+        <svg
+          aria-hidden="true"
+          className="event-hero-mask-defs"
+          focusable="false"
+          width="0"
+          height="0"
+        >
+          <defs>
+            <mask
+              id={heroMaskId}
+              x="0"
+              y="0"
+              width={heroMask.width}
+              height={heroMask.height}
+              maskUnits="userSpaceOnUse"
+              maskContentUnits="userSpaceOnUse"
+            >
+              <rect
+                x="0"
+                y="0"
+                width={heroMask.width}
+                height={heroMask.height}
+                rx="30"
+                ry="30"
+                fill="white"
+              />
+              <circle cx={heroMask.dividerCenterX} cy="0" r="30" fill="black" />
+              <circle
+                cx={heroMask.dividerCenterX}
+                cy={heroMask.height}
+                r="30"
+                fill="black"
+              />
+            </mask>
+          </defs>
+        </svg>
+      )}
+
       {/* CATEGORY NAV */}
       <nav className="category-nav">
         <div className="container">
@@ -124,7 +236,7 @@ export default function EventDetailPage() {
               ))
             ) : (
               <li className="category-item">
-                <span className="category-link">Đang tải...</span>
+                <span className="category-link">Đang tải</span>
               </li>
             )}
           </ul>
@@ -161,60 +273,20 @@ export default function EventDetailPage() {
       </div>
 
       {/* CONTENT SECTION */}
-      <div
-        className="container"
-        style={{ marginTop: "-80px", position: "relative", zIndex: 10 }}
-      >
-        <div
-          style={{
-            background: "white",
-            borderRadius: "16px",
-            padding: "32px",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.1)",
-            display: "flex",
-            gap: "40px",
-            flexWrap: "wrap",
-          }}
+      <div className="container event-hero-wrap">
+        <article
+          className="event-hero-card"
+          ref={heroCardRef}
+          style={heroCardStyle}
         >
-          {/* LEFT: Thumbnail (Optional, if you want a poster look) */}
-          <div style={{ width: "240px", flexShrink: 0 }}>
-            <img
-              src={
-                posterUrl ||
-                "https://via.placeholder.com/240x320?text=No+Poster"
-              }
-              alt="Poster"
-              style={{
-                width: "100%",
-                borderRadius: "12px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-              }}
-            />
-          </div>
-
-          {/* RIGHT: Event Info */}
-          <div style={{ flex: 1, minWidth: "300px" }}>
+          {/* LEFT: Event Info */}
+          <section className="event-hero-info">
             {event.categories && event.categories.length > 0 ? (
-              <div
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  marginBottom: "16px",
-                }}
-              >
+              <div className="event-hero-tags">
                 {event.categories.map((cat: any) => (
                   <span
                     key={cat.id || cat.slug || cat.name}
-                    style={{
-                      background: "var(--primary)",
-                      color: "white",
-                      padding: "6px 12px",
-                      borderRadius: "9999px",
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      display: "inline-block",
-                    }}
+                    className="event-hero-tag"
                   >
                     {cat.name}
                   </span>
@@ -222,70 +294,19 @@ export default function EventDetailPage() {
               </div>
             ) : (
               event.category && (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    flexWrap: "wrap",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <span
-                    style={{
-                      background: "var(--primary)",
-                      color: "white",
-                      padding: "6px 12px",
-                      borderRadius: "9999px",
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      display: "inline-block",
-                    }}
-                  >
-                    {event.category.name}
-                  </span>
+                <div className="event-hero-tags">
+                  <span className="event-hero-tag">{event.category.name}</span>
                 </div>
               )
             )}
 
-            <h1
-              style={{
-                fontSize: "32px",
-                fontWeight: "bold",
-                marginBottom: "24px",
-                lineHeight: "1.3",
-              }}
-            >
-              {event.title}
-            </h1>
+            <h1 className="event-hero-title">{event.title}</h1>
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "16px",
-                marginBottom: "32px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "12px",
-                  color: "var(--text-secondary)",
-                }}
-              >
-                <Calendar
-                  size={20}
-                  style={{ color: "var(--primary)", flexShrink: 0 }}
-                />
+            <div className="event-hero-meta-list">
+              <div className="event-hero-meta-item">
+                <Calendar size={20} className="event-hero-meta-icon" />
                 <div>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontWeight: "500",
-                      color: "var(--text-primary)",
-                    }}
-                  >
+                  <p className="event-hero-meta-primary">
                     {startDate.toLocaleDateString("vi-VN", {
                       weekday: "long",
                       year: "numeric",
@@ -293,7 +314,7 @@ export default function EventDetailPage() {
                       day: "numeric",
                     })}
                   </p>
-                  <p style={{ margin: 0, fontSize: "14px" }}>
+                  <p className="event-hero-meta-secondary">
                     {startDate.toLocaleTimeString("vi-VN", {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -307,59 +328,26 @@ export default function EventDetailPage() {
                 </div>
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "12px",
-                  color: "var(--text-secondary)",
-                }}
-              >
-                <MapPin
-                  size={20}
-                  style={{ color: "var(--primary)", flexShrink: 0 }}
-                />
+              <div className="event-hero-meta-item">
+                <MapPin size={20} className="event-hero-meta-icon" />
                 <div>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontWeight: "500",
-                      color: "var(--text-primary)",
-                    }}
-                  >
+                  <p className="event-hero-meta-primary">
                     {venueName || "Đang cập nhật địa điểm"}
                   </p>
-                  <p style={{ margin: 0, fontSize: "14px" }}>{city || ""}</p>
+                  <p className="event-hero-meta-secondary">
+                    {detailAddressLine || "Đang cập nhật địa chỉ chi tiết"}
+                  </p>
                 </div>
               </div>
 
-              {/* Tickets Capacity */}
               {(totalCapacity !== undefined || ticketsSold !== undefined) && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "12px",
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  <Ticket
-                    size={20}
-                    style={{ color: "var(--primary)", flexShrink: 0 }}
-                  />
+                <div className="event-hero-meta-item">
+                  <Ticket size={20} className="event-hero-meta-icon" />
                   <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontWeight: "500",
-                        color: "var(--text-primary)",
-                      }}
-                    >
-                      Số lượng vé:{" "}
-                      {totalCapacity?.toLocaleString("vi-VN") ||
-                        "Không giới hạn"}
+                    <p className="event-hero-meta-primary">
+                      Số lượng vé: {totalCapacity?.toLocaleString("vi-VN") || "Không giới hạn"}
                     </p>
-                    <p style={{ margin: 0, fontSize: "14px" }}>
+                    <p className="event-hero-meta-secondary">
                       Đã bán: {ticketsSold?.toLocaleString("vi-VN") || "0"}
                     </p>
                   </div>
@@ -367,58 +355,46 @@ export default function EventDetailPage() {
               )}
             </div>
 
-            <div
-              style={{
-                background: "#f9f9f9",
-                padding: "24px",
-                borderRadius: "12px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "12px" }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "16px",
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  Giá vé từ:
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "28px",
-                    fontWeight: "bold",
-                    color: "var(--primary)",
-                  }}
-                >
-                  {minPrice
-                    ? `${minPrice.toLocaleString("vi-VN")} đ`
-                    : "Miễn phí"}
+            <div className="event-hero-separator" />
+
+            <div className="event-hero-cta-row">
+              <div className="event-hero-price-inline">
+                <p className="event-hero-price-label">Giá vé chỉ từ</p>
+                <p className="event-hero-price-value">
+                  {minPrice ? `${minPrice.toLocaleString("vi-VN")} đ` : "Miễn phí"}
                 </p>
               </div>
-              <button
-                className="btn btn-primary"
-                style={{
-                  padding: "10px 32px",
-                  fontSize: "16px",
-                  borderRadius: "9999px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-                onClick={() => navigate(`/events/${slug}/book`)}
-              >
-                Mua vé ngay
-              </button>
             </div>
+
+            <button
+              className="btn btn-primary event-hero-cta-button"
+              onClick={() => navigate(`/events/${slug}/book`)}
+            >
+              Chọn lịch diễn
+            </button>
+          </section>
+
+          {/* Decorative divider */}
+          <div className="event-hero-divider" aria-hidden="true" ref={heroDividerRef}>
+            <span className="event-hero-divider-cap top" />
+            <span className="event-hero-divider-line" />
+            <span className="event-hero-divider-cap bottom" />
           </div>
-        </div>
+
+          {/* RIGHT: Poster */}
+          <section className="event-hero-poster">
+            <img
+              src={
+                posterUrl ||
+                bannerUrl ||
+                "https://via.placeholder.com/560x720?text=No+Poster"
+              }
+              alt={event.title}
+              className="event-hero-poster-image"
+            />
+            <div className="event-hero-poster-overlay" />
+          </section>
+        </article>
 
         {/* TICKET TYPES SECTION */}
         {event.ticketTypes && event.ticketTypes.length > 0 && (

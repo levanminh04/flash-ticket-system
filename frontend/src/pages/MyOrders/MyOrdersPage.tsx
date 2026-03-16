@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import AccountSidebar from "../../components/account/AccountSidebar";
 import AppPagination from "../../components/common/AppPagination";
@@ -47,7 +47,8 @@ function statusLabel(status: string) {
 }
 
 export default function MyOrdersPage() {
-  const { keycloak } = useKeycloak();
+  const { keycloak, initialized } = useKeycloak();
+  const navigate = useNavigate();
   const [content, setContent] = useState<OrderSummary[]>([]);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,13 @@ export default function MyOrdersPage() {
   const [page, setPage] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!initialized) return;
+    if (!keycloak.authenticated) {
+      navigate("/", { replace: true });
+    }
+  }, [initialized, keycloak.authenticated, navigate]);
 
   useEffect(() => {
     if (!keycloak.authenticated) return;
@@ -115,18 +123,7 @@ export default function MyOrdersPage() {
     }
   };
 
-  if (!keycloak.authenticated) {
-    return (
-      <div className="my-orders-page">
-        <div className="container">
-          <p>Vui lòng đăng nhập để xem đơn hàng.</p>
-          <button onClick={() => keycloak.login()} className="btn btn-primary">
-            Đăng nhập
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!initialized || !keycloak.authenticated) return null;
 
   return (
     <div className="my-orders-page">

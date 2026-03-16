@@ -12,6 +12,10 @@ import PaymentResultPage from "./pages/Payment/PaymentResultPage";
 import ProfilePage from "./pages/Profile/ProfilePage";
 import MyTicketsPage from "./pages/MyTickets/MyTicketsPage";
 import MyOrdersPage from "./pages/MyOrders/MyOrdersPage";
+import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
+import OrganizerMediaPage from "./pages/Organizer/OrganizerMediaPage";
+import OrganizerCheckInPage from "./pages/Organizer/OrganizerCheckInPage";
+import OrganizerProfilePage from "./pages/Organizer/OrganizerProfilePage";
 
 import { ReactKeycloakProvider } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
@@ -63,6 +67,16 @@ function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/my-tickets" element={<MyTicketsPage />} />
               <Route path="/my-orders" element={<MyOrdersPage />} />
+              <Route path="/organizer" element={<OrganizerHubPage />} />
+              <Route
+                path="/organizer/profile"
+                element={<OrganizerProfilePage />}
+              />
+              <Route path="/organizer/media" element={<OrganizerMediaPage />} />
+              <Route
+                path="/organizer/check-in"
+                element={<OrganizerCheckInPage />}
+              />
             </Routes>
           </div>
         </Router>

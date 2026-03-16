@@ -2,14 +2,19 @@
 import { useEffect } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Search } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import { confirmDestructiveAction } from "../../lib/swal";
+import { hasRealmRole } from "../../lib/auth";
 
 const LOGIN_TOAST_KEY = "flashTicket:pendingLoginToast";
 
 const Navbar = () => {
-  const { keycloak } = useKeycloak();
+  const { keycloak, initialized } = useKeycloak();
+  const location = useLocation();
+  const isAuthenticated = initialized && !!keycloak?.authenticated;
+  const isOrganizer = hasRealmRole(keycloak?.tokenParsed, "ORGANIZER");
+  const isOrganizerWorkspace = isOrganizer && location.pathname.startsWith("/organizer");
 
   const handleLogout = async () => {
     const confirmed = await confirmDestructiveAction({
@@ -24,13 +29,13 @@ const Navbar = () => {
   };
 
   useEffect(() => {
-    if (!keycloak?.authenticated) return;
+    if (!isAuthenticated) return;
     const shouldNotify = sessionStorage.getItem(LOGIN_TOAST_KEY) === "1";
     if (!shouldNotify) return;
 
     toast.success("Đăng nhập thành công");
     sessionStorage.removeItem(LOGIN_TOAST_KEY);
-  }, [keycloak?.authenticated]);
+  }, [isAuthenticated]);
 
   return (
     <nav className="navbar">
@@ -72,7 +77,9 @@ const Navbar = () => {
         </div>
 
         <div className="nav-right nav-actions">
-          {!keycloak?.authenticated ? (
+          {!initialized ? (
+            <div style={{ width: 120, height: 40 }} aria-hidden="true" />
+          ) : !isAuthenticated ? (
             <>
               <button
                 onClick={() => keycloak?.register()}
@@ -126,12 +133,21 @@ const Navbar = () => {
                 <Link to="/profile" className="dropdown-item">
                   Hồ sơ cá nhân
                 </Link>
-                <Link to="/my-tickets" className="dropdown-item">
-                  Vé của tôi
-                </Link>
-                <Link to="/my-orders" className="dropdown-item">
-                  Đơn hàng của tôi
-                </Link>
+                {!isOrganizerWorkspace ? (
+                  <>
+                    <Link to="/my-tickets" className="dropdown-item">
+                      Vé của tôi
+                    </Link>
+                    <Link to="/my-orders" className="dropdown-item">
+                      Đơn hàng của tôi
+                    </Link>
+                  </>
+                ) : null}
+                {isOrganizer ? (
+                  <Link to="/organizer" className="dropdown-item">
+                    Quản lý sự kiện
+                  </Link>
+                ) : null}
                 <hr />
                 <button
                   onClick={() => void handleLogout()}
