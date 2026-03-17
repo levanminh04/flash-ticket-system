@@ -4,9 +4,9 @@ server:
 spring:
   # PostgreSQL Database
   datasource:
-    url: ${POSTGRES_URL:jdbc:postgresql://13.239.118.235:5432/flash-ticket?currentSchema=ai_schema,public}
-    username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:123456}
+    url: ${POSTGRES_URL}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   # JPA Configuration

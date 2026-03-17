@@ -87,6 +87,9 @@ public class SecurityConfig {
                         
                         // Core Service
                         .pathMatchers("/api/bookings/**").authenticated()
+                        .pathMatchers(HttpMethod.GET, "/api/payments/vnpay-ipn").permitAll()
+                        .pathMatchers("/api/orders/**").authenticated()
+                        .pathMatchers("/api/tickets/**").authenticated()
                         .pathMatchers("/api/payments/**").authenticated()
                         
                         // AI Service 
