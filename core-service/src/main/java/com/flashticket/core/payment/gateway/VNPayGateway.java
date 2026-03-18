@@ -195,12 +195,13 @@ public class VNPayGateway implements PaymentGateway {
 
     /**
      * Build hash data string: "key=value&key=value..." theo thứ tự key sorted.
-     * Không URL encode trong hash data — chỉ concatenate raw value.
+     * lưu ý: Từ phiên bản 2.1.0, VNPay yêu cầu CẢ GIÁ TRỊ trong hashData
+     * cũng PHẢI ĐƯỢC URL ENCODE (UTF-8) trước khi hash.
      */
     private String buildHashData(Map<String, String> params) {
         return params.entrySet().stream()
             .filter(e -> e.getValue() != null && !e.getValue().isBlank())
-            .map(e -> e.getKey() + "=" + e.getValue())
+            .map(e -> e.getKey() + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
             .collect(Collectors.joining("&"));
     }
 

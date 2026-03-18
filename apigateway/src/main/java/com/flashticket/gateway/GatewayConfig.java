@@ -42,7 +42,7 @@ public class GatewayConfig {
         return builder.routes()
                 // Core Service - Events, Bookings, Payments, Categories
                 .route("core-service", r -> r
-                        .path("/api/events/**", "/api/bookings/**", "/api/payments/**", 
+                        .path("/api/events/**", "/api/bookings/**", "/api/payments/**", "/api/orders/**", "/api/tickets/**",
                               "/api/categories/**", "/api/organizer/**", "/api/admin/**")
                         .filters(f -> f
                                 .retry(retryConfig -> retryConfig

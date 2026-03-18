@@ -5,15 +5,15 @@ spring:
   # MongoDB Configuration
   data:
     mongodb:
-      uri: ${MONGO_URI:mongodb://13.239.118.235:27018/ticketbox_users}
+      uri: ${MONGO_URI}
       database: ${MONGO_DATABASE:ticketbox_users}
   
   # RabbitMQ Configuration
   rabbitmq:
-    host: ${RABBITMQ_HOST:13.239.118.235}
+    host: ${RABBITMQ_HOST}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
 
 # Eureka Client
 eureka:
@@ -33,15 +33,27 @@ management:
       exposure:
         include: "*"
 
-# Keycloak Admin Configuration
+# Keycloak Admin Configuration dùng Keycloak Admin API.
+
+# Cách 1 Dùng Service Account + client-secret
 keycloak:
   admin:
-    username: ${KEYCLOAK_ADMIN_USERNAME:levanminh}
-    password: ${KEYCLOAK_ADMIN_PASSWORD:123456}
-    server-url: ${KEYCLOAK_SERVER_URL:http://13.239.118.235:9090}
+    server-url: ${KEYCLOAK_SERVER_URL}
     realm: ${KEYCLOAK_REALM:flash-ticket}
-    client-id: ${KEYCLOAK_CLIENT_ID:admin-cli}
-    client-uid: ${KEYCLOAK_CLIENT_UID:356e5294-a49d-4370-b206-8c5d003058d0}
+    client-id: ${KEYCLOAK_CLIENT_ID:user-service}
+    client-secret: ${KEYCLOAK_CLIENT_SECRET}
+
+#Cách 2 — Dùng admin-cli + username/password (đơn giản hơn):
+
+#keycloak:
+#  admin:
+#    server-url: ${KEYCLOAK_SERVER_URL}
+#    realm: ${KEYCLOAK_REALM:flash-ticket}
+#    client-id: admin-cli
+#    username: ${KEYCLOAK_ADMIN_USERNAME}
+#    password: ${KEYCLOAK_ADMIN_PASSWORD}
+
+
 
 # Logging
 logging:

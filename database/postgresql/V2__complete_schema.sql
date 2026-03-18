@@ -1178,8 +1178,11 @@ FOR EACH ROW EXECUTE FUNCTION booking_schema.generate_ticket_code();
 CREATE OR REPLACE FUNCTION payment_schema.generate_transaction_number()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.transaction_number := 'TXN-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || 
-                              UPPER(SUBSTRING(NEW.id::text, 1, 8));
+    -- Chỉ sinh mã tự động nếu backend không truyền xuống transaction_number
+    IF NEW.transaction_number IS NULL THEN
+        NEW.transaction_number := 'TXN-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || 
+                                  UPPER(SUBSTRING(NEW.id::text, 1, 8));
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

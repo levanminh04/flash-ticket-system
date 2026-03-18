@@ -1,7 +1,6 @@
 # ============================================================================
 # TicketBox .gitignore
 # ============================================================================
-.gitignore
 
 # Environment Variables (CRITICAL - NEVER COMMIT SECRETS)
 .env
@@ -66,6 +65,7 @@ yarn-error.log*
 !**/src/main/**/build/
 !**/src/test/**/build/
 /AI_CONTEXT.md
+/SYSTEM_DESIGN_NOTES.md
 database/postgresql/Database.sql
 API_DATABASE_DOCS.md
 API_Docs.md
