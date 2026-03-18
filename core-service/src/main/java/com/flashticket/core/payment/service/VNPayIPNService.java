@@ -2,17 +2,24 @@ package com.flashticket.core.payment.service;
 
 import com.flashticket.core.booking.entity.Order;
 import com.flashticket.core.booking.repository.OrderRepository;
+import com.flashticket.core.shared.messaging.RabbitMQConstants;
 import com.flashticket.core.payment.entity.Transaction;
 import com.flashticket.core.payment.gateway.PaymentGateway;
 import com.flashticket.core.payment.gateway.PaymentGatewayFactory;
 import com.flashticket.core.payment.gateway.VNPayResponseCode;
+import com.flashticket.core.shared.event.PaymentSuccessEvent;
 import com.flashticket.core.payment.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -67,6 +74,8 @@ public class VNPayIPNService {
     private final PaymentGatewayFactory gatewayFactory;
     private final PaymentValidatorService validatorService;
     private final RedissonClient redissonClient;
+    private final RabbitTemplate rabbitTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Xử lý VNPay IPN callback.
@@ -137,6 +146,8 @@ public class VNPayIPNService {
             // ── Step 7: Update Order (nếu payment thành công)
             if (result.isSuccess()) {
                 confirmOrder(transaction.getOrderId());
+                // Publish local event -> TransactionalEventListener sẽ bắt và gửi lên RabbitMQ SAU KHI commit DB
+                eventPublisher.publishEvent(new PaymentSuccessEvent(transaction.getOrderId()));
                 log.info("[VNPay IPN] Payment SUCCESS — txnRef={}, orderId={}, amount={}",
                     txnRef, transaction.getOrderId(), result.amount());
             } else {
@@ -208,5 +219,36 @@ public class VNPayIPNService {
                     orderId, order.getStatus());
             }
         });
+    }
+
+    /**
+     * Listener bắt sự kiện PaymentSuccessEvent NỘI BỘ sau khi DB đã COMMIT THÀNH CÔNG.
+     * Giải quyết triệt để lỗi đua đồng bộ (Phantom Message/Read) khi gửi RabbitMQ.
+
+     KHÔNG có @Async:
+
+     Tomcat thread:
+     processIPN()
+     └─ @Transactional commit
+        └─ AFTER_COMMIT: gọi handlePaymentSuccessEvent() BLOCKING trên cùng thread
+            └─ rabbitTemplate.convertAndSend() ← nếu lag 2s thì Tomcat thread chờ 2s
+                └─ return response về VNPay  ← lúc này mới trả về (trễ 2s)
+     */
+    @Async("paymentAsyncExecutor") // Cần thêm @Async	Để đảm bảo response < 3s khi RabbitMQ lag.
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handlePaymentSuccessEvent(PaymentSuccessEvent event) {
+        try {
+            rabbitTemplate.convertAndSend(
+                RabbitMQConstants.EXCHANGE_PAYMENT,
+                RabbitMQConstants.RK_PAYMENT_SUCCESS,
+                event
+            );
+            log.info("[VNPay IPN] Published PaymentSuccessEvent to RabbitMQ (After DB Commit) — orderId={}", event.orderId());
+        } catch (Exception e) {
+            // Không cho lỗi publish RabbitMQ ảnh hưởng response IPN về VNPay
+            // Order đã CONFIRMED trong DB — có thể manual trigger lại sau
+            log.error("[VNPay IPN] Failed to publish PaymentSuccessEvent to RabbitMQ — orderId={}: {}",
+                event.orderId(), e.getMessage(), e);
+        }
     }
 }
