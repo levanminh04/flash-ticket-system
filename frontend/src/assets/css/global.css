@@ -4,6 +4,35 @@
   --primary-light: #5ce49b;
   --primary-dark: #1e8a52;
 
+  /* Three-zone page gradients */
+  --page-gradient-discovery:
+    radial-gradient(circle at top center, rgba(92, 228, 155, 0.24), transparent 24%),
+    linear-gradient(
+      180deg,
+      #08281d 0%,
+      #16533a 34%,
+      #d8f4e4 70%,
+      #f8fafc 100%
+    );
+  --page-gradient-booking:
+    radial-gradient(circle at top right, rgba(45, 194, 117, 0.2), transparent 26%),
+    linear-gradient(
+      180deg,
+      #0a1d29 0%,
+      #135164 34%,
+      #d9f1ee 70%,
+      #f8fafc 100%
+    );
+  --page-gradient-account:
+    radial-gradient(circle at top left, rgba(45, 194, 117, 0.18), transparent 24%),
+    linear-gradient(
+      180deg,
+      #0f172a 0%,
+      #214e43 34%,
+      #e5f5ec 70%,
+      #f8fafc 100%
+    );
+
   --success: #10b981;
   --warning: #f59e0b;
   --error: #ef4444;
@@ -127,4 +156,96 @@ a:hover {
 .btn-outline:hover {
   background: var(--bg-input);
   border-color: var(--text-muted);
+}
+
+/* Shared pagination */
+.pagination-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 32px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pagination-info {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.pagination__item {
+  display: flex;
+}
+
+.pagination__link {
+  min-width: 42px;
+  height: 42px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pagination__link:hover {
+  border-color: var(--primary);
+  color: var(--primary-dark);
+  background: #ffffff;
+}
+
+.pagination__link--nav {
+  padding: 0 18px;
+}
+
+.pagination__link--break {
+  cursor: default;
+  background: transparent;
+  border-color: transparent;
+}
+
+.pagination__item.is-active .pagination__link {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(45, 194, 117, 0.24);
+}
+
+.pagination__item.is-disabled .pagination__link {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .pagination {
+    gap: 8px;
+  }
+
+  .pagination__link {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .pagination__link--nav {
+    padding: 0 14px;
+  }
 }

@@ -1,7 +1,21 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import HomePage from "./pages/Home/HomePage";
+import EventSearchPage from "./pages/Search/EventSearchPage";
+import EventDetailPage from "./pages/EventDetail/EventDetailPage";
+import SelectTicketPage from "./pages/SelectTicket/SelectTicketPage";
+import CheckoutPage from "./pages/Checkout/CheckoutPage";
+import PaymentResultPage from "./pages/Payment/PaymentResultPage";
+import ProfilePage from "./pages/Profile/ProfilePage";
+import MyTicketsPage from "./pages/MyTickets/MyTicketsPage";
+import MyOrdersPage from "./pages/MyOrders/MyOrdersPage";
+import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
+import OrganizerMediaPage from "./pages/Organizer/OrganizerMediaPage";
+import OrganizerCheckInPage from "./pages/Organizer/OrganizerCheckInPage";
+import OrganizerProfilePage from "./pages/Organizer/OrganizerProfilePage";
 
 import { ReactKeycloakProvider } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
@@ -21,15 +35,9 @@ function App() {
     <ReactKeycloakProvider
       authClient={keycloak}
       initOptions={{
-        onLoad: "check-sso",
-        silentCheckSsoRedirectUri:
-          window.location.origin + "/silent-check-sso.html",
         checkLoginIframe: false,
         pkceMethod: "S256",
-      }}
-      onEvent={(event, error) => {
-        if (event === "onAuthError")
-          console.error("Keycloak Auth Error:", error);
+        useNonce: false,
       }}
     >
       <QueryClientProvider client={queryClient}>
@@ -37,9 +45,38 @@ function App() {
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
           <Navbar />
+          <ToastContainer
+            position="top-right"
+            autoClose={3500}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            pauseOnHover
+            draggable
+            theme="light"
+          />
           <div>
             <Routes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/search" element={<EventSearchPage />} />
+              <Route path="/event/:slug" element={<EventDetailPage />} />
+              <Route path="/events/:slug/book" element={<SelectTicketPage />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/payment-result" element={<PaymentResultPage />} />
+              <Route path="/payment/result" element={<PaymentResultPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/my-tickets" element={<MyTicketsPage />} />
+              <Route path="/my-orders" element={<MyOrdersPage />} />
+              <Route path="/organizer" element={<OrganizerHubPage />} />
+              <Route
+                path="/organizer/profile"
+                element={<OrganizerProfilePage />}
+              />
+              <Route path="/organizer/media" element={<OrganizerMediaPage />} />
+              <Route
+                path="/organizer/check-in"
+                element={<OrganizerCheckInPage />}
+              />
             </Routes>
           </div>
         </Router>
