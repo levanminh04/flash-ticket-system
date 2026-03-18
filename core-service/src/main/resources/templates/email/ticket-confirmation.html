@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác nhận đặt vé — Flash Ticket</title>
+    <style>
+        /* ── Reset ── */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f6fa;
+            color: #1a1a2e;
+            line-height: 1.6;
+        }
+
+        /* ── Wrapper ── */
+        .wrapper {
+            max-width: 640px;
+            margin: 32px auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        }
+
+        /* ── Header ── */
+        .header {
+            background: linear-gradient(135deg, #6c3fff 0%, #a259ff 100%);
+            padding: 36px 40px;
+            text-align: center;
+        }
+        .header .logo {
+            font-size: 26px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+        }
+        .header .logo span { color: #ffd166; }
+        .header .tagline {
+            margin-top: 6px;
+            font-size: 14px;
+            color: rgba(255,255,255,0.75);
+        }
+
+        /* ── Hero Banner ── */
+        .hero {
+            background: linear-gradient(135deg, #f3efff 0%, #ede9fe 100%);
+            padding: 28px 40px;
+            text-align: center;
+            border-bottom: 1px solid #ede9fe;
+        }
+        .hero .icon { font-size: 48px; margin-bottom: 12px; }
+        .hero h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #4c1d95;
+        }
+        .hero p {
+            margin-top: 6px;
+            font-size: 14px;
+            color: #6d28d9;
+        }
+
+        /* ── Content ── */
+        .content { padding: 32px 40px; }
+
+        /* ── Event Info Card ── */
+        .event-card {
+            background: #f8f7ff;
+            border: 1px solid #ede9fe;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+        }
+        .event-card .event-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #3b0764;
+            margin-bottom: 12px;
+        }
+        .event-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .event-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #374151;
+        }
+        .event-meta-row .icon-wrap {
+            width: 28px;
+            height: 28px;
+            background: #ede9fe;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        /* ── Divider ── */
+        .divider {
+            border: none;
+            border-top: 1px dashed #e0d7f8;
+            margin: 24px 0;
+        }
+
+        /* ── Tickets Section ── */
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ticket-item {
+            background: #ffffff;
+            border: 1.5px solid #ede9fe;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        .ticket-item::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 4px;
+            background: linear-gradient(135deg, #6c3fff, #a259ff);
+            border-radius: 4px 0 0 4px;
+        }
+        .ticket-code {
+            font-size: 13px;
+            font-weight: 600;
+            color: #6c3fff;
+            font-family: 'Courier New', monospace;
+            background: #f3efff;
+            padding: 4px 10px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .ticket-detail {
+            font-size: 13px;
+            color: #4b5563;
+        }
+        .ticket-detail strong { color: #1a1a2e; }
+
+        /* ── Important Notice ── */
+        .notice {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-top: 24px;
+            font-size: 13px;
+            color: #78350f;
+        }
+        .notice strong { color: #92400e; }
+
+        /* ── Footer ── */
+        .footer {
+            background: #f8f7ff;
+            padding: 24px 40px;
+            text-align: center;
+            border-top: 1px solid #ede9fe;
+        }
+        .footer p {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+        .footer a { color: #6c3fff; text-decoration: none; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+
+    <!-- Header -->
+    <div class="header">
+        <div class="logo">⚡ Flash<span>Ticket</span></div>
+        <div class="tagline">Trải nghiệm sự kiện không giới hạn</div>
+    </div>
+
+    <!-- Hero -->
+    <div class="hero">
+        <div class="icon">🎉</div>
+        <h1>Đặt vé thành công!</h1>
+        <p th:text="'Xin chào ' + ${holderName} + ', vé của bạn đã sẵn sàng.'">
+            Xin chào, vé của bạn đã sẵn sàng.
+        </p>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+        <!-- Event Info Card -->
+        <div class="event-card">
+            <div class="event-title" th:text="${eventTitle}">Tên sự kiện</div>
+            <div class="event-meta">
+                <div class="event-meta-row">
+                    <div class="icon-wrap">📅</div>
+                    <span th:text="${eventDatetime}">Thứ Bảy, 15/03/2026 · 19:00</span>
+                </div>
+                <div class="event-meta-row">
+                    <div class="icon-wrap">📍</div>
+                    <span th:text="${venueName}">Nhà hát Hòa Bình, TP.HCM</span>
+                </div>
+                <div class="event-meta-row">
+                    <div class="icon-wrap">🎟️</div>
+                    <span th:text="${ticketCount} + ' vé'">2 vé</span>
+                </div>
+                <div class="event-meta-row">
+                    <div class="icon-wrap">🧾</div>
+                    <span>Mã đơn hàng:&nbsp;<strong th:text="${orderNumber}">ORD-20260311-XXXXX</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tickets List -->
+        <div class="section-title">Danh sách vé của bạn</div>
+
+        <div th:each="ticket : ${tickets}" class="ticket-item">
+            <div style="display: flex; gap: 20px; align-items: flex-start;">
+                <!-- QR Code Image -->
+                <div th:if="${ticket.qrCodeImageUrl != null}" style="flex-shrink: 0;">
+                    <img th:src="${ticket.qrCodeImageUrl}" width="120" height="120" 
+                         alt="QR Code" style="border-radius: 8px; border: 1px solid #ede9fe;" />
+                </div>
+                
+                <div style="flex-grow: 1;">
+                    <div class="ticket-code" th:text="${ticket.ticketCode}">TKT-XXX-001</div>
+                    <div class="ticket-detail">
+                        Loại vé: <strong th:text="${ticket.ticketTypeName}">VIP</strong>
+                        <span th:if="${ticket.seatLabel != null}">
+                            · Ghế: <strong th:text="${ticket.seatLabel}">A12</strong>
+                        </span>
+                    </div>
+                    <div class="ticket-detail" style="margin-top:4px;">
+                        Người giữ vé: <strong th:text="${ticket.holderName}">Nguyễn Văn A</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Important Notice -->
+        <div class="notice">
+            <strong>📌 Lưu ý quan trọng:</strong><br>
+            Vui lòng mang theo mã vé (QR Code) khi đến tham dự sự kiện.
+            Bạn có thể xem và tải vé bất kỳ lúc nào tại mục <strong>Vé của tôi</strong> trong ứng dụng Flash Ticket.
+            Mỗi mã QR chỉ có giá trị sử dụng <strong>một lần</strong>.
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Email này được gửi tự động bởi hệ thống Flash Ticket. Vui lòng không trả lời email này.</p>
+        <p>Cần hỗ trợ? Liên hệ <a href="mailto:support@flashticket.vn">support@flashticket.vn</a></p>
+        <p style="margin-top:12px; font-size:11px; color:#d1d5db;">© 2026 Flash Ticket. All rights reserved.</p>
+    </div>
+
+</div>
+</body>
+</html>
