@@ -58,7 +58,7 @@ public class TicketIssuanceService {
      *
      * Idempotent: nếu tickets đã được cấp, return luôn danh sách đã có.
      * PaymentService gọi method này sau khi IPN confirmed.
-     *
+     * cập nhật bản ghi cho vé mới, cập nhật vé đã bán trong bảng event, cập nhật reserved ticket
      * @param orderId ID của order đã CONFIRMED
      * @return Danh sách tickets được cấp
      */
