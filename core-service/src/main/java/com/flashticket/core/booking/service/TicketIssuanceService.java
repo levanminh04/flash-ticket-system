@@ -68,6 +68,8 @@ public class TicketIssuanceService {
             .orElseThrow(() -> new ResourceNotFoundException("Order không tồn tại: " + orderId));
 
         // Idempotency: nếu tickets đã được cấp → return ngay
+        // Ghi chú: Nếu có 2 threads cùng vượt qua check này, Database UNIQUE constraint trên `ticket_code`
+        // sẽ ngăn chặn thread thứ 2 insert thành công (Rollback).
         long existingCount = ticketRepository.countByOrderIdAndIsDeletedFalse(orderId);
         if (existingCount > 0) {
             log.warn("Tickets already issued for order {}. Returning existing.", order.getOrderNumber());
@@ -85,11 +87,9 @@ public class TicketIssuanceService {
         int sequenceNumber = 1;
 
         for (OrderItem item : items) {
-            // Lấy tên ticket type và event info nếu chưa có trên order item
             String ticketTypeName = item.getTicketTypeName();
             String venueName = order.getEventVenueName();
 
-            // Loop tạo ticket cho từng vé trong quantity
             for (int i = 0; i < item.getQuantity(); i++) {
                 String ticketCode = buildTicketCode(order.getOrderNumber(), sequenceNumber++);
                 String qrData = buildSignedQrData(ticketCode, order.getEventId(), item.getTicketTypeId());
@@ -101,7 +101,6 @@ public class TicketIssuanceService {
                     .userId(order.getUserId())
                     .eventId(order.getEventId())
                     .ticketTypeId(item.getTicketTypeId())
-                    // Seated: seatId/seatLabel được set bởi SeatBookingStrategy (Phase 2D)
                     .seatId(null)
                     .seatLabel(null)
                     .eventTitle(order.getEventTitle())
@@ -124,12 +123,12 @@ public class TicketIssuanceService {
 
         List<Ticket> saved = ticketRepository.saveAll(allTickets);
 
-        // Update tickets_sold counter trên event
+        // Dùng Atomic Update số vé đã bán (Avoid Lost Update), không dùng:
+        //            event.setTicketsSold(event.getTicketsSold() + totalTickets);   =>  bug read-modify-write
+        //            eventRepository.save(event);
+
         int totalTickets = items.stream().mapToInt(OrderItem::getQuantity).sum();
-        eventRepository.findByIdAndIsDeletedFalse(order.getEventId()).ifPresent(event -> {
-            event.setTicketsSold(event.getTicketsSold() + totalTickets);
-            eventRepository.save(event);
-        });
+        eventRepository.incrementTicketsSold(order.getEventId(), totalTickets);
 
         // Giảm quantity_reserved sau khi tickets được cấp
         items.forEach(item ->
@@ -176,8 +175,8 @@ public class TicketIssuanceService {
             throw new InvalidRequestException("QR code đã bị chỉnh sửa hoặc giả mạo");
         }
 
-        // 3. Load ticket
-        Ticket ticket = ticketRepository.findByTicketCodeAndIsDeletedFalse(ticketCode)
+        //  Load ticket với PESSIMISTIC_WRITE lock để tránh double check-in, hiếm khi 1 vé được quét qr cùng lúc nhưng vẫn cần lock để tránh lỗi
+        Ticket ticket = ticketRepository.findByTicketCodeForUpdate(ticketCode)
             .orElseThrow(() -> new InvalidRequestException("Vé không tồn tại trong hệ thống"));
 
         // 4. Check status

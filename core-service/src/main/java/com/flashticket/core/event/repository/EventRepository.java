@@ -7,6 +7,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -90,4 +93,11 @@ public interface EventRepository extends JpaRepository<Event, UUID>,
      */
     @EntityGraph(attributePaths = {"venue"})
     Optional<Event> findBySlugAndIsDeletedFalse(String slug);
+
+    /**
+     * Tăng số vé đã bán nguyên tử để tránh Race Condition (Lost Update).
+     */
+    @Modifying
+    @Query("UPDATE Event e SET e.ticketsSold = e.ticketsSold + :amount WHERE e.id = :id")
+    void incrementTicketsSold(@Param("id") UUID id, @Param("amount") int amount);
 }
