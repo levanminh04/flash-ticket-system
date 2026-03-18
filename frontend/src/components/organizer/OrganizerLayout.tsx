@@ -1,0 +1,85 @@
+import { ReactNode } from "react";
+import { useKeycloak } from "@react-keycloak/web";
+import { ShieldAlert } from "lucide-react";
+import OrganizerSidebar from "./OrganizerSidebar";
+import { hasRealmRole } from "../../lib/auth";
+
+type OrganizerLayoutProps = {
+  title: string;
+  description: string;
+  actions?: ReactNode;
+  children: ReactNode;
+};
+
+export default function OrganizerLayout({
+  title,
+  description,
+  actions,
+  children,
+}: OrganizerLayoutProps) {
+  const { keycloak, initialized } = useKeycloak();
+
+  if (!initialized) {
+    return (
+      <div className="organizer-page">
+        <div className="container organizer-state-card">
+          <div className="loading-spinner" />
+          <p>Đang khởi tạo</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!keycloak.authenticated) {
+    return (
+      <div className="organizer-page">
+        <div className="container organizer-state-card">
+          <ShieldAlert size={28} />
+          <h1>Đăng nhập để dùng organizer workspace</h1>
+          <p>
+            Các API upload ảnh và check-in yêu cầu JWT có quyền organizer.
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={() => keycloak.login()}
+          >
+            Đăng nhập
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasRealmRole(keycloak.tokenParsed, "ORGANIZER")) {
+    return (
+      <div className="organizer-page">
+        <div className="container organizer-state-card">
+          <ShieldAlert size={28} />
+          <h1>Tài khoản hiện tại chưa có quyền organizer</h1>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="organizer-page">
+      <div className="container organizer-layout">
+        <OrganizerSidebar />
+
+        <main className="organizer-main">
+          <header className="organizer-header">
+            <div>
+              <h1 className="organizer-title">{title}</h1>
+              <p className="organizer-description">{description}</p>
+            </div>
+            {actions ? (
+              <div className="organizer-header-actions">{actions}</div>
+            ) : null}
+          </header>
+
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

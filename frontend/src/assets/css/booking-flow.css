@@ -1,0 +1,115 @@
+/* --- 1. Event Info Page Styles --- */
+.hero-detail {
+  height: 60vh;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  /* Mask remains same as it works on white as well */
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.event-content-wrapper {
+  margin-top: -80px;
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 40px;
+  padding-bottom: 100px;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: var(--shadow-md);
+}
+
+.artist-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--primary);
+}
+
+/* Sticky Bottom Bar */
+.sticky-bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+  z-index: 100;
+  animation: slideUp 0.3s ease-out;
+}
+.sticky-bottom-bar .bar-content div:last-child {
+  color: var(--text-primary);
+}
+
+/* --- 2. Booking Focus Mode Styles --- */
+.focus-header {
+  background: #ffffff;
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+}
+
+.step-item {
+  color: var(--text-muted);
+}
+.step-item.active {
+  color: var(--primary);
+}
+.step-number {
+  border: 2px solid currentColor;
+}
+.step-item.active .step-number {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Ticket Selection */
+.ticket-row {
+  background: #ffffff;
+  border: 1px solid var(--border);
+}
+.ticket-row:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-md);
+}
+
+.qty-control {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+}
+.qty-btn {
+  background: #ffffff;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.qty-btn:hover {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.qty-value {
+  color: var(--text-primary) !important;
+}
+
+/* Sticky Sidebar & Countdown */
+.countdown-box {
+  background: #fef2f2; /* Light red */
+  color: #ef4444; /* Error red */
+  border: 1px solid #fee2e2;
+}
+
+.summary-row strong {
+  color: var(--text-primary) !important;
+}
