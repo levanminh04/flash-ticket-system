@@ -68,7 +68,8 @@ public class TicketMessageListener {
                     t.getTicketCode(),
                     t.getSeatLabel(),
                     t.getTicketTypeName() != null ? t.getTicketTypeName() : "Standard",
-                    t.getQrCodeImageUrl()
+                    t.getQrCodeImageUrl(),
+                    t.getHolderName()
                 )).toList();
 
             TicketIssuedEvent ticketEvent = new TicketIssuedEvent(

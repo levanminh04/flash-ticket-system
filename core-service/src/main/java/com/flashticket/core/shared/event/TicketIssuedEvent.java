@@ -23,8 +23,9 @@ public record TicketIssuedEvent(
     public record TicketDto(
         UUID id,
         String ticketCode,
-        String seatName,
+        String seatLabel,
         String ticketTypeName,
-        String qrCodeImageUrl
+        String qrCodeImageUrl,
+        String holderName
     ) {}
 }
