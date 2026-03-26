@@ -28,7 +28,7 @@
 --   event_images.event_id       FK → events.id ON DELETE CASCADE
 --   event_images.image_type     CHECK IN ('BANNER','POSTER','SEAT_MAP','GALLERY','THUMBNAIL')
 --   ticket_types.event_id       FK → events.id ON DELETE CASCADE
---   ticket_types.sector_id      FK → venue_sectors.id ON DELETE SET NULL (nullable)
+--   ticket_types.event_sector_id FK → event_sectors.id ON DELETE SET NULL (nullable)
 --   ticket_types.status         CHECK IN ('ACTIVE', 'SOLD_OUT', 'HIDDEN')
 --   ticket_types.quantity       CHECK quantity_available >= 0 AND <= quantity_total
 --   ticket_types.price          CHECK >= 0
@@ -61,8 +61,6 @@ TRUNCATE TABLE event_schema.ticket_types CASCADE;
 TRUNCATE TABLE event_schema.event_images CASCADE;
 TRUNCATE TABLE event_schema.event_categories CASCADE;
 TRUNCATE TABLE event_schema.events CASCADE;
-TRUNCATE TABLE event_schema.venue_seats CASCADE;
-TRUNCATE TABLE event_schema.venue_sectors CASCADE;
 TRUNCATE TABLE event_schema.venues CASCADE;
 TRUNCATE TABLE event_schema.categories CASCADE;
 
@@ -322,13 +320,13 @@ VALUES
 
 -- ============================================================================
 -- STEP 6: TICKET TYPES
--- FK: event_id → events.id | sector_id → venue_sectors.id (NULL OK)
+-- FK: event_id → events.id | event_sector_id → event_sectors.id (NULL OK)
 -- CHECK: status IN ('ACTIVE', 'SOLD_OUT', 'HIDDEN')
 -- CHECK: quantity_available >= 0 AND quantity_available <= quantity_total
 -- CHECK: price >= 0
 -- ============================================================================
 INSERT INTO event_schema.ticket_types (
-    id, event_id, sector_id, name, description,
+    id, event_id, name, description,
     price, original_price, currency,
     quantity_total, quantity_available, quantity_reserved, max_per_order,
     seat_selection_enabled,
@@ -338,71 +336,71 @@ INSERT INTO event_schema.ticket_types (
 )
 VALUES
     -- Rock Storm: 3 loại vé (VIP Diamond, VIP Gold, Regular)
-    ('bbbbbbbb-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
      'VIP Diamond', 'Khu VIP gần sân khấu. Đồ uống miễn phí, quà lưu niệm, gặp nghệ sĩ',
      2500000, 3000000, 'VND', 500, 87, 13, 4, FALSE,
      '2026-02-01 00:00:00+07', '2026-03-15 17:00:00+07',
      1, '#FFD700', 'ACTIVE', TRUE, FALSE, NOW(), NOW()),
 
-    ('bbbbbbbb-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
      'VIP Gold', 'Khu VIP. Đồ uống miễn phí, quà lưu niệm',
      1500000, NULL, 'VND', 2000, 650, 50, 6, FALSE,
      '2026-02-01 00:00:00+07', '2026-03-15 17:00:00+07',
      2, '#FFA500', 'ACTIVE', TRUE, FALSE, NOW(), NOW()),
 
-    ('bbbbbbbb-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001',
      'Regular', 'Khu vực đứng',
      500000, NULL, 'VND', 37500, 27300, 200, 8, FALSE,
      '2026-02-01 00:00:00+07', '2026-03-15 17:00:00+07',
      3, '#4CAF50', 'ACTIVE', TRUE, FALSE, NOW(), NOW()),
 
     -- Ultra Vietnam: 2 loại vé
-    ('bbbbbbbb-0000-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000002', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000002',
      'VIP 2 ngày', 'Khu riêng biệt, bar VIP, không giới hạn đồ uống',
      4500000, 5000000, 'VND', 1000, 120, 30, 4, FALSE,
      '2026-02-15 00:00:00+07', '2026-04-18 14:00:00+07',
      1, '#9C27B0', 'ACTIVE', TRUE, FALSE, NOW(), NOW()),
 
-    ('bbbbbbbb-0000-0000-0000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000002', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000012', 'aaaaaaaa-0000-0000-0000-000000000002',
      'General Admission 2 ngày', 'Khu vực đứng, trải nghiệm EDM đỉnh cao',
      1200000, NULL, 'VND', 14000, 4080, 120, 4, FALSE,
      '2026-02-15 00:00:00+07', '2026-04-18 14:00:00+07',
      2, '#2196F3', 'ACTIVE', TRUE, FALSE, NOW(), NOW()),
 
     -- Spring Boot Workshop: 2 loại (Early Bird SOLD_OUT + Standard)
-    ('bbbbbbbb-0000-0000-0000-000000000021', 'aaaaaaaa-0000-0000-0000-000000000003', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000021', 'aaaaaaaa-0000-0000-0000-000000000003',
      'Early Bird', 'Giá ưu đãi 50 người đầu tiên. Tài liệu + bữa trưa',
      599000, 799000, 'VND', 50, 0, 0, 2, FALSE,
      '2026-02-10 00:00:00+07', '2026-03-01 23:59:00+07',
      1, '#FF5722', 'SOLD_OUT', TRUE, FALSE, NOW(), NOW()),
 
-    ('bbbbbbbb-0000-0000-0000-000000000022', 'aaaaaaaa-0000-0000-0000-000000000003', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000022', 'aaaaaaaa-0000-0000-0000-000000000003',
      'Standard', 'Vé tiêu chuẩn. Tài liệu + bữa trưa',
      799000, NULL, 'VND', 150, 20, 5, 2, FALSE,
      '2026-02-10 00:00:00+07', '2026-03-21 23:59:00+07',
      2, '#607D8B', 'ACTIVE', TRUE, FALSE, NOW(), NOW()),
 
     -- AI Summit: 1 loại vé
-    ('bbbbbbbb-0000-0000-0000-000000000031', 'aaaaaaaa-0000-0000-0000-000000000004', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000031', 'aaaaaaaa-0000-0000-0000-000000000004',
      'Online Pass', 'Link stream, tài liệu PDF, certificate',
      299000, NULL, 'VND', 5000, 2900, 100, 1, FALSE,
      '2026-03-01 00:00:00+07', '2026-05-10 08:00:00+07',
      1, '#00BCD4', 'ACTIVE', TRUE, FALSE, NOW(), NOW()),
 
     -- Sơn Tùng: 3 loại vé — ALL SOLD_OUT (qty_available=0 ≤ qty_total ✓)
-    ('bbbbbbbb-0000-0000-0000-000000000041', 'aaaaaaaa-0000-0000-0000-000000000005', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000041', 'aaaaaaaa-0000-0000-0000-000000000005',
      'SVIP', 'Hàng ghế đầu. Gặp gỡ & chụp ảnh Sơn Tùng M-TP',
      3500000, NULL, 'VND', 100, 0, 0, 2, TRUE,
      '2026-01-15 00:00:00+07', '2026-03-28 17:00:00+07',
      1, '#E91E63', 'SOLD_OUT', TRUE, FALSE, NOW(), NOW()),
 
-    ('bbbbbbbb-0000-0000-0000-000000000042', 'aaaaaaaa-0000-0000-0000-000000000005', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000042', 'aaaaaaaa-0000-0000-0000-000000000005',
      'VIP', 'Khu VIP có ghế ngồi',
      1800000, NULL, 'VND', 900, 0, 0, 4, TRUE,
      '2026-01-15 00:00:00+07', '2026-03-28 17:00:00+07',
      2, '#FF4081', 'SOLD_OUT', TRUE, FALSE, NOW(), NOW()),
 
-    ('bbbbbbbb-0000-0000-0000-000000000043', 'aaaaaaaa-0000-0000-0000-000000000005', NULL,
+    ('bbbbbbbb-0000-0000-0000-000000000043', 'aaaaaaaa-0000-0000-0000-000000000005',
      'Regular', 'Khu vực đứng',
      800000, NULL, 'VND', 2500, 0, 0, 6, FALSE,
      '2026-01-15 00:00:00+07', '2026-03-28 17:00:00+07',

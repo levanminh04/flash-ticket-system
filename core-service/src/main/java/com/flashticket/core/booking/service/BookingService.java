@@ -441,7 +441,7 @@ public class BookingService {
                 .orderId(order.getId())
                 .ticketTypeId(tt.getId())
                 .ticketTypeName(tt.getName())
-                .sectorId(tt.getSectorId())
+                .sectorId(tt.getEventSectorId())
                 // sectorName load riêng nếu cần — simplified cho MVP
                 .quantity(ctx.quantity())
                 .unitPrice(tt.getPrice())

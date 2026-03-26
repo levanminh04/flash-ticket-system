@@ -1,10 +1,11 @@
 -- ============================================================================
 -- TICKETBOX DATABASE SCHEMA - COMPLETE VERSION
 -- ============================================================================
--- Version: 2.0.0
+-- Version: 3.0.0
 -- Database: PostgreSQL 14+
 -- Author: TicketBox Team
--- Last Updated: 2026-02-08
+-- Last Updated: 2026-03-25
+-- Changelog: v3 - Event-Centric Layout Model (event_layouts, event_sectors, event_seats)
 -- 
 -- DESIGN PRINCIPLES:
 -- 1. Schema Isolation: Each module has its own schema for microservice extraction
@@ -81,8 +82,8 @@ COMMENT ON TABLE event_schema.categories IS 'Danh mục sự kiện - phân lo�
 
 -- ----------------------------------------------------------------------------
 -- Table: event_schema.venues
--- Mô tả: Địa điểm tổ chức sự kiện
--- Relationship: 1:N với venue_sectors
+-- Mô tả: Địa điểm tổ chức sự kiện (Global identity — Admin quản lý)
+-- Relationship: 1:N với events
 -- ----------------------------------------------------------------------------
 CREATE TABLE event_schema.venues (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -120,6 +121,9 @@ CREATE TABLE event_schema.venues (
     is_verified BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     
+    -- Seat Map Designer Config (v3)
+    seat_map_config JSONB DEFAULT '{}',          -- Config cho designer: zoom, grid, viewport defaults
+    
     -- Audit Columns
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -132,87 +136,7 @@ CREATE INDEX idx_venues_city ON event_schema.venues(city) WHERE is_deleted = FAL
 CREATE INDEX idx_venues_active ON event_schema.venues(is_active) WHERE is_deleted = FALSE;
 CREATE INDEX idx_venues_slug ON event_schema.venues(slug);
 
-COMMENT ON TABLE event_schema.venues IS 'Địa điểm tổ chức sự kiện';
-
--- ----------------------------------------------------------------------------
--- Table: event_schema.venue_sectors
--- Mô tả: Khu vực trong venue (Khán đài A, VIP Zone, Khu đứng)
--- Relationship: Belongs to venue, has many venue_seats
--- ----------------------------------------------------------------------------
-CREATE TABLE event_schema.venue_sectors (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    venue_id UUID NOT NULL REFERENCES event_schema.venues(id) ON DELETE CASCADE,
-    
-    name VARCHAR(100) NOT NULL,                  -- "Khán đài A", "VIP Zone"
-    code VARCHAR(20),                            -- "A", "VIP", "STANDING"
-    description TEXT,
-    
-    sector_type VARCHAR(50) NOT NULL,            -- SEATED, STANDING, VIP_BOX
-    
-    -- Capacity
-    total_rows INT,                              -- Số hàng (nếu có ghế)
-    seats_per_row INT,                           -- Số ghế/hàng
-    total_capacity INT NOT NULL,                 -- Tổng sức chứa
-    
-    -- Position on venue map (for UI rendering)
-    position_x DECIMAL(5,2),                     -- Vị trí % từ trái
-    position_y DECIMAL(5,2),                     -- Vị trí % từ trên
-    width_percent DECIMAL(5,2),                  -- Chiều rộng %
-    height_percent DECIMAL(5,2),                 -- Chiều cao %
-    color_code VARCHAR(7),                       -- Color cho UI: "#FF5733"
-    
-    display_order INT DEFAULT 0,
-    is_active BOOLEAN DEFAULT TRUE,
-    
-    -- Audit Columns
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    created_by VARCHAR(255),
-    updated_by VARCHAR(255),
-    is_deleted BOOLEAN DEFAULT FALSE NOT NULL,
-    
-    CONSTRAINT chk_sector_type CHECK (sector_type IN ('SEATED', 'STANDING', 'VIP_BOX', 'ACCESSIBLE'))
-);
-
-CREATE INDEX idx_venue_sectors_venue ON event_schema.venue_sectors(venue_id) WHERE is_deleted = FALSE;
-
-COMMENT ON TABLE event_schema.venue_sectors IS 'Khu vực trong venue - Khán đài, VIP Zone, Khu đứng';
-
--- ----------------------------------------------------------------------------
--- Table: event_schema.venue_seats
--- Mô tả: Từng ghế cụ thể trong sector
--- Relationship: Belongs to venue_sector
--- Note: Ghế là master data, inventory theo event nằm ở event_seat_inventory
--- ----------------------------------------------------------------------------
-CREATE TABLE event_schema.venue_seats (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    sector_id UUID NOT NULL REFERENCES event_schema.venue_sectors(id) ON DELETE CASCADE,
-    
-    row_name VARCHAR(10) NOT NULL,               -- "A", "B", "1", "2"
-    seat_number VARCHAR(10) NOT NULL,            -- "1", "2", "3"
-    seat_label VARCHAR(20),                      -- "A-1", "VIP-01" (computed or custom)
-    
-    -- Position on seat map (for UI rendering)
-    coord_x INT,                                 -- X coordinate trong grid
-    coord_y INT,                                 -- Y coordinate trong grid
-    
-    -- Seat properties
-    seat_type VARCHAR(50) DEFAULT 'REGULAR',     -- REGULAR, WHEELCHAIR, COMPANION, PREMIUM
-    is_aisle BOOLEAN DEFAULT FALSE,              -- Ghế cạnh lối đi
-    has_obstruction BOOLEAN DEFAULT FALSE,       -- Có vật cản tầm nhìn
-    
-    is_active BOOLEAN DEFAULT TRUE,              -- Có thể bán không
-    
-    -- Audit
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    
-    CONSTRAINT chk_seat_type CHECK (seat_type IN ('REGULAR', 'WHEELCHAIR', 'COMPANION', 'PREMIUM', 'RESTRICTED')),
-    CONSTRAINT uk_sector_row_seat UNIQUE (sector_id, row_name, seat_number)
-);
-
-CREATE INDEX idx_venue_seats_sector ON event_schema.venue_seats(sector_id);
-
-COMMENT ON TABLE event_schema.venue_seats IS 'Master data ghế ngồi trong venue sector';
+COMMENT ON TABLE event_schema.venues IS 'Địa điểm tổ chức sự kiện — Global identity, Admin quản lý';
 
 -- ----------------------------------------------------------------------------
 -- Table: event_schema.events
@@ -278,7 +202,7 @@ CREATE TABLE event_schema.events (
     deleted_at TIMESTAMPTZ,
     
     CONSTRAINT chk_event_dates CHECK (end_datetime > start_datetime),
-    CONSTRAINT chk_event_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'CANCELLED', 'COMPLETED', 'SOLD_OUT')),
+    CONSTRAINT chk_event_status CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'PUBLISHED', 'CANCELLED', 'COMPLETED', 'SOLD_OUT')),
     CONSTRAINT chk_event_visibility CHECK (visibility IN ('PUBLIC', 'PRIVATE', 'UNLISTED'))
 );
 
@@ -287,6 +211,7 @@ CREATE INDEX idx_events_organizer ON event_schema.events(organizer_id) WHERE is_
 CREATE INDEX idx_events_status ON event_schema.events(status) WHERE is_deleted = FALSE;
 CREATE INDEX idx_events_datetime ON event_schema.events(start_datetime) WHERE is_deleted = FALSE AND status = 'PUBLISHED';
 CREATE INDEX idx_events_featured ON event_schema.events(is_featured) WHERE is_deleted = FALSE AND status = 'PUBLISHED';
+CREATE INDEX idx_events_pending ON event_schema.events(status, created_at DESC) WHERE is_deleted = FALSE AND status = 'PENDING_APPROVAL';
 CREATE INDEX idx_events_slug ON event_schema.events(slug);
 
 -- Full-text search index
@@ -364,8 +289,8 @@ CREATE TABLE event_schema.ticket_types (
     -- Parent Event
     event_id UUID NOT NULL REFERENCES event_schema.events(id) ON DELETE CASCADE,
     
-    -- Sector (optional - for seat-based events) --  khu vực
-    sector_id UUID REFERENCES event_schema.venue_sectors(id) ON DELETE SET NULL,
+    -- Event Sector (optional — per-event sector tùy biến bởi Organizer)
+    event_sector_id UUID REFERENCES event_schema.event_sectors(id) ON DELETE SET NULL,
     
     -- Basic Information
     name VARCHAR(100) NOT NULL,                  -- Tên loại vé: "VIP", "Regular"
@@ -411,7 +336,7 @@ CREATE TABLE event_schema.ticket_types (
 );
 
 CREATE INDEX idx_ticket_types_event ON event_schema.ticket_types(event_id) WHERE is_deleted = FALSE;
-CREATE INDEX idx_ticket_types_sector ON event_schema.ticket_types(sector_id) WHERE is_deleted = FALSE;
+CREATE INDEX idx_ticket_types_event_sector ON event_schema.ticket_types(event_sector_id) WHERE is_deleted = FALSE;
 CREATE INDEX idx_ticket_types_available ON event_schema.ticket_types(quantity_available) 
     WHERE is_deleted = FALSE AND status = 'ACTIVE';
 
@@ -427,11 +352,11 @@ CREATE TABLE event_schema.event_seat_inventory (
     
     -- Composite key: Event + Seat
     event_id UUID NOT NULL REFERENCES event_schema.events(id) ON DELETE CASCADE,
-    seat_id UUID NOT NULL REFERENCES event_schema.venue_seats(id),
+    event_seat_id UUID NOT NULL REFERENCES event_schema.event_seats(id) ON DELETE CASCADE,
     ticket_type_id UUID REFERENCES event_schema.ticket_types(id) ON DELETE SET NULL,
     
     -- ========== REDIS LOCK SYNC FIELDS ==========
-    -- Redis key format: "seat_lock:{event_id}:{seat_id}"
+    -- Redis key format: "seat_lock:{event_id}:{event_seat_id}"
     
     status VARCHAR(50) DEFAULT 'AVAILABLE' NOT NULL,
     -- AVAILABLE: Ghế trống, có thể chọn
@@ -465,7 +390,7 @@ CREATE TABLE event_schema.event_seat_inventory (
     version INT DEFAULT 1,                       -- Optimistic locking version
     
     CONSTRAINT chk_seat_status CHECK (status IN ('AVAILABLE', 'LOCKED', 'RESERVED', 'SOLD', 'BLOCKED')),
-    CONSTRAINT uk_event_seat UNIQUE (event_id, seat_id)
+    CONSTRAINT uk_event_event_seat UNIQUE (event_id, event_seat_id)
 );
 
 -- Performance indexes for seat locking
@@ -477,10 +402,124 @@ CREATE INDEX idx_seat_inventory_reserved ON event_schema.event_seat_inventory(re
     WHERE status = 'RESERVED';
 CREATE INDEX idx_seat_inventory_user ON event_schema.event_seat_inventory(locked_by_user_id) 
     WHERE status IN ('LOCKED', 'RESERVED');
+CREATE INDEX idx_seat_inventory_event_seat ON event_schema.event_seat_inventory(event_seat_id);
 
 COMMENT ON TABLE event_schema.event_seat_inventory IS 'Inventory ghế theo event - sync với Redis cho distributed lock';
+COMMENT ON COLUMN event_schema.event_seat_inventory.event_seat_id IS 'FK → event_seats (per-event layout)';
 COMMENT ON COLUMN event_schema.event_seat_inventory.lock_expires_at IS 'Sync với Redis TTL - background job cleanup expired locks';
 COMMENT ON COLUMN event_schema.event_seat_inventory.version IS 'Optimistic locking - increment on update to prevent race condition';
+
+
+-- ----------------------------------------------------------------------------
+-- Table: event_schema.event_layouts
+-- Mô tả: Per-event layout metadata — 1 event = 1 layout tùy biến riêng
+-- Relationship: Belongs to event, has many event_sectors
+-- v3: Event-Centric Layout Model
+-- ----------------------------------------------------------------------------
+CREATE TABLE event_schema.event_layouts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    event_id UUID NOT NULL REFERENCES event_schema.events(id) ON DELETE CASCADE,
+
+    name VARCHAR(255),                           -- "Concert Layout", "Football Layout"
+
+    -- Background image (Organizer upload lên Cloudinary)
+    background_image_url VARCHAR(500),           -- Cloudinary URL
+    background_public_id VARCHAR(255),           -- Cloudinary public_id (để xóa)
+    background_width INT,                        -- px
+    background_height INT,                       -- px
+
+    -- Renderer/Designer config
+    map_config JSONB DEFAULT '{}',               -- minZoom, maxZoom, defaultZoom, gridSize, viewport
+
+    -- Nguồn gốc layout
+    source_type VARCHAR(50) DEFAULT 'CUSTOM',    -- CUSTOM | CLONED_FROM_VENUE | CLONED_FROM_EVENT
+    source_id UUID,                              -- ID nguồn nếu clone
+
+    -- Audit
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_by VARCHAR(255),
+
+    CONSTRAINT uk_event_layout UNIQUE (event_id),
+    CONSTRAINT chk_layout_source_type CHECK (source_type IN ('CUSTOM', 'CLONED_FROM_VENUE', 'CLONED_FROM_EVENT'))
+);
+
+CREATE INDEX idx_event_layouts_event ON event_schema.event_layouts(event_id);
+
+COMMENT ON TABLE event_schema.event_layouts IS 'Per-event layout — 1 event có 1 layout riêng, không gắn cứng vào venue (v3)';
+
+-- ----------------------------------------------------------------------------
+-- Table: event_schema.event_sectors
+-- Mô tả: Per-event sectors — Organizer tùy biến riêng cho từng event
+-- Relationship: Belongs to event_layout, has many event_seats
+-- v3: Event-Centric Layout Model
+-- ----------------------------------------------------------------------------
+CREATE TABLE event_schema.event_sectors (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    layout_id UUID NOT NULL REFERENCES event_schema.event_layouts(id) ON DELETE CASCADE,
+
+    name VARCHAR(100) NOT NULL,                  -- "Khán đài A", "VIP Zone"
+    code VARCHAR(20),                            -- "A", "VIP", "GA"
+    description TEXT,
+    sector_type VARCHAR(50) NOT NULL,            -- SEATED | STANDING | VIP_BOX | ACCESSIBLE
+
+    total_capacity INT NOT NULL,                 -- Tổng sức chứa
+
+    -- Visual data cho Konva.js renderer
+    map_data JSONB DEFAULT '{}',                 -- polygon vertices, labelPosition, shape type
+    color_code VARCHAR(7),                       -- "#FF6B6B"
+    display_order INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    CONSTRAINT chk_event_sector_type CHECK (sector_type IN ('SEATED', 'STANDING', 'VIP_BOX', 'ACCESSIBLE'))
+);
+
+CREATE INDEX idx_event_sectors_layout ON event_schema.event_sectors(layout_id);
+CREATE INDEX idx_event_sectors_active ON event_schema.event_sectors(layout_id, is_active);
+
+COMMENT ON TABLE event_schema.event_sectors IS 'Per-event sectors — Organizer tùy biến riêng cho từng event (v3)';
+
+-- ----------------------------------------------------------------------------
+-- Table: event_schema.event_seats
+-- Mô tả: Per-event seats với tọa độ cho Seat Map Renderer
+-- Relationship: Belongs to event_sector
+-- v3: Event-Centric Layout Model
+-- ----------------------------------------------------------------------------
+CREATE TABLE event_schema.event_seats (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    sector_id UUID NOT NULL REFERENCES event_schema.event_sectors(id) ON DELETE CASCADE,
+
+    row_name VARCHAR(10) NOT NULL,               -- "A", "B", "1"
+    seat_number VARCHAR(10) NOT NULL,            -- "1", "2", "3"
+    seat_label VARCHAR(20),                      -- "A-1", "VIP-01"
+
+    -- Tọa độ (DECIMAL — chính xác hơn INT khi auto-generate grid)
+    coord_x DECIMAL(10, 2) NOT NULL,
+    coord_y DECIMAL(10, 2) NOT NULL,
+    coord_metadata JSONB DEFAULT '{}',           -- rotation, scale, custom styling
+
+    -- Thuộc tính ghế
+    seat_type VARCHAR(50) DEFAULT 'REGULAR',
+    is_aisle BOOLEAN DEFAULT FALSE,
+    has_obstruction BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    CONSTRAINT chk_event_seat_type CHECK (seat_type IN ('REGULAR', 'WHEELCHAIR', 'COMPANION', 'PREMIUM', 'RESTRICTED')),
+    CONSTRAINT uk_event_sector_row_seat UNIQUE (sector_id, row_name, seat_number)
+);
+
+CREATE INDEX idx_event_seats_sector ON event_schema.event_seats(sector_id);
+CREATE INDEX idx_event_seats_active ON event_schema.event_seats(sector_id, is_active);
+
+COMMENT ON TABLE event_schema.event_seats IS 'Per-event seats với tọa độ cho Seat Map Renderer (v3)';
 
 
 -- ============================================================================
@@ -750,12 +789,16 @@ COMMENT ON TABLE booking_schema.order_items IS 'Chi tiết vé trong đơn hàng
 -- ----------------------------------------------------------------------------
 -- Table: booking_schema.order_item_seats
 -- Mô tả: Liên kết order_item với specific seats (cho seat selection)
+-- Logic ở đây là:
+--      order_items gom nhóm: "mua 5 vé zone A, giá 200k/vé"         => 1 bản ghi
+--      order_item_seats liệt kê từng ghế cụ thể: A1, A2, A3, A4, A5 => 5 bản ghi
+-- Không nên gộp lại thành 1 bảng order_item + 1 trường seat_id vì như vậy làm mất ý nghĩa của quantity
 -- ----------------------------------------------------------------------------
 CREATE TABLE booking_schema.order_item_seats (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
     order_item_id UUID NOT NULL REFERENCES booking_schema.order_items(id) ON DELETE CASCADE,
-    seat_id UUID NOT NULL,                       -- Reference tới event_schema.venue_seats
+    seat_id UUID NOT NULL,                       -- Reference tới event_schema.event_seats
     
     -- Seat label for display
     seat_label VARCHAR(20),                      -- "A-1", "VIP-01"
@@ -1121,6 +1164,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply trigger to all tables with updated_at column
+-- Bao gồm cả các bảng mới: event_layouts, event_sectors
 DO $$
 DECLARE
     t text;
@@ -1243,22 +1287,6 @@ INSERT INTO event_schema.venues (name, slug, address, city, total_capacity) VALU
 ('GEM Center', 'gem-center', '8 Nguyễn Bỉnh Khiêm, Quận 1', 'TP.HCM', 2000),
 ('Phố đi bộ Nguyễn Huệ', 'pho-di-bo-nguyen-hue', 'Nguyễn Huệ, Quận 1', 'TP.HCM', 10000);
 
--- Sample Sectors for "Sân vận động Mỹ Đình"
-INSERT INTO event_schema.venue_sectors (venue_id, name, code, sector_type, total_capacity, display_order, color_code)
-SELECT id, 'Khán đài A', 'A', 'SEATED', 5000, 1, '#FF6B6B'
-FROM event_schema.venues WHERE slug = 'svd-my-dinh';
-
-INSERT INTO event_schema.venue_sectors (venue_id, name, code, sector_type, total_capacity, display_order, color_code)
-SELECT id, 'Khán đài B', 'B', 'SEATED', 5000, 2, '#4ECDC4'
-FROM event_schema.venues WHERE slug = 'svd-my-dinh';
-
-INSERT INTO event_schema.venue_sectors (venue_id, name, code, sector_type, total_capacity, display_order, color_code)
-SELECT id, 'VIP Zone', 'VIP', 'VIP_BOX', 500, 3, '#FFE66D'
-FROM event_schema.venues WHERE slug = 'svd-my-dinh';
-
-INSERT INTO event_schema.venue_sectors (venue_id, name, code, sector_type, total_capacity, display_order, color_code)
-SELECT id, 'Khu đứng - Sân A', 'STANDING-A', 'STANDING', 10000, 4, '#95E1D3'
-FROM event_schema.venues WHERE slug = 'svd-my-dinh';
 
 -- Sample Promotion
 INSERT INTO promotion_schema.promotions (code, name, description, discount_type, discount_value, max_discount_amount, min_order_value, max_total_uses, max_uses_per_user, start_datetime, end_datetime, status)
@@ -1291,10 +1319,23 @@ GROUP BY table_schema;
 -- ============================================================================
 -- END OF SCRIPT
 -- ============================================================================
--- Total Tables: 24
--- - event_schema: 8 tables (categories, venues, venue_sectors, venue_seats, events, event_categories, event_images, ticket_types, event_seat_inventory)
+-- Total Tables: 25
+-- - event_schema: 9 tables
+--     Global: categories, venues
+--     Core: events, event_categories, event_images, ticket_types, event_seat_inventory
+--     Per-event layout: event_layouts, event_sectors, event_seats
 -- - promotion_schema: 2 tables (promotions, promotion_usages)
 -- - booking_schema: 7 tables (carts, cart_items, orders, order_items, order_item_seats, tickets, reservations)
 -- - payment_schema: 2 tables (transactions, refunds)
 -- - ai_schema: 3 tables (documents, conversations, messages)
+--
+-- v3 Changes (2026-03-25):
+--   + venues.seat_map_config JSONB
+--   + events.status: thêm 'PENDING_APPROVAL'
+--   + ticket_types.event_sector_id UUID FK → event_sectors
+--   + event_seat_inventory.event_seat_id UUID FK → event_seats
+--   + NEW: event_layouts, event_sectors, event_seats
+--   - DELETED: venue_sectors, venue_seats (thay bằng event_sectors, event_seats)
+--   - DELETED: ticket_types.sector_id (thay bằng event_sector_id)
+--   - DELETED: event_seat_inventory.seat_id (thay bằng event_seat_id)
 -- ============================================================================
