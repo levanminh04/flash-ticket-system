@@ -789,6 +789,10 @@ COMMENT ON TABLE booking_schema.order_items IS 'Chi tiết vé trong đơn hàng
 -- ----------------------------------------------------------------------------
 -- Table: booking_schema.order_item_seats
 -- Mô tả: Liên kết order_item với specific seats (cho seat selection)
+-- Logic ở đây là:
+--      order_items gom nhóm: "mua 5 vé zone A, giá 200k/vé"         => 1 bản ghi
+--      order_item_seats liệt kê từng ghế cụ thể: A1, A2, A3, A4, A5 => 5 bản ghi
+-- Không nên gộp lại thành 1 bảng order_item + 1 trường seat_id vì như vậy làm mất ý nghĩa của quantity
 -- ----------------------------------------------------------------------------
 CREATE TABLE booking_schema.order_item_seats (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
