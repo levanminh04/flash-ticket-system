@@ -20,7 +20,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "ticket_types", schema = "event_schema", indexes = {
         @Index(name = "idx_ticket_types_event", columnList = "event_id"),
-        @Index(name = "idx_ticket_types_sector", columnList = "sector_id"),
+        @Index(name = "idx_ticket_types_event_sector", columnList = "event_sector_id"),
         @Index(name = "idx_ticket_types_available", columnList = "quantity_available")
 })
 @EntityListeners(AuditingEntityListener.class)
@@ -42,9 +42,9 @@ public class TicketType {
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;
 
-    // Sector (optional - for seat-based events)
-    @Column(name = "sector_id")
-    private UUID sectorId;  // Logical reference to venue_sectors
+    // Event Sector (optional — per-event sector tùy biến bởi Organizer)
+    @Column(name = "event_sector_id")
+    private UUID eventSectorId;
 
     // Basic Information
     @Column(nullable = false, length = 100)

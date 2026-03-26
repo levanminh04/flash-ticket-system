@@ -70,7 +70,7 @@ public class Ticket {
     @Column(name = "ticket_type_id", nullable = false)
     private UUID ticketTypeId;
 
-    // Seat (null nếu là zone ticket, có giá trị nếu seat selection)
+    // Seat (null nếu là zone ticket, có giá trị nếu seat selection — logical ref tới event_seats)
     @Column(name = "seat_id")
     private UUID seatId;
 

@@ -55,7 +55,7 @@ public class OrderItem {
     @Column(name = "ticket_type_name", length = 100)
     private String ticketTypeName;
 
-    // Sector info (LOGICAL REFERENCE — optional, cho zone ticket)
+    // Sector info (LOGICAL REFERENCE — cache event_sector tại thời điểm booking)
     @Column(name = "sector_id")
     private UUID sectorId;
 
