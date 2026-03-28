@@ -145,6 +145,7 @@ public class BookingService {
 
         // Load & Validate Ticket Types
         List<BookingItemContext> contexts = buildAndValidateContexts(request, event);
+        // contexts CÓ THỂ ĐÃ CŨ, nên cần có double check, tránh
 
         // ── Step 3: Redis Lock → Stock Check → Atomic Decrement
         // khá giống ReentrantLock nhưng ReentrantLock thuộc phạm vi 1 server, nhiều node là chết ngay
@@ -161,6 +162,7 @@ public class BookingService {
                  * Khi thread A acquire được lock và thực hiện trừ stock, thread B đến sau sẽ thử lấy lock nhưng thất bại vì A đang giữ nó,
                  * sau đó B sẽ chờ trong khoảng waitTime. Khi A hoàn tất thanh toán và nhả lock, Redis publish sự kiện unlock,
                  * lúc này B được đánh thức và retry acquire thành công. Tuy nhiên tại thời điểm B vào critical section thì stock đã bị A trừ về 0,
+                 * (trước đó thread B build Context (buildAndValidateContexts) vẫn là 10 nhưng trong khoảng thời gian wait lock thì đã bị lock A trừ về 0))
                  * vì vậy bước double-check sẽ ngăn không cho tiếp tục trừ thêm lần nữa, từ đó tránh tình trạng oversell.
                  * */
                 /**

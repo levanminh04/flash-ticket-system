@@ -5,6 +5,7 @@ import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
 import com.flashticket.core.common.exception.InvalidRequestException;
 import com.flashticket.core.common.exception.ResourceNotFoundException;
+import com.flashticket.core.event.dto.UpdateImageRequest;
 import com.flashticket.core.event.entity.Event;
 import com.flashticket.core.event.entity.EventImage;
 import com.flashticket.core.event.repository.EventImageRepository;
@@ -33,6 +34,14 @@ public class ImageUploadService {
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     private static final List<String> ALLOWED_TYPES = List.of("image/jpeg", "image/png", "image/jpg", "image/webp");
     
+    // Các loại ảnh chỉ được phép có duy nhất 1 bản cho mỗi sự kiện (Tự động thay thế khi tải mới)
+    private static final List<EventImage.ImageType> SINGULAR_IMAGE_TYPES = List.of(
+        EventImage.ImageType.BANNER,
+        EventImage.ImageType.POSTER,
+        EventImage.ImageType.SEAT_MAP,
+        EventImage.ImageType.THUMBNAIL
+    );
+    
     /**
      * Upload image to Cloudinary và save metadata vào database
      * @param imageType Type of image (BANNER, POSTER, GALLERY, etc.)
@@ -51,6 +60,23 @@ public class ImageUploadService {
         // Find event
         Event event = eventRepository.findById(eventId)
             .orElseThrow(() -> new ResourceNotFoundException("Event", "id", eventId));
+        
+        // --- XỬ LÝ AUTO-REPLACE (Chặn Edge Case rác dữ liệu) ---
+        if (SINGULAR_IMAGE_TYPES.contains(imageType)) {
+            log.info("Singular image type {} detected, cleaning up old images for event {}", imageType, eventId);
+            List<EventImage> existingImages = eventImageRepository
+                .findByEventIdAndImageTypeAndIsDeletedFalseOrderByDisplayOrderAsc(eventId, imageType);
+            
+            for (EventImage oldImg : existingImages) {
+                try {
+                    // Xóa file trên Cloudinary và mark deleted trong DB
+                    deleteEventImage(oldImg.getId());
+                } catch (Exception e) {
+                    log.error("Failed to cleanup old image {}: {}", oldImg.getId(), e.getMessage());
+                    // Không chặn hoàn toàn luồng upload nếu lỗi xóa ảnh cũ (giúp UX mượt hơn)
+                }
+            }
+        }
         
         // Upload to Cloudinary
         Map uploadResult = uploadToCloudinary(file, eventId, imageType);
@@ -115,6 +141,62 @@ public class ImageUploadService {
     }
     
     /**
+     * Cập nhật metadata của ảnh (isPrimary, altText, displayOrder)
+     * Đảm bảo chỉ có 1 ảnh Primary cho mỗi loại (Banner/Poster)
+     */
+    @Transactional
+    public EventImage updateImageMetadata(UUID imageId, UpdateImageRequest req) {
+        log.info("Updating metadata for image {}", imageId);
+        
+        EventImage image = eventImageRepository.findById(imageId)
+            .orElseThrow(() -> new ResourceNotFoundException("EventImage", "id", imageId));
+
+        if (req.altText() != null) image.setAltText(req.altText());
+        if (req.displayOrder() != null) image.setDisplayOrder(req.displayOrder());
+
+        // Nếu có sự thay đổi về ImageType
+        if (req.imageType() != null && req.imageType() != image.getImageType()) {
+            EventImage.ImageType newType = req.imageType();
+            
+            // XỬ LÝ AUTO-REPLACE (Nếu biến thành loại ảnh duy nhất)
+            if (SINGULAR_IMAGE_TYPES.contains(newType)) {
+                log.info("Transition to Singular type {}, cleaning up old images", newType);
+                List<EventImage> existingImages = eventImageRepository
+                    .findByEventIdAndImageTypeAndIsDeletedFalseOrderByDisplayOrderAsc(image.getEvent().getId(), newType);
+                
+                for (EventImage oldImg : existingImages) {
+                    if (!oldImg.getId().equals(imageId)) { // Không tự xóa chính nó
+                        try {
+                            // Xóa file trên Cloudinary và mark deleted trong DB
+                            deleteEventImage(oldImg.getId());
+                        } catch (Exception e) {
+                            log.error("Failed to cleanup old image {}: {}", oldImg.getId(), e.getMessage());
+                        }
+                    }
+                }
+            }
+            
+            // Cập nhật bannerUrl của Event nếu liên quan đến BANNER
+            Event event = image.getEvent();
+            if (image.getImageType() == EventImage.ImageType.BANNER && newType != EventImage.ImageType.BANNER) {
+                // Đang là BANNER, giờ bị giáng cấp thành loại khác -> Clear banner url
+                event.setBannerUrl(null);
+                eventRepository.save(event);
+            } else if (newType == EventImage.ImageType.BANNER) {
+                // Trở thành BANNER mới
+                event.setBannerUrl(image.getImageUrl());
+                eventRepository.save(event);
+            }
+
+            image.setImageType(newType);
+            image.setIsPrimary(newType == EventImage.ImageType.BANNER);
+        }
+
+        // Loại bỏ hoàn toàn logic xử lý req.isPrimary() cũ vì flag này phụ thuộc chặt vào ImageType.
+        return eventImageRepository.save(image);
+    }
+    
+    /**
      * Get all images of an event
      */
     @Transactional(readOnly = true)
@@ -130,7 +212,7 @@ public class ImageUploadService {
         Transformation transformation = getTransformation(imageType);
         
         Map<String, Object> uploadParams = ObjectUtils.asMap(
-            "folder", "ticketbox/events/" + eventId,
+            "folder", "flash-ticket/events/" + eventId,
             "resource_type", "image",
             "transformation", transformation,
             "use_filename", true,

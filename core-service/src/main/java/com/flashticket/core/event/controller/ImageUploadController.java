@@ -1,7 +1,9 @@
 package com.flashticket.core.event.controller;
 
+import com.flashticket.core.event.dto.UpdateImageRequest;
 import com.flashticket.core.event.entity.EventImage;
 import com.flashticket.core.event.service.ImageUploadService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -76,5 +78,21 @@ public class ImageUploadController {
         
         log.info("Successfully deleted image {}", imageId);
         return ResponseEntity.noContent().build();
+    }
+    
+    /**
+     * PATCH /api/organizer/events/{eventId}/images/{imageId}
+     * Cập nhật metadata của ảnh (alt text, order, isPrimary)
+     */
+    @PatchMapping("/{eventId}/images/{imageId}")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<EventImage> updateImageMetadata(
+        @PathVariable UUID eventId,
+        @PathVariable UUID imageId,
+        @RequestBody @Valid UpdateImageRequest req
+    ) {
+        log.info("PATCH /api/organizer/events/{}/images/{} - Updating metadata", eventId, imageId);
+        EventImage image = imageUploadService.updateImageMetadata(imageId, req);
+        return ResponseEntity.ok(image);
     }
 }

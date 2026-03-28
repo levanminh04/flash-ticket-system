@@ -148,7 +148,7 @@ CREATE TABLE event_schema.events (
     
     -- Basic Information
     title VARCHAR(255) NOT NULL,                 -- Tiêu đề: "Rock Storm 2026"
-    slug VARCHAR(255) NOT NULL UNIQUE,           -- URL: "rock-storm-2026"
+    slug VARCHAR(255) NOT NULL ,           -- URL: "rock-storm-2026"
     short_description VARCHAR(500),              -- Mô tả ngắn cho listing
     description TEXT,                            -- Mô tả đầy đủ (có thể HTML/Markdown)
     
@@ -213,6 +213,10 @@ CREATE INDEX idx_events_datetime ON event_schema.events(start_datetime) WHERE is
 CREATE INDEX idx_events_featured ON event_schema.events(is_featured) WHERE is_deleted = FALSE AND status = 'PUBLISHED';
 CREATE INDEX idx_events_pending ON event_schema.events(status, created_at DESC) WHERE is_deleted = FALSE AND status = 'PENDING_APPROVAL';
 CREATE INDEX idx_events_slug ON event_schema.events(slug);
+-- TẠO PARTIAL INDEX ĐỂ XỬ LÝ UNIQUE SLUG CHO CÁC EVENT CHƯA XÓA
+CREATE UNIQUE INDEX idx_events_slug_unique_active 
+ON event_schema.events (slug) 
+WHERE is_deleted = FALSE;
 
 -- Full-text search index
 CREATE INDEX idx_events_search ON event_schema.events 

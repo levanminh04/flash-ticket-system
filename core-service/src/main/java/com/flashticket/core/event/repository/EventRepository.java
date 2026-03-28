@@ -100,4 +100,40 @@ public interface EventRepository extends JpaRepository<Event, UUID>,
     @Modifying
     @Query("UPDATE Event e SET e.ticketsSold = e.ticketsSold + :amount WHERE e.id = :id")
     void incrementTicketsSold(@Param("id") UUID id, @Param("amount") int amount);
+
+    // ============================================================
+    // ORGANIZER — IDOR-safe queries
+    // ============================================================
+
+    /**
+     * Tìm event cho Organizer — đảm bảo IDOR protection.
+     * Trả về 404 nếu event không thuộc organizerId này.
+     */
+    @EntityGraph(attributePaths = {"venue"})
+    Optional<Event> findByIdAndOrganizerIdAndIsDeletedFalse(UUID id, String organizerId);
+
+    /**
+     * List tất cả events của một Organizer (paginated).
+     */
+    @EntityGraph(attributePaths = {"venue"})
+    Page<Event> findByOrganizerIdAndIsDeletedFalse(String organizerId, Pageable pageable);
+
+    /**
+     * Kiểm tra slug đã tồn tại chưa (để auto-gen slug unique).
+     */
+    boolean existsBySlugAndIsDeletedFalse(String slug);
+
+    /**
+     * Atomic update tổng sức chứa khi thêm/xóa TicketType.
+     * Dùng GREATEST(0, ...) để tránh totalCapacity âm.
+     */
+    @Modifying
+    @Query("UPDATE Event e SET e.totalCapacity = GREATEST(0, e.totalCapacity + :delta) WHERE e.id = :id")
+    void adjustTotalCapacity(@Param("id") UUID id, @Param("delta") int delta);
+
+    /**
+     * Đếm TicketType ACTIVE của event (dùng để validate trước khi publish).
+     */
+    @Query("SELECT COUNT(t) FROM TicketType t WHERE t.event.id = :eventId AND t.isDeleted = false AND t.status = 'ACTIVE'")
+    long countActiveTicketTypes(@Param("eventId") UUID eventId);
 }
