@@ -88,7 +88,7 @@ public class TicketTypeService {
 
         tt = ticketTypeRepository.save(tt);
 
-        // Atomic update totalCapacity trên Event
+        // Atomic update totalCapacity trên Event - tránh lỗi "trí nhớ cũ" (Read-Modify-Write)
         eventRepository.adjustTotalCapacity(eventId, req.quantityTotal());
 
         log.info("Created ticket type '{}' (qty={}) for event {}", tt.getName(), tt.getQuantityTotal(), eventId);
