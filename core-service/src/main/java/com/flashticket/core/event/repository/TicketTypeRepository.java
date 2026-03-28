@@ -81,4 +81,21 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
              AND t.status = com.flashticket.core.event.entity.TicketType.TicketStatus.ACTIVE
            """)
     void markAsSoldOutIfEmpty(@Param("id") UUID id);
+
+    // ============================================================
+    // ORGANIZER — IDOR-safe queries
+    // ============================================================
+
+    /**
+     * Tìm TicketType theo id VÀ eventId — IDOR protection.
+     * Đảm bảo Organizer chỉ thao tác được TicketType thuộc event của mình.
+     */
+    Optional<TicketType> findByIdAndEventIdAndIsDeletedFalse(UUID id, UUID eventId);
+
+    /**
+     * Số vé đã bán = quantityTotal - quantityAvailable - quantityReserved
+     * Dùng để kiểm tra trước khi giảm quantityTotal.
+     */
+    @Query("SELECT (t.quantityTotal - t.quantityAvailable - t.quantityReserved) FROM TicketType t WHERE t.id = :id")
+    Integer countSoldTickets(@Param("id") UUID id);
 }

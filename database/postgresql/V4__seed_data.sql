@@ -144,6 +144,17 @@ VALUES
         '["https://cdn.ticketbox.vn/venues/saigon-river-1.jpg"]',
         NULL, NULL, NULL,
         FALSE, TRUE, FALSE, NOW(), NOW()
+    ),
+    (
+        '22222222-0000-0000-0000-000000000005',
+        'Old Trafford', 'old-trafford',
+        'Sân nhà của Manchester United, một trong những sân vận động nổi tiếng nhất thế giới với sức chứa hơn 74,000 khán giả',
+        'Sir Matt Busby Way', 'Trafford', 'Greater Manchester', 'Manchester', 'United Kingdom', 'M16 0RA',
+        53.46310000, -2.29130000, 74310,
+        '["Bãi đỗ xe", "Nhà vệ sinh", "Khu ẩm thực", "Cửa hàng lưu niệm", "Bảo tàng CLB", "Wifi miễn phí"]',
+        '["https://cdn.ticketbox.vn/venues/old-trafford-1.jpg", "https://cdn.ticketbox.vn/venues/old-trafford-2.jpg"]',
+        '+44-161-868-8000', 'enquiries@manutd.co.uk', 'https://www.manutd.com',
+        TRUE, TRUE, FALSE, NOW(), NOW()
     );
 
 
