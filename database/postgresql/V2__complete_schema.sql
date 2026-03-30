@@ -350,6 +350,7 @@ COMMENT ON TABLE event_schema.ticket_types IS 'Loại vé - quản lý inventory
 -- Table: event_schema.event_seat_inventory
 -- Mô tả: Inventory trạng thái ghế cho từng event (REDIS LOCK SYNC)
 -- Critical: Syncs with Redis for distributed locking during Flash Sale
+-- Khi Organizer chốt sổ và bấm "PUBLISH EVENT" (Công bố mở bán) thì mới insert 1 loạt vào event_seat_inventory
 -- ----------------------------------------------------------------------------
 CREATE TABLE event_schema.event_seat_inventory (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
