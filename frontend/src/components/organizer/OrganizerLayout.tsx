@@ -63,10 +63,10 @@ export default function OrganizerLayout({
 
   return (
     <div className="organizer-page">
-      <div className="container organizer-layout">
-        <OrganizerSidebar />
+      <OrganizerSidebar />
 
-        <main className="organizer-main">
+      <div className="container organizer-layout">
+        <main className="organizer-main organizer-main-full">
           <header className="organizer-header">
             <div>
               <h1 className="organizer-title">{title}</h1>

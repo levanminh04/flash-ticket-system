@@ -11,6 +11,7 @@ import {
   OrderDetail,
 } from "../../services/orderService";
 import { ShoppingBag, X } from "lucide-react";
+import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 
 function formatDate(iso: string | null | undefined): string {
   if (iso == null || iso === "") return "-";
@@ -127,6 +128,7 @@ export default function MyOrdersPage() {
 
   return (
     <div className="my-orders-page">
+      <AccountCategoryNav />
       <div className="container account-layout-container">
         <AccountSidebar />
 

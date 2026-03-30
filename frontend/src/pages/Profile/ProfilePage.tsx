@@ -3,6 +3,7 @@ import { useKeycloak } from "@react-keycloak/web";
 import { userService, UserProfile } from "../../services/userService";
 import { Mail, Phone } from "lucide-react";
 import AccountSidebar from "../../components/account/AccountSidebar";
+import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 
 export default function ProfilePage() {
   const { keycloak } = useKeycloak();
@@ -53,6 +54,7 @@ export default function ProfilePage() {
   if (!keycloak.authenticated) {
     return (
       <div className="profile-page">
+        <AccountCategoryNav />
         <div className="profile-card">
           <p>Vui lòng đăng nhập để xem hồ sơ.</p>
           <button onClick={() => keycloak.login()} className="btn btn-primary">
@@ -65,6 +67,7 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-page">
+      <AccountCategoryNav />
       <div className="container account-layout-container">
         <AccountSidebar />
 

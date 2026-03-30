@@ -12,10 +12,16 @@ import PaymentResultPage from "./pages/Payment/PaymentResultPage";
 import ProfilePage from "./pages/Profile/ProfilePage";
 import MyTicketsPage from "./pages/MyTickets/MyTicketsPage";
 import MyOrdersPage from "./pages/MyOrders/MyOrdersPage";
+import VenuesPage from "./pages/Venues/VenuesPage";
 import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
 import OrganizerMediaPage from "./pages/Organizer/OrganizerMediaPage";
 import OrganizerCheckInPage from "./pages/Organizer/OrganizerCheckInPage";
 import OrganizerProfilePage from "./pages/Organizer/OrganizerProfilePage";
+import OrganizerEventsPage from "./pages/Organizer/OrganizerEventsPage";
+import OrganizerEventEditorPage from "./pages/Organizer/OrganizerEventEditorPage";
+import OrganizerTicketTypesPage from "./pages/Organizer/OrganizerTicketTypesPage";
+import OrganizerLayoutPage from "./pages/Organizer/OrganizerLayoutPage";
+import OrganizerSeatMapPage from "./pages/Organizer/OrganizerSeatMapPage";
 
 import { ReactKeycloakProvider } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
@@ -59,6 +65,7 @@ function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/search" element={<EventSearchPage />} />
+              <Route path="/venues" element={<VenuesPage />} />
               <Route path="/event/:slug" element={<EventDetailPage />} />
               <Route path="/events/:slug/book" element={<SelectTicketPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
@@ -68,6 +75,27 @@ function App() {
               <Route path="/my-tickets" element={<MyTicketsPage />} />
               <Route path="/my-orders" element={<MyOrdersPage />} />
               <Route path="/organizer" element={<OrganizerHubPage />} />
+              <Route path="/organizer/events" element={<OrganizerEventsPage />} />
+              <Route
+                path="/organizer/events/new"
+                element={<OrganizerEventEditorPage />}
+              />
+              <Route
+                path="/organizer/events/:eventId/edit"
+                element={<OrganizerEventEditorPage />}
+              />
+              <Route
+                path="/organizer/events/:eventId/ticket-types"
+                element={<OrganizerTicketTypesPage />}
+              />
+              <Route
+                path="/organizer/events/:eventId/layout"
+                element={<OrganizerLayoutPage />}
+              />
+              <Route
+                path="/organizer/events/:eventId/seat-map"
+                element={<OrganizerSeatMapPage />}
+              />
               <Route
                 path="/organizer/profile"
                 element={<OrganizerProfilePage />}

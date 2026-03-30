@@ -6,6 +6,21 @@ export interface Category {
   displayOrder: number;
 }
 
+export interface Venue {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  address: string;
+  district?: string;
+  city: string;
+  latitude?: number;
+  longitude?: number;
+  totalCapacity?: number;
+  facilities?: string[];
+  imageUrls?: string[];
+}
+
 export interface EventSummary {
   id: string;
   title: string;

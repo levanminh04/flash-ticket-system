@@ -6,7 +6,7 @@
   min-height: calc(100vh - 80px);
   background: var(--page-gradient-account);
   background-repeat: no-repeat;
-  padding: 32px 20px 48px;
+  padding: 0 0 48px;
 }
 
 .profile-page .container,
@@ -20,6 +20,26 @@
 .my-tickets-page .container.account-layout-container,
 .my-orders-page .container.account-layout-container {
   max-width: 1100px;
+  padding-top: 32px;
+}
+
+.profile-page .container.account-category-nav-inner,
+.my-tickets-page .container.account-category-nav-inner,
+.my-orders-page .container.account-category-nav-inner {
+  max-width: 1200px;
+  padding-top: 0;
+}
+
+.account-category-nav {
+  z-index: 20;
+}
+
+.account-category-list {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  list-style: none;
+  overflow-x: auto;
 }
 
 .account-layout-container {
@@ -548,8 +568,14 @@
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE / Edge */
   position: relative;
   box-shadow: var(--shadow-lg);
+}
+
+.modal-content::-webkit-scrollbar {
+  display: none;                  /* Chrome / Safari / Opera */
 }
 
 .modal-close {
@@ -626,6 +652,19 @@
   color: var(--text-primary);
 }
 
+/* Status badge inside ticket detail modal */
+.ticket-detail-info .info-row .value.status-valid,
+.ticket-detail-info .info-row .value.status-used,
+.ticket-detail-info .info-row .value.status-cancelled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
 .order-detail-info .info-row .value.order-detail-status {
   display: inline-flex;
   align-items: center;
@@ -638,9 +677,8 @@
 }
 
 .order-detail-info .info-row.total {
-  border-top: 1px solid var(--border);
-  margin-top: 8px;
-  padding-top: 12px;
+  margin-top: 2px;
+  padding-top: 4px;
   font-size: 16px;
 }
 
@@ -650,9 +688,8 @@
 }
 
 .order-items {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 4px;
 }
 
 .items-label {
@@ -688,7 +725,10 @@
 }
 
 .qr-section {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 20px;
   background: #f8fafc;
   border-radius: 12px;
@@ -698,12 +738,14 @@
   font-size: 13px;
   color: var(--text-muted);
   margin-bottom: 12px;
+  text-align: center;
 }
 
 .qr-image {
   width: 200px;
   height: 200px;
   border-radius: 8px;
+  display: block;
 }
 
 .btn-danger {

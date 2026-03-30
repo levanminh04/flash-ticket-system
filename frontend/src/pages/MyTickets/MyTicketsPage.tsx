@@ -10,6 +10,7 @@ import {
   TicketsPageResponse,
 } from "../../services/ticketService";
 import { Search, Ticket, X } from "lucide-react";
+import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 
 const PAGE_SIZE = 10;
 type TicketStatusFilter = "ALL" | "VALID" | "USED" | "CANCELLED";
@@ -120,6 +121,7 @@ export default function MyTicketsPage() {
   if (!keycloak.authenticated) {
     return (
       <div className="my-tickets-page">
+        <AccountCategoryNav />
         <div className="container">
           <p>Vui lòng đăng nhập để xem vé của bạn.</p>
           <button onClick={() => keycloak.login()} className="btn btn-primary">
@@ -132,6 +134,7 @@ export default function MyTicketsPage() {
 
   return (
     <div className="my-tickets-page">
+      <AccountCategoryNav />
       <div className="container account-layout-container">
         <AccountSidebar />
 

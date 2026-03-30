@@ -3,9 +3,15 @@ import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 
 const featureCards = [
   {
+    title: "Quản lý sự kiện",
+    description:
+      "Xem danh sách event của organizer, tạo sự kiện mới, chỉnh sửa thông tin, quản lý loại vé, layout và seat map.",
+    href: "/organizer/events",
+  },
+  {
     title: "Hồ sơ ban tổ chức",
     description:
-      "Xem hồ sơ tổ chức, contact, thông số và trạng thái xác minh",
+      "Xem hồ sơ tổ chức, contact, thông số và trạng thái xác minh.",
     href: "/organizer/profile",
   },
   {
@@ -26,7 +32,7 @@ export default function OrganizerHubPage() {
   return (
     <OrganizerLayout
       title="Tổng quan"
-      description="Tập hợp các tính năng dành cho ban tổ chức sự kiện"
+      description="Tập hợp các tính năng dành cho ban tổ chức sự kiện."
     >
       <section className="organizer-grid">
         {featureCards.map((card) => (

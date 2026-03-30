@@ -1,11 +1,6 @@
 import { FormEvent, useState } from "react";
 import { toast } from "react-toastify";
-import {
-  BadgeCheck,
-  LoaderCircle,
-  QrCode,
-  ShieldAlert,
-} from "lucide-react";
+import { LoaderCircle, QrCode, ShieldAlert } from "lucide-react";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import {
   organizerService,
@@ -87,9 +82,12 @@ export default function OrganizerCheckInPage() {
       description="Dành cho quầy soát vé hoặc máy quét QR. Chỉ cần quét hoặc dán mã QR theo định dạng hệ thống yêu cầu"
     >
       <section className="organizer-grid organizer-grid-checkin">
-        <form className="organizer-panel organizer-checkin-form" onSubmit={handleSubmit}>
+        <form
+          className="organizer-panel organizer-checkin-form"
+          onSubmit={handleSubmit}
+        >
           <div className="organizer-panel-heading">
-            <h2>Máy quét / nhập tay</h2>
+            <p className="organizer-panel-title-pill">Máy quét</p>
             <p>
               Nếu bạn dùng máy quét 2D kiểu bàn phím, hãy đặt con trỏ vào ô QR
               data rồi quét trực tiếp.
@@ -103,7 +101,7 @@ export default function OrganizerCheckInPage() {
               onChange={(changeEvent) => setQrData(changeEvent.target.value)}
               className="organizer-input organizer-textarea"
               placeholder="Dán hoặc quét chuỗi QR data của vé tại đây"
-              rows={7}
+              rows={1}
             />
           </label>
 
@@ -135,29 +133,39 @@ export default function OrganizerCheckInPage() {
 
             {result ? (
               <div className="organizer-checkin-result success">
-                <div className="organizer-checkin-result-icon">
-                  <BadgeCheck size={24} />
-                </div>
                 <div className="organizer-checkin-result-copy">
-                  <h3>{result.holderName}</h3>
-                  <p>{result.ticketTypeName}</p>
+                  <h3>
+                    <strong>Tên người sở hữu vé: </strong>
+                    {result.holderName}
+                  </h3>
+                  <p>
+                    <strong>Loại vé: </strong>
+                    {result.ticketTypeName}
+                  </p>
                 </div>
 
-                <div className="organizer-checkin-data">
-                  <div>
+                <div
+                  className="organizer-checkin-data"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "16px 12px",
+                  }}
+                >
+                  <div style={{ minWidth: "auto" }}>
                     <span>Mã vé</span>
                     <strong>{result.ticketCode}</strong>
                   </div>
-                  <div>
-                    <span>Ghế / khu</span>
+                  <div style={{ minWidth: "auto", paddingLeft: "40px" }}>
+                    <span>Ghế</span>
                     <strong>{result.seatLabel}</strong>
                   </div>
-                  <div>
+                  <div style={{ minWidth: "auto" }}>
                     <span>Check-in lúc</span>
                     <strong>{formatDateTime(result.checkedInAt)}</strong>
                   </div>
-                  <div>
-                    <span>Vị trí quét</span>
+                  <div style={{ minWidth: "auto", paddingLeft: "40px" }}>
+                    <span>Nơi quét</span>
                     <strong>{result.scannedLocation}</strong>
                   </div>
                 </div>
@@ -192,8 +200,8 @@ export default function OrganizerCheckInPage() {
                       <span>{formatDateTime(item.scannedAt)}</span>
                     </div>
                     <div className="organizer-history-meta">
-                      <span>{item.ticketCode}</span>
-                      <span>{item.ticketTypeName}</span>
+                      <span>{item.ticketCode} | </span>
+                      <span>{item.ticketTypeName} | </span>
                       <span>{item.scannedLocation}</span>
                     </div>
                   </article>

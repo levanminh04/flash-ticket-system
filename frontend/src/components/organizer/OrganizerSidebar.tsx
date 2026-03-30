@@ -1,50 +1,58 @@
 import { NavLink } from "react-router-dom";
-import { ImagePlus, LayoutDashboard, QrCode, ShieldCheck } from "lucide-react";
+
+const navItems: Array<{
+  to: string;
+  label: string;
+  end?: boolean;
+}> = [
+  {
+    to: "/organizer",
+    label: "Tổng quan",
+    end: true,
+  },
+  {
+    to: "/organizer/events",
+    label: "Quản lý sự kiện",
+  },
+  {
+    to: "/organizer/profile",
+    label: "Hồ sơ ban tổ chức",
+  },
+  {
+    to: "/organizer/media",
+    label: "Thư viện ảnh sự kiện",
+  },
+  {
+    to: "/venues",
+    label: "Địa điểm",
+  },
+  {
+    to: "/organizer/check-in",
+    label: "Check-in",
+  },
+];
 
 export default function OrganizerSidebar() {
   return (
-    <aside className="organizer-sidebar">
-      <nav className="organizer-sidebar-nav">
-        <NavLink
-          to="/organizer"
-          end
-          className={({ isActive }) =>
-            `organizer-nav-link ${isActive ? "active" : ""}`
-          }
-        >
-          <LayoutDashboard size={18} />
-          <span>Tổng quan</span>
-        </NavLink>
-
-        <NavLink
-          to="/organizer/profile"
-          className={({ isActive }) =>
-            `organizer-nav-link ${isActive ? "active" : ""}`
-          }
-        >
-          <ShieldCheck size={18} />
-          <span>Hồ sơ organizer</span>
-        </NavLink>
-
-        <NavLink
-          to="/organizer/media"
-          className={({ isActive }) =>
-            `organizer-nav-link ${isActive ? "active" : ""}`
-          }
-        >
-          <ImagePlus size={18} />
-          <span>Thư viện ảnh</span>
-        </NavLink>
-
-        <NavLink
-          to="/organizer/check-in"
-          className={({ isActive }) =>
-            `organizer-nav-link ${isActive ? "active" : ""}`
-          }
-        >
-          <QrCode size={18} />
-          <span>Check-in vé</span>
-        </NavLink>
+    <aside className="organizer-sidebar organizer-category-nav">
+      <nav
+        className="container organizer-category-nav-track"
+        aria-label="Organizer navigation"
+      >
+        {navItems.map((item) => {
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `organizer-category-link ${isActive ? "active" : ""}`
+              }
+            >
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
     </aside>
   );
