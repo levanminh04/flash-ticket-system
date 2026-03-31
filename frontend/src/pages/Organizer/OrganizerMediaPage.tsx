@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { Eye, ImagePlus, LoaderCircle, Search, Trash2 } from "lucide-react";
+import {
+  Eye,
+  ImagePlus,
+  LoaderCircle,
+  Edit,
+  Search,
+  Trash2,
+} from "lucide-react";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import { useDropzone } from "react-dropzone";
@@ -54,6 +61,10 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+function isOrganizerImageType(value: string): value is OrganizerImageType {
+  return imageTypes.includes(value as OrganizerImageType);
+}
+
 type ResolvedEvent = {
   id: string;
   title: string;
@@ -65,13 +76,18 @@ type ResolvedEvent = {
 export default function OrganizerMediaPage() {
   const [lookupValue, setLookupValue] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
-  const [resolvedEvent, setResolvedEvent] = useState<ResolvedEvent | null>(null);
+  const [resolvedEvent, setResolvedEvent] = useState<ResolvedEvent | null>(
+    null,
+  );
   const [images, setImages] = useState<OrganizerEventImage[]>([]);
   const [imagesLoading, setImagesLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [selectedType, setSelectedType] = useState<OrganizerImageType>("BANNER");
+  const [selectedType, setSelectedType] =
+    useState<OrganizerImageType>("BANNER");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedPreviewUrl, setSelectedPreviewUrl] = useState<string | null>(null);
+  const [selectedPreviewUrl, setSelectedPreviewUrl] = useState<string | null>(
+    null,
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [currentPage, setCurrentPage] = useState(0);
@@ -84,26 +100,29 @@ export default function OrganizerMediaPage() {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      setSelectedPreviewUrl(typeof reader.result === "string" ? reader.result : null);
+      setSelectedPreviewUrl(
+        typeof reader.result === "string" ? reader.result : null,
+      );
     };
     reader.onerror = () => setSelectedPreviewUrl(null);
     reader.readAsDataURL(file);
   };
 
-  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
-    multiple: false,
-    maxFiles: 1,
-    accept: {
-      "image/*": [".png", ".jpg", ".jpeg", ".webp"],
-    },
-    onDrop: (acceptedFiles) => {
-      setFileWithPreview(acceptedFiles[0] ?? null);
-    },
-    onDropRejected: () => {
-      setFileWithPreview(null);
-      toast.error("Chỉ hỗ trợ 1 ảnh định dạng PNG, JPG hoặc WEBP.");
-    },
-  });
+  const { getRootProps, getInputProps, isDragActive, isDragReject } =
+    useDropzone({
+      multiple: false,
+      maxFiles: 1,
+      accept: {
+        "image/*": [".png", ".jpg", ".jpeg", ".webp"],
+      },
+      onDrop: (acceptedFiles) => {
+        setFileWithPreview(acceptedFiles[0] ?? null);
+      },
+      onDropRejected: () => {
+        setFileWithPreview(null);
+        toast.error("Chỉ hỗ trợ 1 ảnh định dạng PNG, JPG hoặc WEBP.");
+      },
+    });
 
   const loadImages = async (eventId: string) => {
     setImagesLoading(true);
@@ -176,9 +195,7 @@ export default function OrganizerMediaPage() {
       await loadImages(resolvedEvent.id);
       toast.success("Upload ảnh thành công.");
     } catch {
-      toast.error(
-        "Upload ảnh thất bại",
-      );
+      toast.error("Upload ảnh thất bại");
     } finally {
       setUploading(false);
     }
@@ -247,6 +264,82 @@ export default function OrganizerMediaPage() {
     });
   };
 
+  const handleEditMetadata = async (image: OrganizerEventImage) => {
+    if (!resolvedEvent) return;
+
+    const result = await Swal.fire({
+      title: "Chỉnh sửa metadata ảnh",
+      width: 640,
+      html: `
+        <div class="organizer-media-editor-popup">
+          <label class="organizer-media-editor-field">
+            <span>Alt text</span>
+            <input id="swal-image-alt" class="swal2-input organizer-media-editor-input" value="${escapeHtml(image.altText ?? "")}" placeholder="Nhập alt text cho ảnh" />
+          </label>
+          <label class="organizer-media-editor-field">
+            <span>Display order</span>
+            <input id="swal-image-order" type="number" min="0" class="swal2-input organizer-media-editor-input" value="${escapeHtml(String(image.displayOrder ?? 0))}" />
+          </label>
+          <label class="organizer-media-editor-field">
+            <span>Loại ảnh (Image type)</span>
+            <select id="swal-image-type" class="organizer-media-editor-select">
+              ${imageTypes.map((type) => `<option value="${type}" ${image.imageType === type ? "selected" : ""}>${type}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: "Lưu thay đổi",
+      cancelButtonText: "Hủy",
+      preConfirm: () => {
+        const altInput = document.getElementById(
+          "swal-image-alt",
+        ) as HTMLInputElement | null;
+        const orderInput = document.getElementById(
+          "swal-image-order",
+        ) as HTMLInputElement | null;
+        const typeInput = document.getElementById(
+          "swal-image-type",
+        ) as HTMLSelectElement | null;
+
+        const nextImageType = typeInput?.value ?? "";
+        if (!isOrganizerImageType(nextImageType)) {
+          Swal.showValidationMessage("Lỗi ảnh không hợp lệ");
+          return null;
+        }
+
+        const displayOrderText = orderInput?.value?.trim() ?? "";
+        if (displayOrderText && Number.isNaN(Number(displayOrderText))) {
+          Swal.showValidationMessage("Display order phải là số hợp lệ.");
+          return null;
+        }
+
+        return {
+          altText: altInput?.value?.trim() || null,
+          displayOrder: displayOrderText ? Number(displayOrderText) : 0,
+          imageType: nextImageType,
+        };
+      },
+    });
+
+    if (!result.isConfirmed || !result.value) {
+      return;
+    }
+
+    try {
+      await organizerService.updateEventImage(
+        resolvedEvent.id,
+        image.id,
+        result.value,
+      );
+      await loadImages(resolvedEvent.id);
+      toast.success("Cập nhật metadata ảnh.");
+    } catch {
+      toast.error("Không thể cập nhật metadata ảnh.");
+    }
+  };
+
   const lightboxSlides = images.map((image) => ({
     src: image.imageUrl,
     alt: image.altText ?? image.imageType,
@@ -310,8 +403,18 @@ export default function OrganizerMediaPage() {
               <p>
                 Event ID: <strong>{resolvedEvent.id}</strong>
               </p>
-              <p> Slug: <strong>{resolvedEvent.slug}</strong> </p>
-              <p>BTC: <strong>{resolvedEvent.organizerName ? ` ${resolvedEvent.organizerName}` : ""}</strong></p>
+              <p>
+                {" "}
+                Slug: <strong>{resolvedEvent.slug}</strong>{" "}
+              </p>
+              <p>
+                BTC:{" "}
+                <strong>
+                  {resolvedEvent.organizerName
+                    ? ` ${resolvedEvent.organizerName}`
+                    : ""}
+                </strong>
+              </p>
             </div>
             <div className="organizer-event-art">
               {resolvedEvent.bannerUrl ? (
@@ -340,7 +443,9 @@ export default function OrganizerMediaPage() {
                     className="organizer-input"
                     value={selectedType}
                     onChange={(changeEvent) =>
-                      setSelectedType(changeEvent.target.value as OrganizerImageType)
+                      setSelectedType(
+                        changeEvent.target.value as OrganizerImageType,
+                      )
                     }
                   >
                     {imageTypes.map((type) => (
@@ -355,9 +460,11 @@ export default function OrganizerMediaPage() {
                   <span>Tệp hình ảnh</span>
                   <div
                     {...getRootProps({
-                      className: `organizer-input organizer-dropzone${isDragActive ? " is-active" : ""
-                        }${isDragReject ? " is-reject" : ""}${selectedFile ? " has-file" : ""
-                        }`,
+                      className: `organizer-input organizer-dropzone${
+                        isDragActive ? " is-active" : ""
+                      }${isDragReject ? " is-reject" : ""}${
+                        selectedFile ? " has-file" : ""
+                      }`,
                     })}
                   >
                     <input
@@ -372,8 +479,13 @@ export default function OrganizerMediaPage() {
                       </p>
                     ) : selectedPreviewUrl ? (
                       <div className="organizer-dropzone-preview">
-                        <img src={selectedPreviewUrl} alt={selectedFile?.name ?? "preview"} />
-                        <p className="organizer-dropzone-file-name">{selectedFile?.name}</p>
+                        <img
+                          src={selectedPreviewUrl}
+                          alt={selectedFile?.name ?? "preview"}
+                        />
+                        <p className="organizer-dropzone-file-name">
+                          {selectedFile?.name}
+                        </p>
                       </div>
                     ) : (
                       <p className="organizer-dropzone-text">
@@ -384,7 +496,6 @@ export default function OrganizerMediaPage() {
                     )}
                   </div>
                 </div>
-
               </div>
 
               <div className="organizer-upload-submit-row">
@@ -404,7 +515,9 @@ export default function OrganizerMediaPage() {
 
             <section className="organizer-panel">
               <div className="organizer-panel-heading">
-                <h2 className="organizer-panel-title-pill">Thư viện hiện tại</h2>
+                <h2 className="organizer-panel-title-pill">
+                  Thư viện hiện tại
+                </h2>
               </div>
 
               {imagesLoading ? (
@@ -433,7 +546,8 @@ export default function OrganizerMediaPage() {
                       </thead>
                       <tbody>
                         {paginatedImages.map((image, index) => {
-                          const imageIndex = currentPage * IMAGES_PER_PAGE + index;
+                          const imageIndex =
+                            currentPage * IMAGES_PER_PAGE + index;
                           return (
                             <tr key={image.id}>
                               <td>
@@ -450,7 +564,10 @@ export default function OrganizerMediaPage() {
                                   />
                                 </button>
                               </td>
-                              <td className="organizer-media-id" title={image.id}>
+                              <td
+                                className="organizer-media-id"
+                                title={image.id}
+                              >
                                 {image.id}
                               </td>
                               <td>
@@ -479,12 +596,25 @@ export default function OrganizerMediaPage() {
                                 <div className="organizer-media-actions">
                                   <button
                                     className="organizer-icon-action organizer-icon-action-info"
-                                    onClick={() => void handleViewDetails(image)}
+                                    onClick={() =>
+                                      void handleViewDetails(image)
+                                    }
                                     type="button"
                                     aria-label="Xem chi tiết ảnh"
                                     title="Xem chi tiết ảnh"
                                   >
                                     <Eye size={16} />
+                                  </button>
+                                  <button
+                                    className="organizer-icon-action organizer-icon-action-edit"
+                                    onClick={() =>
+                                      void handleEditMetadata(image)
+                                    }
+                                    type="button"
+                                    aria-label="Chỉnh sửa metadata ảnh"
+                                    title="Chỉnh sửa metadata ảnh"
+                                  >
+                                    <Edit size={16} />
                                   </button>
                                   <button
                                     className="organizer-icon-action organizer-icon-action-danger"
@@ -495,7 +625,10 @@ export default function OrganizerMediaPage() {
                                     title="Xóa ảnh"
                                   >
                                     {deletingId === image.id ? (
-                                      <LoaderCircle size={16} className="spin" />
+                                      <LoaderCircle
+                                        size={16}
+                                        className="spin"
+                                      />
                                     ) : (
                                       <Trash2 size={16} />
                                     )}

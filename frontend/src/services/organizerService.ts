@@ -1,4 +1,5 @@
 import axiosClient from "../lib/axiosClient";
+import { userDirectClient } from "../lib/internalServiceClients";
 
 export type OrganizerImageType =
   | "BANNER"
@@ -50,12 +51,25 @@ export interface OrganizerProfile {
   phone?: string | null;
 }
 
+export interface OrganizerEventImageUpdatePayload {
+  altText?: string | null;
+  displayOrder?: number | null;
+  imageType?: OrganizerImageType | null;
+}
+
 export const organizerService = {
   getOrganizerByUserId: async (userId: string): Promise<OrganizerProfile> => {
-    const response = await axiosClient.get<OrganizerProfile>(
-      `/api/organizers/by-user/${userId}`,
-    );
-    return response.data;
+    try {
+      const response = await axiosClient.get<OrganizerProfile>(
+        `/api/organizers/by-user/${userId}`,
+      );
+      return response.data;
+    } catch {
+      const response = await userDirectClient.get<OrganizerProfile>(
+        `/api/organizers/by-user/${userId}`,
+      );
+      return response.data;
+    }
   },
 
   getEventImages: async (eventId: string): Promise<OrganizerEventImage[]> => {
@@ -88,6 +102,18 @@ export const organizerService = {
 
   deleteEventImage: async (eventId: string, imageId: string): Promise<void> => {
     await axiosClient.delete(`/api/organizer/events/${eventId}/images/${imageId}`);
+  },
+
+  updateEventImage: async (
+    eventId: string,
+    imageId: string,
+    payload: OrganizerEventImageUpdatePayload,
+  ): Promise<OrganizerEventImage> => {
+    const response = await axiosClient.patch<OrganizerEventImage>(
+      `/api/organizer/events/${eventId}/images/${imageId}`,
+      payload,
+    );
+    return response.data;
   },
 
   checkInTicket: async (

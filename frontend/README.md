@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-The app will be available at `http://localhost:3000`
+The app will be available at `http://localhost:5173`
 
 ### Build for Production
 
@@ -69,11 +69,13 @@ src/
 
 ## Environment Variables
 
-Create a `.env` file in the root directory:
+Create a `.env` file at the repository root (not inside `frontend/`):
 
 ```env
 VITE_API_GATEWAY_URL=http://localhost:8080
-VITE_KEYCLOAK_URL=http://localhost:8180
-VITE_KEYCLOAK_REALM=ticketbox
-VITE_KEYCLOAK_CLIENT_ID=ticketbox-client
+VITE_KEYCLOAK_URL=http://13.239.118.235:9090
+VITE_KEYCLOAK_REALM=flash-ticket
+VITE_KEYCLOAK_CLIENT_ID=flash-ticket-frontend
 ```
+
+`frontend/vite.config.ts` reads env values from the repo root, so the same `.env` file can be shared with backend services and `docker-compose`.
