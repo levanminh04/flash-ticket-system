@@ -868,3 +868,38 @@ db.user_activity_logs.getIndexes();
 
 // Check validation rules
 db.getCollectionInfos({ name: "users" });
+
+// ============================================================================
+// COLLECTION: user_follows
+// ============================================================================
+// Mô tả: Trạng thái user theo dõi (Follow) organizer
+// ============================================================================
+
+db.createCollection("user_follows", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["followerId", "organizerProfileId", "createdAt"],
+      properties: {
+        followerId: {
+          bsonType: "string",
+          description: "ID của User đi follow"
+        },
+        organizerProfileId: {
+          bsonType: "string",
+          description: "ID của OrganizerProfile được follow"
+        },
+        createdAt: {
+          bsonType: "date"
+        }
+      }
+    }
+  }
+});
+
+db.user_follows.createIndex({ "followerId": 1 });
+db.user_follows.createIndex({ "organizerProfileId": 1 });
+db.user_follows.createIndex(
+  { "followerId": 1, "organizerProfileId": 1 }, 
+  { unique: true, name: "idx_unique_user_follow" }
+);

@@ -42,11 +42,13 @@ public class User {
     // ========== Basic Information ==========
     @Indexed(unique = true)
     private String email;
-    
+
+    // @Builder.Default bật cơ chế default value cho field khi sử dụng Builder.
+    // nếu không có @Builder.Default thì khi không setEmailVerified() nó sẽ gán emailVerified = null thay vì false default
     @Builder.Default
     private Boolean emailVerified = false;
     
-    @Indexed(sparse = true)
+    @Indexed(sparse = true) // Index chỉ lập chỉ mục cho những document thực sự chứa trường phone, cây index chỉ truy vấn những thằng khác null
     private String phone;
     
     @Builder.Default
