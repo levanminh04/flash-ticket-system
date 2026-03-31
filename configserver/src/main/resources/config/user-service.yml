@@ -14,6 +14,18 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+    listener:
+      simple:
+        # false = NACK → DLQ, không requeue vô tận (mirror core-service)
+        default-requeue-rejected: false
+
+  # Spring Security — JWT Resource Server
+  # Trỏ đến Keycloak issuer URI để auto-fetch JWKS và validate JWT signature
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
 
 # Eureka Client
 eureka:
@@ -32,10 +44,12 @@ management:
     web:
       exposure:
         include: "*"
+  endpoint:
+    health:
+      show-details: always
 
-# Keycloak Admin Configuration dùng Keycloak Admin API.
-
-# Cách 1 Dùng Service Account + client-secret
+# Keycloak Admin Configuration
+# Dùng Service Account + client-secret (Cách 1 — Production-grade)
 keycloak:
   admin:
     server-url: ${KEYCLOAK_SERVER_URL}
@@ -44,7 +58,6 @@ keycloak:
     client-secret: ${KEYCLOAK_CLIENT_SECRET}
 
 #Cách 2 — Dùng admin-cli + username/password (đơn giản hơn):
-
 #keycloak:
 #  admin:
 #    server-url: ${KEYCLOAK_SERVER_URL}
@@ -53,10 +66,8 @@ keycloak:
 #    username: ${KEYCLOAK_ADMIN_USERNAME}
 #    password: ${KEYCLOAK_ADMIN_PASSWORD}
 
-
-
 # Logging
 logging:
   level:
     com.flashticket.user: ${LOG_LEVEL:DEBUG}
-    org.springframework.security: ${LOG_LEVEL_SECURITY:DEBUG}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:DEBUG}

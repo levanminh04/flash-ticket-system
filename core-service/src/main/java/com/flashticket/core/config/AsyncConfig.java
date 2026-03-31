@@ -27,7 +27,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(50);
         
         // Sức chứa của hàng đợi trước khi tạo thêm thread mới (đến max)
-        executor.setQueueCapacity(200);
+        executor.setQueueCapacity(1000);
         
         // Tiền tố tên thread để dễ debug trong log
         executor.setThreadNamePrefix("async-exec-");
@@ -41,7 +41,7 @@ public class AsyncConfig {
 
             Khi nào trigger?
             Core threads: 50/50 đang bận
-            Queue:        200/200 đầy
+            Queue:        1000/1000 đầy
             Task mới đến: không còn chỗ nào
                 └─ RejectedExecutionHandler được gọi
          */

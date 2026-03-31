@@ -108,7 +108,7 @@ public class VNPayIPNService {
          * => VNPay retry => không lo IPN không được gọi lại nếu lỗi update DB giữa chừng
          * */
         try {
-            // ── Step 2: Tìm Transaction
+            // Tìm Transaction
             var transactionOpt = transactionRepository.findByTransactionNumber(txnRef);
             if (transactionOpt.isEmpty()) {
                 log.warn("[VNPay IPN] Transaction not found — txnRef={}", txnRef);
@@ -117,21 +117,21 @@ public class VNPayIPNService {
 
             Transaction transaction = transactionOpt.get();
 
-            // ── Step 3: Check đã xử lý chưa (reject sớm, tiết kiệm CPU) ────
+            // Check đã xử lý chưa (reject sớm, tiết kiệm CPU) ────
             if (transaction.getStatus() != Transaction.TransactionStatus.PENDING) {
                 log.info("[VNPay IPN] Transaction already processed — txnRef={}, status={}",
                     txnRef, transaction.getStatus());
                 return VNPayResponseCode.ORDER_ALREADY_CONFIRMED.toResponse();
             }
 
-            // ── Step 4: Verify HMAC signature
+            // Verify HMAC signature
             PaymentGateway gateway = gatewayFactory.getGateway("VNPAY");
             if (!gateway.verifyCallback(params)) {
                 log.error("[VNPay IPN] SIGNATURE FAILED — txnRef={}", txnRef);
                 return VNPayResponseCode.SIGNATURE_FAILED.toResponse();
             }
 
-            // ── Step 5: Parse result + verify amount ─────────────────────────
+            // Parse result + verify amount
             PaymentGateway.PaymentResult result = gateway.parseCallbackResult(params);
 
             if (!validatorService.validateAmount(transaction.getAmount(), result.amount())) {
@@ -140,13 +140,14 @@ public class VNPayIPNService {
                 return VNPayResponseCode.INVALID_AMOUNT.toResponse();
             }
 
-            // ── Step 6: Update Transaction
+            // Update Transaction
             updateTransaction(transaction, result);
 
-            // ── Step 7: Update Order (nếu payment thành công)
+            // Update Order (nếu payment thành công)
             if (result.isSuccess()) {
                 confirmOrder(transaction.getOrderId());
                 // Publish local event -> TransactionalEventListener sẽ bắt và gửi lên RabbitMQ SAU KHI commit DB
+                // ApplicationEventPublisher đẩy event này vào một event bus nội bộ
                 eventPublisher.publishEvent(new PaymentSuccessEvent(transaction.getOrderId()));
                 log.info("[VNPay IPN] Payment SUCCESS — txnRef={}, orderId={}, amount={}",
                     txnRef, transaction.getOrderId(), result.amount());
@@ -234,7 +235,9 @@ public class VNPayIPNService {
             └─ rabbitTemplate.convertAndSend() ← nếu lag 2s thì Tomcat thread chờ 2s
                 └─ return response về VNPay  ← lúc này mới trả về (trễ 2s)
      */
-    @Async("paymentAsyncExecutor") // Cần thêm @Async	Để đảm bảo response < 3s khi RabbitMQ lag.
+    // @EventListener hay @TransactionalEventListener định tuyến (route) các sự kiện dựa trên kiểu dữ liệu của tham số truyền vào hàm.
+    // nếu tham số không phải PaymentSuccessEvent thì handlePaymentSuccessEvent() sẽ không trigger
+    @Async("paymentAsyncExecutor") // Cần thêm @Async	Để đảm bảo response IPN cho VNPAY < 3s trong trường hợp RabbitMQ lag.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handlePaymentSuccessEvent(PaymentSuccessEvent event) {
         try {
@@ -251,4 +254,22 @@ public class VNPayIPNService {
                 event.orderId(), e.getMessage(), e);
         }
     }
+//    @Async
+    /**
+     * Bình thường, khi method A gọi method B → B chạy trên cùng thread với A.
+     * Khi method B có @Async → Spring sẽ không chạy B ngay, mà đẩy nhiệm vụ (task) vào một Thread Pool (bể luồng),
+     * rồi trả quyền kiểm soát lại cho thread A ngay lập tức.
+     * Nếu rabbitTemplate.convertAndSend() chậm (RabbitMQ lag, network chậm, queue đầy…)
+     *      → Tomcat thread bị block vài giây.
+     * Response về VNPay bị trễ → VNPay timeout và retry IPN → rất nguy hiểm.
+     *
+     * Spring dùng cơ chế TransactionSynchronization để theo dõi từng transaction riêng biệt.
+     * Khi gọi publishEvent(eventA), Spring đăng ký eventA với transaction hiện tại của thread đó.
+     * Khi transaction commit → Spring chỉ kích hoạt listener cho đúng event đó.
+     * Khi listener chạy @Async, nó vẫn nhận được event object gốc (đã được copy hoặc reference an toàn).
+     *
+     * */
+
+
+
 }
