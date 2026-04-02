@@ -70,4 +70,14 @@ keycloak:
 logging:
   level:
     com.flashticket.user: ${LOG_LEVEL:DEBUG}
-    org.springframework.security: ${LOG_LEVEL_SECURITY:DEBUG}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:DEBUG}
+
+# Cloudinary Configuration
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
+  api-key: ${CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET}
+  folders:
+    user-avatars: flash-ticket/users/avatars
+    organizer-logos: flash-ticket/organizers/logos
+    organizer-banners: flash-ticket/organizers/banners

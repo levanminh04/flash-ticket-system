@@ -177,6 +177,18 @@ public class EventService {
             if (fullProfile != null) {
                 response.setOrganizer(fullProfile);
                 log.debug("Enriched organizer data from User Service for: {}", fullProfile.getName());
+
+                // Self-healing: if logoUrl is stale, update denormalized data asynchronously
+                if (fullProfile.getLogoUrl() != null && !fullProfile.getLogoUrl().equals(event.getOrganizerLogoUrl())) {
+                    log.info("Self-healing: updating stale organizerLogoUrl for organizer {}", event.getOrganizerId());
+                    java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        try {
+                            eventRepository.updateOrganizerLogoUrlByOrganizerId(event.getOrganizerId(), fullProfile.getLogoUrl());
+                        } catch (Exception e) {
+                            log.error("Failed to async update stale organizer logo for organizer {}", event.getOrganizerId(), e);
+                        }
+                    });
+                }
             } else {
                 log.debug("User Service returned null, using cached organizer data");
             }
