@@ -114,6 +114,18 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- Cloudinary — Avatar & Banner upload -->
+		<dependency>
+			<groupId>com.cloudinary</groupId>
+			<artifactId>cloudinary-core</artifactId>
+			<version>2.3.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.cloudinary</groupId>
+			<artifactId>cloudinary-http5</artifactId>
+			<version>2.3.0</version>
+		</dependency>
+
 	</dependencies>
 
 <!--	dùng eureka client thì phải có khối dependencyManagement này mỗi dependency spring-cloud-starter-netflix-eureka-client là không  đủ  -->

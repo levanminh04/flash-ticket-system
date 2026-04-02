@@ -27,6 +27,17 @@ public class Address {
     private String postalCode;
     
     public enum AddressType {
-        HOME, WORK, BILLING, OTHER
+        HOME, WORK, BILLING, OTHER;
+
+        @com.fasterxml.jackson.annotation.JsonCreator
+        public static AddressType fromString(String value) {
+            if (value == null || value.isBlank()) return null;
+            return AddressType.valueOf(value.toUpperCase());
+        }
+
+        @com.fasterxml.jackson.annotation.JsonValue
+        public String toValue() {
+            return this.name();
+        }
     }
 }

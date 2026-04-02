@@ -198,14 +198,47 @@ public class User {
     // ========== Enums ==========
     
     public enum Gender {
-        MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY
+        MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY;
+
+        @com.fasterxml.jackson.annotation.JsonCreator
+        public static Gender fromString(String value) {
+            if (value == null || value.isBlank()) return null;
+            return Gender.valueOf(value.toUpperCase());
+        }
+
+        @com.fasterxml.jackson.annotation.JsonValue
+        public String toValue() {
+            return this.name(); // Trả về "MALE" cho API và DB
+        }
     }
     
     public enum OAuthProvider {
-        GOOGLE, FACEBOOK, APPLE
+        GOOGLE, FACEBOOK, APPLE;
+
+        @com.fasterxml.jackson.annotation.JsonCreator
+        public static OAuthProvider fromString(String value) {
+            if (value == null || value.isBlank()) return null;
+            return OAuthProvider.valueOf(value.toUpperCase());
+        }
+
+        @com.fasterxml.jackson.annotation.JsonValue
+        public String toValue() {
+            return this.name();
+        }
     }
     
     public enum TwoFactorMethod {
-        APP, SMS
+        APP, SMS;
+
+        @com.fasterxml.jackson.annotation.JsonCreator
+        public static TwoFactorMethod fromString(String value) {
+            if (value == null || value.isBlank()) return null;
+            return TwoFactorMethod.valueOf(value.toUpperCase());
+        }
+
+        @com.fasterxml.jackson.annotation.JsonValue
+        public String toValue() {
+            return this.name();
+        }
     }
 }

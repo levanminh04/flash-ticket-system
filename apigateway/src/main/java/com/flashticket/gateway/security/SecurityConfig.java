@@ -49,7 +49,8 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/api/venues/**").permitAll()
                         
                         // User Service 
-                        .pathMatchers(HttpMethod.GET, "/api/users/organizers/{organizerId}").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/organizers/public/**").permitAll()
+                        .pathMatchers("/api/internal/**").permitAll()
                         
                         // AI Service 
                         .pathMatchers(HttpMethod.GET, "/api/recommendations/events").permitAll()
@@ -60,7 +61,7 @@ public class SecurityConfig {
                         .pathMatchers("/eureka/**").permitAll()
                         
                         // User Service 
-                        .pathMatchers("/api/users/admin/**").hasAuthority("ROLE_ADMIN")
+                        .pathMatchers("/api/admin/organizers/**").hasAuthority("ROLE_ADMIN")
                         
                         // Core Service 
                         .pathMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
@@ -69,8 +70,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/analytics/admin/**").hasAuthority("ROLE_ADMIN")
                 
                         // User Service 
-                        .pathMatchers(HttpMethod.GET, "/api/users/organizers/me").hasAuthority("ROLE_ORGANIZER")
-                        .pathMatchers(HttpMethod.PUT, "/api/users/organizers/me").hasAuthority("ROLE_ORGANIZER")
+                        .pathMatchers("/api/organizers/me/**").hasAuthority("ROLE_ORGANIZER")
                         
                         // Core Service 
                         .pathMatchers("/api/organizer/**").hasAuthority("ROLE_ORGANIZER")
@@ -79,7 +79,9 @@ public class SecurityConfig {
                         .pathMatchers("/api/analytics/organizer/**").hasAuthority("ROLE_ORGANIZER")
             
                         // User Service
-                        .pathMatchers(HttpMethod.POST, "/api/users/organizers/register").hasAuthority("ROLE_BUYER")
+                        .pathMatchers(HttpMethod.POST, "/api/organizers/apply").hasAuthority("ROLE_BUYER")
+                        .pathMatchers("/api/organizers/*/follow").hasAuthority("ROLE_BUYER")
+                        .pathMatchers(HttpMethod.GET, "/api/organizers/*/is-following").authenticated()
          
                         // User Service
                         .pathMatchers(HttpMethod.GET, "/api/users/me").authenticated()

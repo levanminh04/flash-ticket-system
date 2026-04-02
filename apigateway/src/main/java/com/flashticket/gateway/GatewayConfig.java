@@ -40,10 +40,11 @@ public class GatewayConfig {
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
-                // Core Service - Events, Bookings, Payments, Categories
+                // Core Service - Events, Bookings, Payments, Categories, Organizer's Events
                 .route("core-service", r -> r
                         .path("/api/events/**", "/api/bookings/**", "/api/payments/**", "/api/orders/**", "/api/tickets/**",
-                              "/api/categories/**", "/api/organizer/**", "/api/admin/**")
+                              "/api/categories/**", "/api/venues/**", "/api/layouts/**", "/api/seats/**",
+                              "/api/organizer/**") // Số ít (Singular) - Dùng cho /api/organizer/events...
                         .filters(f -> f
                                 .retry(retryConfig -> retryConfig
                                         .setRetries(3)
@@ -61,9 +62,13 @@ public class GatewayConfig {
                         .uri("lb://CORE-SERVICE")
                 )
                 
-                // User Service - User profiles, authentication
+                // User Service - User profiles, Organizers (KYC/Profile), Authentication, Admin Management
                 .route("user-service", r -> r
-                        .path("/api/users/**")
+                        .path("/api/users/**", 
+                              "/api/organizers/**",       // Số nhiều (Plural) - KYC, Follow, Profile
+                              "/api/admin/organizers/**", // Duyệt đơn KYC
+                              "/api/internal/users/**",   // S2S Internal
+                              "/api/internal/organizers/**")
                         .filters(f -> f
                                 .circuitBreaker(config -> config
                                         .setName("userServiceBreaker")

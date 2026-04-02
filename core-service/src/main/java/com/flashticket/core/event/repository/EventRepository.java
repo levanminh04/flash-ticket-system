@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -136,4 +137,12 @@ public interface EventRepository extends JpaRepository<Event, UUID>,
      */
     @Query("SELECT COUNT(t) FROM TicketType t WHERE t.event.id = :eventId AND t.isDeleted = false AND t.status = 'ACTIVE'")
     long countActiveTicketTypes(@Param("eventId") UUID eventId);
+
+    /**
+     * Cập nhật Organizer Logo URL (dùng cho Self-Healing khi phát hiện data bị stale).
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE Event e SET e.organizerLogoUrl = :logoUrl WHERE e.organizerId = :organizerId")
+    void updateOrganizerLogoUrlByOrganizerId(@Param("organizerId") String organizerId, @Param("logoUrl") String logoUrl);
 }

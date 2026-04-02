@@ -80,7 +80,7 @@ db.createCollection("users", {
               description: "Ngày sinh - dùng cho verify tuổi (events 18+)"
             },
             gender: {
-              enum: ["male", "female", "other", "prefer_not_to_say", null],
+              enum: ["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY", null],
               description: "Giới tính"
             },
             bio: {
@@ -100,7 +100,7 @@ db.createCollection("users", {
             required: ["type", "city"],
             properties: {
               type: {
-                enum: ["home", "work", "billing", "other"],
+                enum: ["HOME", "WORK", "BILLING", "OTHER"],
                 description: "Loại địa chỉ"
               },
               isDefault: {
@@ -205,7 +205,7 @@ db.createCollection("users", {
             bsonType: "object",
             properties: {
               provider: {
-                enum: ["google", "facebook", "apple"],
+                enum: ["GOOGLE", "FACEBOOK", "APPLE"],
                 description: "OAuth provider"
               },
               providerId: {
@@ -231,7 +231,7 @@ db.createCollection("users", {
               description: "Đã bật 2FA chưa"
             },
             twoFactorMethod: {
-              enum: ["app", "sms", null],
+              enum: ["APP", "SMS", null],
               description: "Phương thức 2FA"
             },
             lastPasswordChange: {
@@ -344,7 +344,7 @@ db.createCollection("organizer_profiles", {
           description: "URL-friendly name: abc-entertainment"
         },
         organizerType: {
-          enum: ["individual", "company", "nonprofit", "government"],
+          enum: ["INDIVIDUAL", "COMPANY", "NONPROFIT", "GOVERNMENT"],
           description: "Loại hình tổ chức"
         },
 
@@ -477,7 +477,7 @@ db.createCollection("organizer_profiles", {
                 bsonType: "object",
                 properties: {
                   type: {
-                    enum: ["business_license", "id_card", "bank_statement", "other"]
+                    enum: ["BUSINESS_LICENSE", "ID_CARD", "BANK_STATEMENT", "OTHER"]
                   },
                   url: { bsonType: "string" },
                   uploadedAt: { bsonType: "date" },
@@ -583,7 +583,7 @@ db.createCollection("refresh_tokens", {
           properties: {
             deviceId: { bsonType: ["string", "null"] },
             deviceName: { bsonType: ["string", "null"] },
-            platform: { enum: ["web", "ios", "android", null] },
+            platform: { enum: ["WEB", "IOS", "ANDROID", null] },
             browser: { bsonType: ["string", "null"] },
             os: { bsonType: ["string", "null"] }
           }
@@ -674,9 +674,9 @@ db.user_activity_logs.createIndex({ "timestamp": 1 }, { expireAfterSeconds: 7776
 
 // Sample User
 db.users.insertOne({
-  _id: "550e8400-e29b-41d4-a716-446655440001",
-  keycloakId: "550e8400-e29b-41d4-a716-446655440001",
-  email: "buyer@example.com",
+  _id: "7e9fa6e0-13de-4680-aad7-55a7cfe4db1f",
+  keycloakId: "7e9fa6e0-13de-4680-aad7-55a7cfe4db1f",
+  email: "buyer@gmail.com",
   emailVerified: true,
   phone: "+84901234567",
   phoneVerified: false,
@@ -686,12 +686,12 @@ db.users.insertOne({
     displayName: "Nguyễn Văn A",
     avatarUrl: null,
     dateOfBirth: new Date("1995-05-15"),
-    gender: "male",
+    gender: "MALE",
     bio: "Yêu âm nhạc và các sự kiện live"
   },
   addresses: [
     {
-      type: "home",
+      type: "HOME",
       isDefault: true,
       street: "123 Nguyễn Huệ",
       district: "Quận 1",
@@ -747,7 +747,7 @@ db.users.insertOne({
     displayName: "Lê Minh",
     avatarUrl: null,
     dateOfBirth: new Date("1990-10-20"),
-    gender: "male",
+    gender: "MALE",
     bio: "Event Organizer chuyên nghiệp"
   },
   addresses: [],
