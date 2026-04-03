@@ -244,7 +244,7 @@ public class OrganizerService {
     private OrganizerDTO handleApproval(OrganizerProfile profile, String adminUserId) {
         String userId = profile.getUserId();
 
-        // Step 1: Update OrganizerProfile → ACTIVE
+        // Update OrganizerProfile → ACTIVE
         profile.setStatus(OrganizerProfile.OrganizerStatus.ACTIVE);
 
         OrganizerProfile.Verification verification = profile.getVerification();
