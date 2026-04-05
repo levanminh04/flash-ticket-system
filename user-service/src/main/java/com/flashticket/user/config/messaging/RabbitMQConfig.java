@@ -62,7 +62,7 @@ public class RabbitMQConfig {
         // user.# → nhận user.register, user.update, user.delete
         return BindingBuilder.bind(userSyncQueue())
                 .to(keycloakEventsExchange())
-                .with("user.#");
+                .with("#");
     }
 
     @Bean

@@ -51,12 +51,21 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      
+      # Integration with Custom RabbitMQ SPI
+      KC_SPI_EVENTS_LISTENER_RABBITMQ_HOST: rabbitmq
+      KC_SPI_EVENTS_LISTENER_RABBITMQ_PORT: 5672
+      KC_SPI_EVENTS_LISTENER_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
+      KC_SPI_EVENTS_LISTENER_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-guest}
+      KC_SPI_EVENTS_LISTENER_RABBITMQ_EXCHANGE: keycloak.events
     networks:
       - backend
     command:
       - "start-dev"
     volumes:
       - keycloak_data:/opt/keycloak/data/
+      # Mount the compiled custom SPI JAR from host to container
+      - ./keycloak-rabbitmq-spi/target/keycloak-rabbitmq-spi.jar:/opt/keycloak/providers/keycloak-rabbitmq-spi.jar
     restart: unless-stopped
 
   mongo:
