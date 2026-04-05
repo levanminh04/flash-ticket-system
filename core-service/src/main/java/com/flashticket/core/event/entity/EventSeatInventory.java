@@ -38,7 +38,7 @@ public class EventSeatInventory {
     @Column(name = "order_id")
     private UUID orderId;
 
-    @Column(name = "user_id")
+    @Column(name = "locked_by_user_id")
     private String userId;
 
     @Column(name = "lock_expires_at")
