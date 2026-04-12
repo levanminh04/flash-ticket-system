@@ -25,7 +25,9 @@ const Navbar = () => {
     });
     if (!confirmed) return;
 
-    await keycloak.logout();
+    await keycloak.logout({
+      redirectUri: `${window.location.origin}/`,
+    });
   };
 
   useEffect(() => {
