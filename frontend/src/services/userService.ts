@@ -7,20 +7,31 @@ export interface UserProfile {
   lastName?: string;
   displayName?: string;
   avatarUrl?: string | null;
+  bio?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
   email?: string;
+  emailVerified?: boolean | null;
   phone?: string;
+  phoneVerified?: boolean | null;
   roles?: string[];
   status?: string;
+  organizerProfileId?: string | null;
+  language?: string | null;
+  timezone?: string | null;
+  currency?: string | null;
+  lastLoginAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface UpdateProfileRequest {
-  profile?: {
-    firstName?: string;
-    lastName?: string;
-    displayName?: string;
-    avatarUrl?: string;
-    bio?: string;
-  };
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  bio?: string;
+  dateOfBirth?: string;
+  gender?: string;
   phone?: string;
 }
 
@@ -47,7 +58,30 @@ export const userService = {
 
   updateProfile: async (data: UpdateProfileRequest): Promise<UserProfile | null> => {
     try {
-      const response = await axiosClient.patch<UserProfileApiResponse>("/api/users/me", data);
+      const response = await axiosClient.put<UserProfileApiResponse>(
+        "/api/users/me/profile",
+        data,
+      );
+      return unwrapUserProfileResponse(response.data);
+    } catch {
+      return null;
+    }
+  },
+
+  uploadAvatar: async (file: File): Promise<UserProfile | null> => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await axiosClient.post<UserProfileApiResponse>(
+        "/api/users/me/avatar",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        },
+      );
       return unwrapUserProfileResponse(response.data);
     } catch {
       return null;

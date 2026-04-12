@@ -1,10 +1,12 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import {
+  Calendar,
   Eye,
   ImagePlus,
   LoaderCircle,
   Edit,
+  MapPin,
   Search,
   Trash2,
 } from "lucide-react";
@@ -14,12 +16,15 @@ import { useDropzone } from "react-dropzone";
 import Swal from "sweetalert2";
 import AppPagination from "../../components/common/AppPagination";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
-import { eventService } from "../../services/eventService";
 import {
   organizerService,
   OrganizerEventImage,
   OrganizerImageType,
 } from "../../services/organizerService";
+import {
+  organizerWorkspaceService,
+  OrganizerEventDetail,
+} from "../../services/organizerWorkspaceService";
 import { confirmDestructiveAction } from "../../lib/swal";
 
 const imageTypes: OrganizerImageType[] = [
@@ -65,18 +70,37 @@ function isOrganizerImageType(value: string): value is OrganizerImageType {
   return imageTypes.includes(value as OrganizerImageType);
 }
 
-type ResolvedEvent = {
-  id: string;
-  title: string;
-  slug: string;
-  bannerUrl?: string;
-  organizerName?: string;
-};
+function resolveBannerUrl(event: OrganizerEventDetail) {
+  return (
+    event.images?.find((image) => image.type === "BANNER")?.url ||
+    event.images?.find((image) => image.type === "THUMBNAIL")?.url
+  );
+}
+
+function formatEventLocation(event: OrganizerEventDetail) {
+  const parts = [event.venue?.name, event.venue?.city]
+    .filter(
+      (part): part is string =>
+        typeof part === "string" && part.trim().length > 0,
+    )
+    .map((part) => part.trim());
+
+  return Array.from(new Set(parts)).join(", ") || "Chưa cập nhật địa điểm";
+}
+
+function formatEventDate(event: OrganizerEventDetail) {
+  const start = event.schedule?.startDatetime;
+  if (!start) return "Chưa cập nhật lịch diễn";
+  const parsed = new Date(start);
+  if (Number.isNaN(parsed.getTime())) return start;
+  return parsed.toLocaleDateString("vi-VN");
+}
 
 export default function OrganizerMediaPage() {
-  const [lookupValue, setLookupValue] = useState("");
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const [resolvedEvent, setResolvedEvent] = useState<ResolvedEvent | null>(
+  const [events, setEvents] = useState<OrganizerEventDetail[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventSearch, setEventSearch] = useState("");
+  const [resolvedEvent, setResolvedEvent] = useState<OrganizerEventDetail | null>(
     null,
   );
   const [images, setImages] = useState<OrganizerEventImage[]>([]);
@@ -124,6 +148,17 @@ export default function OrganizerMediaPage() {
       },
     });
 
+  const filteredEvents = useMemo(() => {
+    const keyword = eventSearch.trim().toLowerCase();
+    if (!keyword) return events;
+
+    return events.filter((event) =>
+      [event.title, event.slug, event.venue?.name, event.venue?.city]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    );
+  }, [eventSearch, events]);
+
   const loadImages = async (eventId: string) => {
     setImagesLoading(true);
     try {
@@ -139,44 +174,53 @@ export default function OrganizerMediaPage() {
     }
   };
 
-  const resolveEvent = async () => {
-    const value = lookupValue.trim();
-    if (!value) {
-      toast.error("Nhập slug hoặc event ID trước khi tải thư viện ảnh.");
-      return;
-    }
-
-    setLookupLoading(true);
-    try {
-      const event = await eventService.getEventDetails(value);
-      const nextEvent: ResolvedEvent = {
-        id: String(event.id),
-        title: String(event.title ?? "Sự kiện chưa đặt tên"),
-        slug: String(event.slug ?? value),
-        bannerUrl:
-          event.images?.find(
-            (image: { type?: string; url?: string }) => image.type === "BANNER",
-          )?.url ?? event.bannerUrl,
-        organizerName: event.organizer?.name,
-      };
-
-      setResolvedEvent(nextEvent);
-      await loadImages(nextEvent.id);
-      toast.success("Đã tải thư viện ảnh của sự kiện.");
-    } catch {
-      setResolvedEvent(null);
-      setImages([]);
-      setCurrentPage(0);
-      toast.error("Không tìm thấy sự kiện theo slug hoặc ID đã nhập.");
-    } finally {
-      setLookupLoading(false);
-    }
+  const handleSelectEvent = async (event: OrganizerEventDetail) => {
+    setResolvedEvent(event);
+    setFileWithPreview(null);
+    await loadImages(event.id);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadEvents = async () => {
+      setEventsLoading(true);
+      try {
+        const page = await organizerWorkspaceService.getMyEvents(0, 100);
+        if (cancelled) return;
+        setEvents(page.content);
+        if (page.content.length > 0) {
+          setResolvedEvent(page.content[0]);
+          await loadImages(page.content[0].id);
+        } else {
+          setResolvedEvent(null);
+          setImages([]);
+        }
+      } catch {
+        if (!cancelled) {
+          setEvents([]);
+          setResolvedEvent(null);
+          setImages([]);
+          toast.error("Không thể tải danh sách sự kiện của organizer.");
+        }
+      } finally {
+        if (!cancelled) {
+          setEventsLoading(false);
+        }
+      }
+    };
+
+    void loadEvents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleUpload = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault();
     if (!resolvedEvent) {
-      toast.error("Hãy tải sự kiện trước khi upload ảnh.");
+      toast.error("Hãy chọn sự kiện trước khi upload ảnh.");
       return;
     }
     if (!selectedFile) {
@@ -305,7 +349,7 @@ export default function OrganizerMediaPage() {
 
         const nextImageType = typeInput?.value ?? "";
         if (!isOrganizerImageType(nextImageType)) {
-          Swal.showValidationMessage("Lỗi ảnh không hợp lệ");
+          Swal.showValidationMessage("Loại ảnh không hợp lệ");
           return null;
         }
 
@@ -359,66 +403,110 @@ export default function OrganizerMediaPage() {
   return (
     <OrganizerLayout
       title="Thư viện ảnh sự kiện"
-      description="Người dùng có thể tìm sự kiện bằng slug hoặc UUID, sau đó tải lên và quản lý các loại hình ảnh mà hệ thống hỗ trợ cho sự kiện."
+      description="Chọn một sự kiện từ workspace organizer rồi quản lý banner, poster, thumbnail, gallery và seat map ngay trên cùng màn hình."
     >
       <section className="organizer-panel organizer-lookup-panel">
         <div className="organizer-panel-heading">
           <div className="organizer-panel-heading-row">
-            <h2 className="organizer-panel-title-pill">Tải sự kiện</h2>
+            <h2 className="organizer-panel-title-pill">Chọn sự kiện</h2>
           </div>
           <p>
-            Người dùng nhập slug hoặc UUID của sự kiện, hệ thống xác định ID sự
-            kiện tương ứng để thực hiện các thao tác quản lý hình ảnh.
+            Danh sách bên dưới lấy trực tiếp từ workspace organizer. Chọn một sự
+            kiện để xem và quản lý thư viện ảnh của sự kiện đó.
           </p>
         </div>
 
         <div className="organizer-search-row">
-          <input
-            value={lookupValue}
-            onChange={(changeEvent) => setLookupValue(changeEvent.target.value)}
-            className="organizer-input organizer-search-input"
-            placeholder="Hãy nhập slug hoặc UUID của sự kiện"
-          />
-          <button
-            className="btn btn-primary organizer-search-button"
-            onClick={() => void resolveEvent()}
-            disabled={lookupLoading}
-          >
-            {lookupLoading ? (
-              <LoaderCircle size={16} className="spin" />
-            ) : (
-              <Search size={16} />
-            )}
-            Tìm kiếm sự kiện
-          </button>
+          <div className="organizer-search-input organizer-media-filter">
+            <Search size={16} />
+            <input
+              value={eventSearch}
+              onChange={(event) => setEventSearch(event.target.value)}
+              className="organizer-media-filter-input"
+              placeholder="Tìm theo tên sự kiện, slug hoặc địa điểm"
+            />
+          </div>
         </div>
+
+        {eventsLoading ? (
+          <div className="organizer-empty-state">
+            <div className="loading-spinner" />
+            <p>Đang tải danh sách sự kiện của organizer...</p>
+          </div>
+        ) : filteredEvents.length === 0 ? (
+          <div className="organizer-empty-state">
+            <ImagePlus size={32} />
+            <p>Không có sự kiện nào phù hợp để quản lý ảnh.</p>
+          </div>
+        ) : (
+          <div className="organizer-media-event-grid">
+            {filteredEvents.map((event) => {
+              const isActive = resolvedEvent?.id === event.id;
+
+              return (
+                <button
+                  key={event.id}
+                  type="button"
+                  className={`organizer-media-event-card${isActive ? " is-active" : ""}`}
+                  onClick={() => void handleSelectEvent(event)}
+                >
+                  <div className="organizer-media-event-card__thumb">
+                    {resolveBannerUrl(event) ? (
+                      <img
+                        src={resolveBannerUrl(event)}
+                        alt={event.title}
+                      />
+                    ) : (
+                      <div className="organizer-event-art-placeholder">
+                        <ImagePlus size={24} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="organizer-media-event-card__body">
+                    <strong>{event.title}</strong>
+                    <span>{event.slug}</span>
+                    <span>
+                      <Calendar size={14} /> {formatEventDate(event)}
+                    </span>
+                    <span>
+                      <MapPin size={14} /> {formatEventLocation(event)}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {resolvedEvent ? (
         <>
           <section className="organizer-event-banner">
             <div className="organizer-event-copy">
-              <span className="organizer-badge">Event đã kết nối</span>
-              <h2>{resolvedEvent.title}</h2>
+              <span className="organizer-badge">Event đã chọn</span>
+              <h2>
+                <strong>Tên sự kiện: </strong>
+                {resolvedEvent.title}
+              </h2>
               <p>
-                Event ID: <strong>{resolvedEvent.id}</strong>
+                <strong>Event ID: </strong>
+                {resolvedEvent.id}
               </p>
               <p>
-                {" "}
-                Slug: <strong>{resolvedEvent.slug}</strong>{" "}
+                <strong>Slug: </strong>
+                {resolvedEvent.slug}
               </p>
               <p>
-                BTC:{" "}
-                <strong>
-                  {resolvedEvent.organizerName
-                    ? ` ${resolvedEvent.organizerName}`
-                    : ""}
-                </strong>
+                <strong>BTC: </strong>
+                {resolvedEvent.organizer?.name || "Chưa cập nhật"}
               </p>
             </div>
             <div className="organizer-event-art">
-              {resolvedEvent.bannerUrl ? (
-                <img src={resolvedEvent.bannerUrl} alt={resolvedEvent.title} />
+              {resolveBannerUrl(resolvedEvent) ? (
+                <img
+                  src={resolveBannerUrl(resolvedEvent)}
+                  alt={resolvedEvent.title}
+                />
               ) : (
                 <div className="organizer-event-art-placeholder">
                   <ImagePlus size={32} />
@@ -442,10 +530,8 @@ export default function OrganizerMediaPage() {
                   <select
                     className="organizer-input"
                     value={selectedType}
-                    onChange={(changeEvent) =>
-                      setSelectedType(
-                        changeEvent.target.value as OrganizerImageType,
-                      )
+                    onChange={(event) =>
+                      setSelectedType(event.target.value as OrganizerImageType)
                     }
                   >
                     {imageTypes.map((type) => (
@@ -548,6 +634,7 @@ export default function OrganizerMediaPage() {
                         {paginatedImages.map((image, index) => {
                           const imageIndex =
                             currentPage * IMAGES_PER_PAGE + index;
+
                           return (
                             <tr key={image.id}>
                               <td>
@@ -564,10 +651,7 @@ export default function OrganizerMediaPage() {
                                   />
                                 </button>
                               </td>
-                              <td
-                                className="organizer-media-id"
-                                title={image.id}
-                              >
+                              <td className="organizer-media-id" title={image.id}>
                                 {image.id}
                               </td>
                               <td>
@@ -596,9 +680,7 @@ export default function OrganizerMediaPage() {
                                 <div className="organizer-media-actions">
                                   <button
                                     className="organizer-icon-action organizer-icon-action-info"
-                                    onClick={() =>
-                                      void handleViewDetails(image)
-                                    }
+                                    onClick={() => void handleViewDetails(image)}
                                     type="button"
                                     aria-label="Xem chi tiết ảnh"
                                     title="Xem chi tiết ảnh"
@@ -607,9 +689,7 @@ export default function OrganizerMediaPage() {
                                   </button>
                                   <button
                                     className="organizer-icon-action organizer-icon-action-edit"
-                                    onClick={() =>
-                                      void handleEditMetadata(image)
-                                    }
+                                    onClick={() => void handleEditMetadata(image)}
                                     type="button"
                                     aria-label="Chỉnh sửa metadata ảnh"
                                     title="Chỉnh sửa metadata ảnh"
@@ -625,10 +705,7 @@ export default function OrganizerMediaPage() {
                                     title="Xóa ảnh"
                                   >
                                     {deletingId === image.id ? (
-                                      <LoaderCircle
-                                        size={16}
-                                        className="spin"
-                                      />
+                                      <LoaderCircle size={16} className="spin" />
                                     ) : (
                                       <Trash2 size={16} />
                                     )}

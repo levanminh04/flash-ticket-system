@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, Home, X } from "lucide-react";
-import axiosClient from "../../lib/axiosClient";
 import {
   paymentService,
   PaymentStatusResponse,
@@ -30,8 +29,6 @@ export default function PaymentResultPage() {
     const params = new URLSearchParams(paymentQuery);
     const vnpResponseCode = params.get("vnp_ResponseCode");
     const vnpAmount = params.get("vnp_Amount");
-    const hasTxnRef = Boolean(params.get("vnp_TxnRef"));
-    const hasSecureHash = Boolean(params.get("vnp_SecureHash"));
     const orderId = sessionStorage.getItem("lastOrderId");
     const orderNumber = sessionStorage.getItem("lastOrderNumber");
 
@@ -39,8 +36,12 @@ export default function PaymentResultPage() {
 
     const run = async () => {
       setIsLoading(true);
+
       if (!vnpResponseCode && !orderId) {
-        setResult({ success: false, message: "Không có dữ liệu thanh toán." });
+        setResult({
+          success: false,
+          message: "Khong co du lieu thanh toan.",
+        });
         setIsLoading(false);
         return;
       }
@@ -48,24 +49,13 @@ export default function PaymentResultPage() {
       const quickSuccess = vnpResponseCode === "00";
       const quickAmount = vnpAmount ? parseInt(vnpAmount, 10) / 100 : undefined;
 
-      // Local/dev fallback:
-      // khi VNPay không gọi được IPN vào localhost, frontend chủ động forward callback params về backend 1 lần.
-      if (hasTxnRef && hasSecureHash) {
-        try {
-          await axiosClient.get(`/api/payments/vnpay-ipn?${paymentQuery}`);
-        } catch (error) {
-          // Không chặn luồng polling; có thể callback này đã được xử lý trước đó hoặc bị retry.
-          console.warn("Failed to forward VNPay callback from frontend:", error);
-        }
-      }
-
       if (!orderId) {
         setResult({
           success: false,
           amount: quickAmount,
           message: quickSuccess
-            ? "Đã nhận phản hồi thành công từ VNPay, nhưng không tìm thấy mã đơn hàng trong phiên để đối soát tự động. Vui lòng kiểm tra lại trong Đơn hàng của tôi."
-            : "Thanh toán không thành công. Vui lòng thử lại.",
+            ? "Da nhan redirect tu VNPay, nhung khong tim thay ma don hang trong phien de doi soat. Vui long kiem tra lai trong Don hang cua toi."
+            : "Thanh toan khong thanh cong. Vui long thu lai.",
         });
         setIsLoading(false);
         return;
@@ -77,7 +67,7 @@ export default function PaymentResultPage() {
           orderNumber: orderNumber || undefined,
           amount: quickAmount,
           message:
-            "Phiên đăng nhập đã hết. Vui lòng đăng nhập lại để hệ thống xác nhận trạng thái thanh toán.",
+            "Phien dang nhap da het. Vui long dang nhap lai de he thong xac nhan trang thai thanh toan.",
         });
         setIsLoading(false);
         return;
@@ -104,8 +94,8 @@ export default function PaymentResultPage() {
               transactionNumber: latestTx?.transactionNumber,
               amount: Number(status.totalAmount) || quickAmount,
               message: isConfirmed
-                ? "Thanh toán thành công!"
-                : `Thanh toán chưa hoàn tất (${status.orderStatus}). Vui lòng kiểm tra lại trong Đơn hàng của tôi.`,
+                ? "Thanh toan thanh cong!"
+                : `Thanh toan chua duoc backend xac nhan (${status.orderStatus}). Vui long kiem tra lai trong Don hang cua toi.`,
             });
             setIsLoading(false);
             sessionStorage.removeItem("lastOrderId");
@@ -122,10 +112,10 @@ export default function PaymentResultPage() {
           const statusCode = error?.response?.status;
           const message =
             statusCode === 401 || statusCode === 403
-              ? "Không thể xác nhận đơn hàng vì phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại và kiểm tra Đơn hàng của tôi."
+              ? "Khong the xac nhan don hang vi phien dang nhap khong hop le. Vui long dang nhap lai va kiem tra Don hang cua toi."
               : statusCode === 503
-                ? "Hệ thống thanh toán đang xử lý chậm. Vui lòng kiểm tra lại trong Đơn hàng của tôi sau ít phút."
-                : "Không thể xác nhận trạng thái thanh toán lúc này. Vui lòng kiểm tra lại trong Đơn hàng của tôi.";
+                ? "He thong thanh toan dang xu ly cham. Vui long kiem tra lai trong Don hang cua toi sau it phut."
+                : "Khong the xac nhan trang thai thanh toan luc nay. Vui long kiem tra lai trong Don hang cua toi.";
 
           setResult({
             success: false,
@@ -157,7 +147,7 @@ export default function PaymentResultPage() {
         <div className="result-card">
           <div className="result-loading">
             <div className="loading-spinner"></div>
-            <div className="loading-text">Đang xác nhận thanh toán...</div>
+            <div className="loading-text">Dang xac nhan thanh toan...</div>
           </div>
         </div>
       </div>
@@ -168,9 +158,9 @@ export default function PaymentResultPage() {
     return (
       <div className="payment-result-page">
         <div className="result-card">
-          <p>Không có thông tin kết quả thanh toán.</p>
+          <p>Khong co thong tin ket qua thanh toan.</p>
           <Link to="/" className="btn btn-primary" style={{ marginTop: 16 }}>
-            Về trang chủ
+            Ve trang chu
           </Link>
         </div>
       </div>
@@ -192,35 +182,35 @@ export default function PaymentResultPage() {
         </div>
 
         <h1 className={`result-title ${result.success ? "success" : "failure"}`}>
-          {result.success ? "Thanh toán thành công!" : "Thanh toán thất bại"}
+          {result.success ? "Thanh toan thanh cong!" : "Thanh toan that bai"}
         </h1>
 
         <p className="result-subtitle">
           {result.success
-            ? "Chúng tôi đã gửi thông tin vé đến email của bạn."
+            ? "Chung toi da gui thong tin ve den email cua ban."
             : result.message ||
-              "Đã có lỗi xảy ra trong quá trình thanh toán. Vui lòng thử lại hoặc liên hệ hỗ trợ."}
+              "Da co loi xay ra trong qua trinh thanh toan. Vui long thu lai hoac lien he ho tro."}
         </p>
 
         {result.orderNumber || result.amount !== undefined ? (
           <div className="result-order-info">
             {result.orderNumber ? (
               <div className="info-row">
-                <span className="label">Mã đơn hàng</span>
+                <span className="label">Ma don hang</span>
                 <span className="value">{result.orderNumber}</span>
               </div>
             ) : null}
             {result.transactionNumber ? (
               <div className="info-row">
-                <span className="label">Mã giao dịch</span>
+                <span className="label">Ma giao dich</span>
                 <span className="value">{result.transactionNumber}</span>
               </div>
             ) : null}
             {result.amount !== undefined ? (
               <div className="info-row total">
-                <span className="label">Số tiền</span>
+                <span className="label">So tien</span>
                 <span className="value">
-                  {result.amount.toLocaleString("vi-VN")} đ
+                  {result.amount.toLocaleString("vi-VN")} d
                 </span>
               </div>
             ) : null}
@@ -230,15 +220,15 @@ export default function PaymentResultPage() {
         <div className="result-actions">
           <Link to="/" className="btn btn-outline">
             <Home size={16} />
-            Về trang chủ
+            Ve trang chu
           </Link>
           {result.success ? (
             <Link to="/my-tickets" className="btn btn-primary">
-              Xem vé của tôi
+              Xem ve cua toi
             </Link>
           ) : (
             <Link to="/my-orders" className="btn btn-primary">
-              Kiểm tra đơn hàng
+              Kiem tra don hang
             </Link>
           )}
         </div>

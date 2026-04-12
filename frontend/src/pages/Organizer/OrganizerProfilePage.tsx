@@ -6,8 +6,6 @@ import {
   Mail,
   Phone,
   ShieldCheck,
-  Star,
-  Users,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
@@ -22,7 +20,8 @@ function formatRating(value?: number | null) {
 }
 
 function statNumber(value?: number | null) {
-  return Number(value ?? 0).toLocaleString("vi-VN");
+  if (value == null) return "-";
+  return Number(value).toLocaleString("vi-VN");
 }
 
 export default function OrganizerProfilePage() {
@@ -32,19 +31,22 @@ export default function OrganizerProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const userId = keycloak.tokenParsed?.sub as string | undefined;
-    if (!keycloak.authenticated || !userId) {
+    if (!keycloak.authenticated) {
       setLoading(false);
       return;
     }
 
     let cancelled = false;
+
     const load = async () => {
       setLoading(true);
       setError(null);
+
       try {
-        const data = await organizerService.getOrganizerByUserId(userId);
-        if (!cancelled) setProfile(data);
+        const data = await organizerService.getMyOrganizerProfile();
+        if (!cancelled) {
+          setProfile(data);
+        }
       } catch {
         if (!cancelled) {
           setProfile(null);
@@ -52,20 +54,23 @@ export default function OrganizerProfilePage() {
           toast.error("Không thể tải hồ sơ ban tổ chức.");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     void load();
+
     return () => {
       cancelled = true;
     };
-  }, [keycloak.authenticated, keycloak.tokenParsed]);
+  }, [keycloak.authenticated]);
 
   return (
     <OrganizerLayout
       title="Hồ sơ ban tổ chức"
-      description="Hệ thống lấy thông tin ban tổ chức dựa trên tài khoản người dùng hiện tại."
+      description="Trang này lấy dữ liệu trực tiếp từ API organizer profile hiện có của hệ thống."
     >
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
@@ -87,7 +92,6 @@ export default function OrganizerProfilePage() {
                 <div className="organizer-profile-banner-fallback" />
               )}
             </div>
-
             <div className="organizer-profile-card">
               <div className="organizer-profile-avatar">
                 {profile.logoUrl ? (
@@ -98,26 +102,41 @@ export default function OrganizerProfilePage() {
               </div>
 
               <div className="organizer-profile-copy">
-                <div className="organizer-profile-heading">
-                  <div>
-                    <div className="organizer-identity-row">
+                <div className="organizer-profile-info">
+                  <div className="organizer-profile-field">
+                    <span className="organizer-profile-field-label">
+                      Tên ban tổ chức:
+                    </span>
+                    <div className="organizer-profile-field-value organizer-profile-field-value--title">
                       <h2>{profile.name}</h2>
-                      {profile.isVerified ? (
-                        <span className="organizer-verified-pill">
-                          <BadgeCheck size={14} />
-                          Đã xác minh
-                        </span>
-                      ) : null}
                     </div>
-                    <p className="organizer-profile-slug">
-                      {profile.slug ? `@${profile.slug}` : "Organizer chưa có slug"}
-                    </p>
+                  </div>
+
+                  {profile.isVerified ? (
+                    <div className="organizer-identity-row">
+                      <span className="organizer-verified-pill">
+                        <BadgeCheck size={14} />
+                        Đã xác minh
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className="organizer-profile-field organizer-profile-slug">
+                    <span className="organizer-profile-field-label organizer-profile-slug-label">
+                      Slug:
+                    </span>
+                    <span className="organizer-profile-field-value organizer-profile-field-value--title">
+                      {profile.slug ? `${profile.slug}` : "Organizer chưa có slug"}
+                    </span>
+                  </div>
+
+                  <div className="organizer-profile-field organizer-profile-description">
+                    <span className="organizer-profile-field-label">Mô tả:</span>
+                    <span className="organizer-profile-field-value">
+                      {profile.description || "Organizer chưa cập nhật mô tả."}
+                    </span>
                   </div>
                 </div>
-
-                <p className="organizer-profile-description">
-                  {profile.description || "Organizer chưa cập nhật mô tả."}
-                </p>
 
                 <div className="organizer-contact-grid">
                   <div className="organizer-contact-item">
@@ -140,10 +159,7 @@ export default function OrganizerProfilePage() {
           <section className="organizer-grid">
             <article className="organizer-panel organizer-stat-panel">
               <div className="organizer-panel-heading">
-                <h2>Chỉ số hiện có</h2>
-                <p>
-                  Các số liệu này đến trực tiếp từ `OrganizerDTO` trong user-service.
-                </p>
+                <p className="organizer-panel-title-pill">Chỉ số hiện có</p>
               </div>
 
               <div className="organizer-stats-grid">
@@ -168,39 +184,28 @@ export default function OrganizerProfilePage() {
 
             <article className="organizer-panel">
               <div className="organizer-panel-heading">
-                <h2>Thông tin định danh</h2>
-                <p>Hữu ích để kiểm tra mapping user hiện tại với organizer profile.</p>
+                <p className="organizer-panel-title-pill">Thông tin định danh</p>
               </div>
 
               <div className="organizer-profile-meta-list">
                 <div className="organizer-profile-meta-row">
-                  <span>Organizer ID</span>
-                  <strong>{profile.id}</strong>
+                  <strong>Organizer ID</strong>
+                  <span className="organizer-profile-meta-value">{profile.id}</span>
                 </div>
                 <div className="organizer-profile-meta-row">
-                  <span>User ID</span>
-                  <strong>{profile.userId}</strong>
+                  <strong>User ID</strong>
+                  <span className="organizer-profile-meta-value">{profile.userId}</span>
                 </div>
                 <div className="organizer-profile-meta-row">
-                  <span>Trạng thái xác minh</span>
-                  <strong>{profile.isVerified ? "Verified" : "Pending"}</strong>
+                  <strong>Trạng thái xác minh</strong>
+                  <span className="organizer-profile-meta-value">
+                    {profile.isVerified == null
+                      ? "Unknown"
+                      : profile.isVerified
+                        ? "Verified"
+                        : "Pending"}
+                  </span>
                 </div>
-              </div>
-
-              <div className="organizer-inline-note">
-                <Users size={18} />
-                <span>
-                  Page này hiện chỉ đọc dữ liệu. Backend chưa có API cập nhật organizer
-                  profile nên tôi không thêm form chỉnh sửa.
-                </span>
-              </div>
-
-              <div className="organizer-inline-note">
-                <Star size={18} />
-                <span>
-                  Khi backend có API update hoặc dashboard organizer, phần này có thể
-                  mở rộng tiếp mà không cần đổi route hiện tại.
-                </span>
               </div>
             </article>
           </section>

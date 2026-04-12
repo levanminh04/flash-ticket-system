@@ -1,5 +1,5 @@
 import axiosClient from "../lib/axiosClient";
-import { userDirectClient } from "../lib/internalServiceClients";
+import { gatewayFallbackClient, userDirectClient } from "../lib/internalServiceClients";
 
 export type OrganizerImageType =
   | "BANNER"
@@ -58,18 +58,25 @@ export interface OrganizerEventImageUpdatePayload {
 }
 
 export const organizerService = {
-  getOrganizerByUserId: async (userId: string): Promise<OrganizerProfile> => {
+  getMyOrganizerProfile: async (): Promise<OrganizerProfile> => {
     try {
-      const response = await axiosClient.get<OrganizerProfile>(
-        `/api/organizers/by-user/${userId}`,
+      const response = await gatewayFallbackClient.get<OrganizerProfile>(
+        "/api/organizers/me",
       );
       return response.data;
     } catch {
       const response = await userDirectClient.get<OrganizerProfile>(
-        `/api/organizers/by-user/${userId}`,
+        "/api/organizers/me",
       );
       return response.data;
     }
+  },
+
+  getOrganizerByUserId: async (userId: string): Promise<OrganizerProfile> => {
+    const response = await axiosClient.get<OrganizerProfile>(
+      `/api/organizers/by-user/${userId}`,
+    );
+    return response.data;
   },
 
   getEventImages: async (eventId: string): Promise<OrganizerEventImage[]> => {
