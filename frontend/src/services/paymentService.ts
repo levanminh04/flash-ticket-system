@@ -27,6 +27,11 @@ export interface PaymentStatusResponse {
   transactions: PaymentStatusTransaction[];
 }
 
+export interface VNPayIPNResponse {
+  RspCode: string;
+  Message: string;
+}
+
 export const paymentService = {
   initiatePayment: async (
     orderId: string,
@@ -56,6 +61,15 @@ export const paymentService = {
   getPaymentStatus: async (orderId: string): Promise<PaymentStatusResponse> => {
     const response = await axiosClient.get<PaymentStatusResponse>(
       `/api/payments/status/${orderId}`,
+    );
+    return response.data;
+  },
+  confirmVNPayReturn: async (
+    params: Record<string, string>,
+  ): Promise<VNPayIPNResponse> => {
+    const response = await axiosClient.get<VNPayIPNResponse>(
+      "/api/payments/vnpay-ipn",
+      { params },
     );
     return response.data;
   },

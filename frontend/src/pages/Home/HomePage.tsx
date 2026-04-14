@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight,
   Building2,
   Calendar,
   Check,
@@ -20,7 +19,10 @@ import {
 } from "lucide-react";
 import { eventService } from "../../services/eventService";
 import AccountCategoryNav from "../../components/common/AccountCategoryNav";
+import Blog from "../../components/common/Blog";
+import Footer from "../../components/common/Footer";
 import { EventSummary } from "../../types/api";
+import { partnerLogos } from "../../constants/partners";
 
 const fallbackHeroEvents = [
   {
@@ -60,44 +62,6 @@ const fallbackHeroEvents = [
       "Không gian festival kết hợp visual art, activation zone và trải nghiệm check-in theo thời gian thực.",
     bannerUrl: "https://i.ytimg.com/vi/BG26iYVppy8/maxresdefault.jpg",
     minPrice: 1500000,
-  },
-];
-
-const partnerLogos = [
-  {
-    id: "momo",
-    image:
-      "https://homepage.momocdn.net/fileuploads/svg/momo-file-240411162904.svg",
-    name: "Momo",
-  },
-  {
-    id: "vnpay",
-    image: "https://vnpay.vn/assets/images/logo-icon/logo-primary.svg",
-    name: "VNPay",
-  },
-  {
-    id: "paypal",
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/PayPal.svg/1280px-PayPal.svg.png",
-    name: "PayPal",
-  },
-  {
-    id: "visa",
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/9/98/Visa_Inc._logo_%282005%E2%80%932014%29.svg",
-    name: "Visa",
-  },
-  {
-    id: "mastercard",
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1200px-Mastercard-logo.svg.png",
-    name: "Mastercard",
-  },
-  {
-    id: "jcb",
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/JCB_logo.svg/1200px-JCB_logo.svg.png",
-    name: "JCB",
   },
 ];
 
@@ -205,35 +169,27 @@ const faqItems = [
   },
 ];
 
-const blogPosts = [
-  {
-    id: "blog-1",
-    title: "Cách tối ưu trang sự kiện để tăng tỉ lệ mua vé",
-    description:
-      "Những thành phần nội dung quan trọng giúp event page rõ ràng, dễ quét và chuyển đổi tốt hơn.",
-    image:
-      "https://images.unsplash.com/photo-1515169067868-5387ec356754?q=80&w=1200&auto=format&fit=crop",
-    meta: "Guides",
-  },
-  {
-    id: "blog-2",
-    title: "Checklist vận hành check-in QR cho concert đông người",
-    description:
-      "Chuẩn bị luồng check-in thực tế để giảm ùn tắc và kiểm soát vé hiệu quả tại cổng vào.",
-    image:
-      "https://images.unsplash.com/photo-1505236858219-8359eb29e329?q=80&w=1200&auto=format&fit=crop",
-    meta: "Operations",
-  },
-  {
-    id: "blog-3",
-    title:
-      "Minh bạch phí và trải nghiệm thanh toán ảnh hưởng thế nào đến conversion",
-    description:
-      "Vì sao pricing rõ ràng và checkout ngắn gọn là hai yếu tố quan trọng của ticketing platform.",
-    image:
-      "https://images.unsplash.com/photo-1556741533-6e6a62bd8b49?q=80&w=1200&auto=format&fit=crop",
-    meta: "Insights",
-  },
+const homeNavItems = [
+  { label: "Home", to: "#home-hero", isHash: true },
+  { label: "Events", to: "/search" },
+  { label: "About", to: "#home-features", isHash: true },
+  { label: "Blog", to: "#home-blog", isHash: true },
+  { label: "Pages", to: "#home-faq", isHash: true },
+];
+
+const monthShortNames = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 function formatDate(value?: string) {
@@ -276,10 +232,6 @@ function getEventLocation(event?: Partial<EventSummary>) {
     .map((part) => part.trim());
 
   return Array.from(new Set(parts)).join(", ") || "Đang cập nhật địa điểm";
-}
-
-function getEventTag(event?: Partial<EventSummary>) {
-  return event?.category?.name || event?.categories?.[0]?.name || "Event";
 }
 
 export default function HomePage() {
@@ -347,14 +299,6 @@ export default function HomePage() {
       return next;
     });
   };
-
-  const homeNavItems = [
-    { label: "Home", to: "#home-hero", isHash: true },
-    { label: "Events", to: "/search" },
-    { label: "About", to: "#home-features", isHash: true },
-    { label: "Blog", to: "#home-blog", isHash: true },
-    { label: "Pages", to: "#home-faq", isHash: true },
-  ];
 
   return (
     <div className="home-page">
@@ -540,7 +484,7 @@ export default function HomePage() {
                 const d = new Date(event.startDatetime || "");
                 const isValidDate = !Number.isNaN(d.getTime());
                 const dayMonth = isValidDate
-                  ? `${d.getDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}`
+                  ? `${d.getDate()} ${monthShortNames[d.getMonth()]}`
                   : "";
                 const year = isValidDate ? d.getFullYear() : "";
 
@@ -559,7 +503,6 @@ export default function HomePage() {
                       )}
                     </Link>
                     <div className="upcoming-card-content">
-                      <span className="upcoming-card-tag">{getEventTag(event)}</span>
                       <h3 className="upcoming-card-title">
                         <Link to={`/event/${event.slug || event.id}`}>
                           {event.title}
@@ -724,10 +667,18 @@ export default function HomePage() {
 
         <section className="home-section home-past-events-section">
           <div className="section-heading section-heading-center">
-            <h2 style={{ fontSize: "clamp(2.2rem, 3.6vw, 3.4rem)", fontWeight: 800 }}>
+            <h2
+              style={{
+                fontSize: "clamp(2.2rem, 3.6vw, 3.4rem)",
+                fontWeight: 800,
+              }}
+            >
               Some of our <span style={{ color: "#CC9900" }}>Past Events</span>
             </h2>
-            <p> It is a long established fact that a reader content of a page when Ipsum is that it has a more-or- this is simple less normal
+            <p>
+              {" "}
+              It is a long established fact that a reader content of a page when
+              Ipsum is that it has a more-or- this is simple less normal
             </p>
           </div>
 
@@ -789,96 +740,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section" id="home-blog">
-          <div className="section-heading">
-            <div>
-              <h2 className="home-blog-title">
-                Our last <span className="home-blog-title-highlight">Blog</span>
-              </h2>
-            </div>
-            <a href="#home-blog" className="section-link">
-              View all
-              <ArrowRight size={16} />
-            </a>
-          </div>
-
-          <div className="blog-grid">
-            {blogPosts.map((post) => (
-              <article className="blog-card" key={post.id}>
-                <img src={post.image} alt={post.title} />
-                <div className="blog-card-body">
-                  <span>{post.meta}</span>
-                  <h3>{post.title}</h3>
-                  <p>{post.description}</p>
-                  <a href="#home-blog">
-                    Read article
-                    <ArrowRight size={15} />
-                  </a>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+          <Blog />
       </main>
 
-      <footer className="footer home-footer">
-        <div className="container">
-          <div className="footer-grid home-footer-grid">
-            <div className="footer-col home-footer-brand">
-              <Link to="/" className="logo home-footer-logo">
-                FlashTicket
-              </Link>
-              <p>
-                Nền tảng đặt vé sự kiện trực tuyến dành cho người mua vé muốn
-                giao dịch nhanh và organizer muốn vận hành bán vé trên một giao
-                diện rõ ràng.
-              </p>
-            </div>
-            <div className="footer-col">
-              <h4>Quick Links</h4>
-              <ul className="footer-links">
-                <li>
-                  <Link to="/">Home</Link>
-                </li>
-                <li>
-                  <Link to="/search">Events</Link>
-                </li>
-                <li>
-                  <Link to="/venues">Venues</Link>
-                </li>
-                <li>
-                  <Link to="/organizer">Organizer</Link>
-                </li>
-              </ul>
-            </div>
-
-            <div className="footer-col">
-              <h4>Support</h4>
-              <ul className="footer-links">
-                <li>
-                  <a href="#home-faq">FAQ</a>
-                </li>
-                <li>
-                  <Link to="/profile">My Account</Link>
-                </li>
-                <li>
-                  <Link to="/my-orders">Orders</Link>
-                </li>
-                <li>
-                  <Link to="/my-tickets">Tickets</Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="footer-bottom">
-            <p>
-              &copy; 2026 FlashTicket. Event booking homepage for buyers and
-              organizers.
-            </p>
-          </div>
-        </div>
-      </footer>
+        <Footer />
     </div>
   );
 }

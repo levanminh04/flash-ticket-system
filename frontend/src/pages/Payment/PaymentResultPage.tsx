@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, Home, X } from "lucide-react";
+import BookingStepIndicator from "../../components/common/BookingStepIndicator";
 import {
   paymentService,
   PaymentStatusResponse,
@@ -144,6 +145,7 @@ export default function PaymentResultPage() {
   if (isLoading) {
     return (
       <div className="payment-result-page">
+        <BookingStepIndicator currentStep={3} />
         <div className="result-card">
           <div className="result-loading">
             <div className="loading-spinner"></div>
@@ -157,6 +159,7 @@ export default function PaymentResultPage() {
   if (!result) {
     return (
       <div className="payment-result-page">
+        <BookingStepIndicator currentStep={3} />
         <div className="result-card">
           <p>Khong co thong tin ket qua thanh toan.</p>
           <Link to="/" className="btn btn-primary" style={{ marginTop: 16 }}>
@@ -169,6 +172,7 @@ export default function PaymentResultPage() {
 
   return (
     <div className="payment-result-page">
+      <BookingStepIndicator currentStep={3} />
       <div
         className={`result-card ${result.success ? "success-state" : ""}`}
         style={{ position: "relative", overflow: "hidden" }}

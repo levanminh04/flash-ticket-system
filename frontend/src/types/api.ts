@@ -21,6 +21,24 @@ export interface Venue {
   imageUrls?: string[];
 }
 
+export interface OrganizerInfo {
+  id: string;
+  userId?: string;
+  name: string;
+  slug?: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+  description?: string;
+  websiteUrl?: string;
+  isVerified?: boolean;
+  totalEvents?: number;
+  totalTicketsSold?: number;
+  followerCount?: number;
+  averageRating?: number;
+  email?: string;
+  phone?: string;
+}
+
 export interface EventSummary {
   id: string;
   title: string;
@@ -44,13 +62,27 @@ export interface EventSummary {
   endDatetime: string;
   organizer?: {
     id: string;
+    userId?: string;
     name: string;
+    slug?: string;
+    logoUrl?: string;
+    bannerUrl?: string;
+    description?: string;
+    websiteUrl?: string;
+    isVerified?: boolean;
+    totalEvents?: number;
+    totalTicketsSold?: number;
+    followerCount?: number;
+    averageRating?: number;
+    email?: string;
+    phone?: string;
   };
   status: string;
   isFeatured: boolean;
   minPrice?: number;
   ticketsSold?: number;
   totalCapacity?: number;
+  tags?: string[];
 
   // Fields for EventDetailResponse API
   description?: string;
@@ -62,15 +94,16 @@ export interface EventSummary {
     ticketsSold: number;
     totalCapacity: number;
   };
-  ticketTypes?: {
-    price: number;
-  }[];
+  ticketTypes?: TicketType[];
   images?: {
     type: string;
     url: string;
+    isPrimary?: boolean;
   }[];
   categories?: {
+    id?: string;
     name: string;
+    slug?: string;
   }[];
 }
 

@@ -6,7 +6,10 @@ import {
   useMemo,
   type MouseEvent,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
 import {
@@ -16,9 +19,13 @@ import {
 } from "../../services/bookingService";
 import { paymentService } from "../../services/paymentService";
 import { EventSummary, TicketType } from "../../types/api";
+import BookingStepIndicator from "../../components/common/BookingStepIndicator";
 import {
   User,
   AlertTriangle,
+  ShieldCheck,
+  Ticket,
+  ReceiptText,
 } from "lucide-react";
 
 function formatCurrency(value: number): string {
@@ -44,6 +51,14 @@ function normalizeSeatLabel(value: string): string {
     return `${directLabel[1].toUpperCase()}-${directLabel[2]}`;
   }
   return formatSeatLabel(trimmed);
+}
+
+function truncateBreadcrumbLabel(value: string, maxLength = 70): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength)}...`;
 }
 
 function getSeatLabelsFromSeatIds(seatIds?: string[]): string[] {
@@ -79,9 +94,82 @@ export default function CheckoutPage() {
   const [voucherCode, setVoucherCode] = useState("");
   const [timeLeft, setTimeLeft] = useState<number>(15 * 60);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [eventImageIndex, setEventImageIndex] = useState(0);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const allowNavigationRef = useRef(false);
+  const popStateReadyRef = useRef(false);
+
+  const shouldBlockNavigation =
+    Boolean(event) && bookingItems.length > 0 && !allowNavigationRef.current;
+
+  useEffect(() => {
+    if (!shouldBlockNavigation) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [shouldBlockNavigation]);
+
+  useEffect(() => {
+    if (!shouldBlockNavigation) return;
+
+    const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.history.pushState({ checkoutGuard: true }, "", currentPath);
+    popStateReadyRef.current = true;
+
+    const handlePopState = () => {
+      if (!popStateReadyRef.current || allowNavigationRef.current) return;
+      const nowPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.history.pushState({ checkoutGuard: true }, "", nowPath);
+      setShowLeaveModal(true);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      popStateReadyRef.current = false;
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [shouldBlockNavigation]);
+
+  useEffect(() => {
+    if (!shouldBlockNavigation) return;
+
+    const handleDocumentClick = (event: globalThis.MouseEvent) => {
+      if (allowNavigationRef.current) return;
+      if (event.defaultPrevented) return;
+      if (event.button !== 0) return;
+      if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.target && anchor.target !== "_self") return;
+      if (anchor.hasAttribute("download")) return;
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+        return;
+      }
+
+      const nextUrl = new URL(anchor.href, window.location.origin);
+      if (nextUrl.origin !== window.location.origin) return;
+
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (nextPath === currentPath) return;
+
+      event.preventDefault();
+      setShowLeaveModal(true);
+    };
+
+    document.addEventListener("click", handleDocumentClick, true);
+    return () => document.removeEventListener("click", handleDocumentClick, true);
+  }, [shouldBlockNavigation]);
 
   useEffect(() => {
     const itemsData = sessionStorage.getItem("bookingItems");
@@ -90,6 +178,7 @@ export default function CheckoutPage() {
     const selectedSeatsData = sessionStorage.getItem("bookingSelectedSeats");
 
     if (!itemsData || !eventData) {
+      allowNavigationRef.current = true;
       navigate("/");
       return;
     }
@@ -106,14 +195,6 @@ export default function CheckoutPage() {
     setEvent(selectedEvent);
     setTicketTypes(types);
 
-    if (keycloak?.tokenParsed) {
-      setCustomerName(
-        keycloak.tokenParsed.name ||
-          `${keycloak.tokenParsed.given_name || ""} ${keycloak.tokenParsed.family_name || ""}`.trim(),
-      );
-      setCustomerEmail(keycloak.tokenParsed.email || "");
-    }
-
     const expiresAt = Date.now() + 15 * 60 * 1000;
     const updateTimer = () => {
       const diff = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
@@ -127,6 +208,7 @@ export default function CheckoutPage() {
           ? `/events/${selectedEvent.slug}/book`
           : "/search";
         toast.error("Hết thời gian giữ vé. Bạn sẽ được chuyển lại trang chọn vé.");
+        allowNavigationRef.current = true;
         navigate(fallbackPath, { replace: true });
       }
     };
@@ -137,26 +219,31 @@ export default function CheckoutPage() {
   }, [navigate, keycloak]);
 
   useEffect(() => {
-    setEventImageIndex(0);
-  }, [event?.id]);
+    if (!initialized || !keycloak?.authenticated || !keycloak?.tokenParsed) {
+      return;
+    }
+
+    const parsed = keycloak.tokenParsed as Record<string, any>;
+    const fullName =
+      parsed.name ||
+      `${parsed.given_name || ""} ${parsed.family_name || ""}`.trim();
+    const email = parsed.email || "";
+    const phone = parsed.phone_number || parsed.phone || "";
+
+    if (fullName) {
+      setCustomerName((prev) => prev.trim() || fullName);
+    }
+    if (email) {
+      setCustomerEmail((prev) => prev.trim() || email);
+    }
+    if (phone) {
+      setCustomerPhone((prev) => prev.trim() || phone);
+    }
+  }, [initialized, keycloak?.authenticated, keycloak?.token]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const isLowTime = timeLeft <= 120;
-  const eventImageCandidates = [
-    event?.bannerUrl,
-    event?.thumbnailUrl,
-    event?.images?.find((img) => img.type === "BANNER")?.url,
-    event?.images?.[0]?.url,
-  ].filter((url): url is string => Boolean(url && url.trim()));
-  const eventImageSrc =
-    eventImageCandidates[eventImageIndex] ||
-    "https://via.placeholder.com/96x96?text=Event";
-  const startStr =
-    event?.schedule?.startDatetime ||
-    event?.startDatetime ||
-    (event as any)?.startTime;
-  const startDate = startStr ? new Date(startStr) : null;
 
   const subtotal = bookingItems.reduce((sum, item) => {
     const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
@@ -176,6 +263,9 @@ export default function CheckoutPage() {
       return acc;
     }, {});
   }, [selectedSeats]);
+
+  const breadcrumbEventName = truncateBreadcrumbLabel(event?.title || "", 20);
+  const selectTicketPath = event?.slug ? `/events/${event.slug}/book` : "/search";
 
   const validateForm = useCallback((): boolean => {
     const errors: Record<string, string> = {};
@@ -233,6 +323,7 @@ export default function CheckoutPage() {
       sessionStorage.removeItem("bookingSelectedSeats");
       sessionStorage.setItem("lastOrderId", booking.orderId);
       sessionStorage.setItem("lastOrderNumber", booking.orderNumber);
+      allowNavigationRef.current = true;
 
       if (paymentUrl) {
         if (/^https?:\/\//i.test(paymentUrl)) {
@@ -263,6 +354,24 @@ export default function CheckoutPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleStayOnCheckout = () => {
+    setShowLeaveModal(false);
+  };
+
+  const handleConfirmLeaveCheckout = () => {
+    setShowLeaveModal(false);
+    allowNavigationRef.current = true;
+    sessionStorage.removeItem("bookingItems");
+    sessionStorage.removeItem("bookingSelectedSeats");
+
+    if (event?.slug) {
+      navigate(`/events/${event.slug}/book`);
+      return;
+    }
+
+    navigate("/search");
   };
 
   const handleReselectTickets = () => {
@@ -297,9 +406,10 @@ export default function CheckoutPage() {
         <button
           type="button"
           className="btn btn-primary"
-          onClick={() =>
-            keycloak.login({ redirectUri: `${window.location.origin}/checkout` })
-          }
+          onClick={() => {
+            allowNavigationRef.current = true;
+            keycloak.login({ redirectUri: `${window.location.origin}/checkout` });
+          }}
         >
           Đăng nhập
         </button>
@@ -311,48 +421,28 @@ export default function CheckoutPage() {
     <div className="checkout-page">
       <div className="booking-focus-header">
         <div className="container">
-          <div className="focus-event-info">
-            <img
-              src={eventImageSrc}
-              alt={event.title}
-              className="event-thumb"
-              onError={() =>
-                setEventImageIndex((prev) =>
-                  prev < eventImageCandidates.length ? prev + 1 : prev,
-                )
-              }
-            />
-            <div>
-              <div className="event-name">{event.title}</div>
-              {startDate && (
-                <div className="event-date">
-                  {startDate.toLocaleDateString("vi-VN", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </div>
-              )}
-            </div>
+          <div className="focus-breadcrumb" aria-label="Breadcrumb">
+            <Link to="/" className="breadcrumb-home">
+              Home
+            </Link>
+            <span className="breadcrumb-separator">/</span>
+            <Link to={`/event/${event.slug || ""}`} className="breadcrumb-event">
+              Event
+            </Link>
+            <span className="breadcrumb-separator">/</span>
+            <Link
+              to={selectTicketPath}
+              className="breadcrumb-event-name"
+              title={event.title}
+              aria-label={event.title}
+            >
+              {breadcrumbEventName}
+            </Link>
+            <span className="breadcrumb-separator">/</span>
+            <span className="breadcrumb-current">Checkout</span>
           </div>
 
-          <div className="step-indicator">
-            <div className="step-item completed">
-              <span className="step-number">✓</span>
-              <span>Chọn vé</span>
-            </div>
-            <div className="step-divider" />
-            <div className="step-item active">
-              <span className="step-number">2</span>
-              <span>Thanh toán</span>
-            </div>
-            <div className="step-divider" />
-            <div className="step-item">
-              <span className="step-number">3</span>
-              <span>Kết quả</span>
-            </div>
-          </div>
+          <BookingStepIndicator currentStep={2} />
         </div>
       </div>
 
@@ -415,6 +505,36 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </div>
+
+            <div className="checkout-info-card">
+              <div className="checkout-info-header">
+                <ShieldCheck size={18} />
+                <h3>Lưu ý trước khi thanh toán</h3>
+              </div>
+
+              <ul className="checkout-info-list">
+                <li className="checkout-info-item">
+                  <strong>Giữ vé trong 15 phút</strong>
+                  <p>
+                    Vé đang được giữ tạm thời cho bạn. Nếu hết thời gian, hệ thống sẽ trả lại ghế.
+                  </p>
+                </li>
+
+                <li className="checkout-info-item">
+                  <strong>Nhận vé qua email</strong>
+                  <p>
+                    Hãy nhập email chính xác để nhận xác nhận đơn hàng và vé điện tử sau khi thanh toán.
+                  </p>
+                </li>
+
+                <li className="checkout-info-item">
+                  <strong>Kiểm tra thông tin thật kỹ</strong>
+                  <p>
+                    Tên, email và số điện thoại sẽ được dùng cho xác nhận thanh toán và hỗ trợ sau này.
+                  </p>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <aside className="checkout-sidebar">
@@ -431,7 +551,9 @@ export default function CheckoutPage() {
 
             <div className="sidebar-card">
               <div className="sidebar-card-header">
-                <h3>Thông tin đặt vé</h3>
+                <h3>
+                  <Ticket size={16} /> Thông tin đặt vé
+                </h3>
                 <button
                   type="button"
                   className="reselect-link"
@@ -500,7 +622,9 @@ export default function CheckoutPage() {
 
             <div className="sidebar-card">
               <div className="sidebar-card-header">
-                <h3>Thông tin đơn hàng</h3>
+                <h3>
+                  <ReceiptText size={16} /> Thông tin đơn hàng
+                </h3>
               </div>
 
               <div className="sidebar-voucher">
@@ -564,6 +688,44 @@ export default function CheckoutPage() {
           </aside>
         </div>
       </div>
+
+      {showLeaveModal && (
+        <div className="checkout-leave-modal-overlay" role="dialog" aria-modal="true">
+          <div className="checkout-leave-modal">
+            <div className="checkout-leave-modal-header">
+              <h3>Hủy đơn hàng ?</h3>
+            </div>
+
+            <p className="checkout-leave-modal-subtitle">
+              Bạn có chắc chắn muốn tiếp tục ?
+            </p>
+
+            <ul className="checkout-leave-modal-list">
+              <li>Bạn sẽ mất vị trí mình đã lựa chọn.</li>
+              <li>
+                Đơn hàng đang trong quá trình thanh toán hoặc đã thanh toán thành công cũng có thể bị hủy.
+              </li>
+            </ul>
+
+            <div className="checkout-leave-modal-actions">
+              <button
+                type="button"
+                className="checkout-leave-btn checkout-leave-btn-danger"
+                onClick={handleConfirmLeaveCheckout}
+              >
+                Hủy đơn
+              </button>
+              <button
+                type="button"
+                className="checkout-leave-btn checkout-leave-btn-safe"
+                onClick={handleStayOnCheckout}
+              >
+                Ở lại
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

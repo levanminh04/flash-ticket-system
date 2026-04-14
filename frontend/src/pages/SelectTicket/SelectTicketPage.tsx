@@ -4,6 +4,7 @@ import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
 import { eventService } from "../../services/eventService";
 import { EventSummary, TicketType } from "../../types/api";
+import BookingStepIndicator from "../../components/common/BookingStepIndicator";
 import {
   MapPin,
   Calendar,
@@ -338,51 +339,27 @@ export default function SelectTicketPage() {
 
   return (
     <div className="select-ticket-page">
-      {/* HEADER */}
       <div className="booking-focus-header">
         <div className="container">
-          <div className="focus-event-info">
-            {bannerUrl && (
-              <img src={bannerUrl} alt="" className="event-thumb" />
-            )}
-            <div>
-              <div className="event-name">{event.title}</div>
-              {startDate && (
-                <div className="event-date">
-                  {startDate.toLocaleDateString("vi-VN", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </div>
-              )}
-            </div>
+          <div className="focus-breadcrumb" aria-label="Breadcrumb">
+            <Link to="/" className="breadcrumb-home">
+              Home
+            </Link>
+            <span className="breadcrumb-separator">/</span>
+            <Link to={`/event/${slug || ""}`} className="breadcrumb-event">
+              Event
+            </Link>
+            <span className="breadcrumb-separator">/</span>
+            <span className="breadcrumb-current">{event.title}</span>
           </div>
 
-          <div className="step-indicator">
-            <div className="step-item active">
-              <span className="step-number">1</span>
-              <span>Chọn vé</span>
-            </div>
-            <div className="step-divider" />
-            <div className="step-item">
-              <span className="step-number">2</span>
-              <span>Thanh toán</span>
-            </div>
-            <div className="step-divider" />
-            <div className="step-item">
-              <span className="step-number">3</span>
-              <span>Kết quả</span>
-            </div>
-          </div>
+          <BookingStepIndicator currentStep={1} />
         </div>
       </div>
 
       {/* MAIN LAYOUT */}
       <div className="container">
         <div className="select-ticket-layout">
-          {/* ════════════ LEFT: SEAT MAP ════════════ */}
           <div className="seat-map-section">
             <div className="section-header">
               <h2>Sơ đồ chỗ ngồi</h2>
