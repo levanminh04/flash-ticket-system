@@ -14,105 +14,89 @@
   border-bottom: 1px solid var(--border);
   padding: 16px 0;
   position: sticky;
-  top: 0;
-  z-index: 50;
+  top: 56px;
+  z-index: 950;
 }
 
 .booking-focus-header .container {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
 }
 
-.focus-event-info {
+.focus-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.focus-event-info .event-thumb {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  object-fit: cover;
-}
-
-.focus-event-info .event-name {
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--text-primary);
-  max-width: 280px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.focus-event-info .event-date {
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
   font-size: 13px;
-  color: var(--text-muted);
+  font-weight: 400;
+  color: #000;
+}
+
+.breadcrumb-home {
+  color: #000;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.breadcrumb-event {
+  color: #000;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.breadcrumb-home:hover {
+  color: #000;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.breadcrumb-home:visited,
+.breadcrumb-home:active,
+.breadcrumb-home:focus,
+.breadcrumb-home:focus-visible {
+  color: #000;
+}
+
+.breadcrumb-event:hover {
+  color: #000;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.breadcrumb-event:visited,
+.breadcrumb-event:active,
+.breadcrumb-event:focus,
+.breadcrumb-event:focus-visible {
+  color: #000;
+}
+
+.breadcrumb-separator {
+  color: #000;
+  flex: 0 0 auto;
+}
+
+.breadcrumb-current {
+  font-weight: 400;
+  font-size: 13px;
+  color: #000;
+  max-width: min(100%, 520px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.focus-breadcrumb > * {
+  min-width: 0;
 }
 
 /* Step Indicator */
-.step-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.step-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.step-item.active {
-  color: var(--primary);
-}
-
-.step-item.completed {
-  color: var(--success);
-}
-
-.step-number {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  border: 2px solid currentColor;
-  transition: all 0.3s ease;
-}
-
-.step-item.active .step-number {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-}
-
-.step-item.completed .step-number {
-  background: var(--success);
-  color: #fff;
-  border-color: var(--success);
-}
-
-.step-divider {
-  width: 40px;
-  height: 2px;
-  background: var(--border);
-  border-radius: 1px;
-}
-
-.step-item.completed + .step-divider {
-  background: var(--success);
-}
-
 /* ============================================
    MAIN LAYOUT — Seat Map Primary
    ============================================ */
@@ -387,7 +371,7 @@
    ============================================ */
 .booking-sidebar {
   position: sticky;
-  top: 90px;
+  top: calc(56px + 90px);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -493,7 +477,7 @@
 .tier-item .tier-price {
   font-size: 13px;
   font-weight: 700;
-  color: var(--primary);
+  color: #000;
   white-space: nowrap;
 }
 
@@ -645,10 +629,6 @@
   .booking-sidebar {
     position: relative;
     top: 0;
-  }
-
-  .step-indicator {
-    display: none;
   }
 
   .seat-map-viewport {

@@ -8,6 +8,11 @@
   background-repeat: no-repeat;
 }
 
+.checkout-page .booking-focus-header {
+  position: static;
+  top: auto;
+}
+
 .checkout-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 400px;
@@ -18,15 +23,116 @@
 
 .checkout-main {
   min-width: 0;
+  position: sticky;
+  top: calc(56px + 96px);
+  align-self: flex-start;
 }
 
 .checkout-sidebar {
   position: sticky;
-  top: 96px;
+  top: calc(56px + 96px);
   align-self: flex-start;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.checkout-page .booking-focus-header .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.checkout-page .focus-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 320px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: #000;
+}
+
+.checkout-page .breadcrumb-home {
+  color: #000;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.checkout-page .breadcrumb-event {
+  color: #000;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.checkout-page .breadcrumb-home:hover,
+.checkout-page .breadcrumb-event:hover {
+  color: #000;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.checkout-page .breadcrumb-home:visited,
+.checkout-page .breadcrumb-home:active,
+.checkout-page .breadcrumb-home:focus,
+.checkout-page .breadcrumb-home:focus-visible,
+.checkout-page .breadcrumb-event:visited,
+.checkout-page .breadcrumb-event:active,
+.checkout-page .breadcrumb-event:focus,
+.checkout-page .breadcrumb-event:focus-visible {
+  color: #000;
+}
+
+.checkout-page .breadcrumb-separator {
+  color: #000;
+  flex: 0 0 auto;
+}
+
+.checkout-page .breadcrumb-event-name,
+.checkout-page .breadcrumb-current {
+  font-size: 13px;
+  font-weight: 400;
+  color: #000;
+  min-width: 0;
+}
+
+.checkout-page .breadcrumb-event-name {
+  max-width: min(100%, 520px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.checkout-page .breadcrumb-event-name:hover {
+  color: #000;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.checkout-page .breadcrumb-event-name:visited,
+.checkout-page .breadcrumb-event-name:active,
+.checkout-page .breadcrumb-event-name:focus,
+.checkout-page .breadcrumb-event-name:focus-visible {
+  color: #000;
+}
+
+.checkout-page .breadcrumb-current {
+  white-space: nowrap;
+}
+
+.checkout-page .booking-step-indicator {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 /* Buyer form */
@@ -36,6 +142,54 @@
   border-radius: 16px;
   box-shadow: var(--shadow-sm);
   padding: 28px;
+}
+
+.checkout-info-card {
+  margin-top: 16px;
+  padding: 22px 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(45, 194, 117, 0.18);
+  background: linear-gradient(180deg, #f8fff9 0%, #ffffff 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.checkout-info-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.checkout-info-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.checkout-info-list {
+  margin: 0;
+  padding-left: 30px;
+  list-style: disc;
+}
+
+.checkout-info-item {
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.checkout-info-item strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.checkout-info-item p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 
 .buyer-info-title {
@@ -189,7 +343,10 @@
 
 .sidebar-card-header h3 {
   margin: 0;
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -448,6 +605,99 @@
   font-size: 12px;
 }
 
+.checkout-leave-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.checkout-leave-modal {
+  width: min(100%, 340px);
+  background: #f3f4f6;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  padding: 22px 24px;
+  color: #1f2937;
+}
+
+.checkout-leave-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.checkout-leave-modal-header h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.checkout-leave-modal-subtitle {
+  margin: 12px 0 14px;
+  text-align: center;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.checkout-leave-modal-list {
+  margin: 0;
+  padding-left: 30px;
+  list-style: disc;
+  list-style-position: outside;
+  color: #374151;
+  font-size: 14px;
+}
+
+.checkout-leave-modal-list li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.checkout-leave-modal-actions {
+  margin-top: 18px;
+  padding-top: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.checkout-leave-btn {
+  border-radius: 12px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.checkout-leave-btn-danger {
+  background: #fff;
+  color: #dc2626;
+  border-color: #ef4444;
+}
+
+.checkout-leave-btn-danger:hover {
+  background: #fef2f2;
+}
+
+.checkout-leave-btn-safe {
+  background: #16a34a;
+  color: #fff;
+}
+
+.checkout-leave-btn-safe:hover {
+  background: #15803d;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -460,9 +710,27 @@
     grid-template-columns: 1fr;
   }
 
+  .checkout-form-section {
+    position: static;
+    top: auto;
+  }
+
+  .checkout-main {
+    position: static;
+    top: auto;
+  }
+
   .checkout-sidebar {
     position: static;
     top: 0;
+  }
+
+  .checkout-page .booking-focus-header .container {
+    align-items: flex-start;
+  }
+
+  .checkout-page .booking-step-indicator {
+    margin-left: 0;
   }
 }
 

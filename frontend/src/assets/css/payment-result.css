@@ -3,8 +3,10 @@
   background: var(--page-gradient-booking);
   background-repeat: no-repeat;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 18px;
   padding: 40px 20px;
 }
 

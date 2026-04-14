@@ -47,7 +47,11 @@ export default function AccountCategoryNav({
   }, [shouldUseCustomItems]);
 
   return (
-    <nav className="category-nav account-category-nav">
+    <nav
+      className={`category-nav account-category-nav ${
+        shouldUseCustomItems ? "account-category-nav--custom" : ""
+      }`}
+    >
       <div className="container account-category-nav-inner">
         <ul className="category-list account-category-list">
           {shouldUseCustomItems

@@ -2,10 +2,53 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import AppPagination from "../../components/common/AppPagination";
+import Footer from "../../components/common/Footer";
 import { eventService } from "../../services/eventService";
 import { categoryService } from "../../services/categoryService";
 import { EventSummary, SpringPage, Category } from "../../types/api";
-import { Search, MapPin, Calendar, X, ChevronDown } from "lucide-react";
+import { Search, MapPin, X, ChevronDown } from "lucide-react";
+
+const monthShortNames = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function getEventImage(event: EventSummary) {
+  return (
+    event.bannerUrl ||
+    event.thumbnailUrl ||
+    event.images?.find((image) => image.type === "BANNER")?.url ||
+    event.images?.find((image) => image.type === "THUMBNAIL")?.url ||
+    "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=1400&auto=format&fit=crop"
+  );
+}
+
+function getEventLocation(event: EventSummary) {
+  const venueName = event.venue?.name || event.venueName;
+  const cityName = event.venue?.city || event.city;
+  const parts = [venueName, cityName]
+    .filter((part): part is string => Boolean(part && part.trim()))
+    .map((part) => part.trim());
+
+  return Array.from(new Set(parts)).join(", ") || "Đang cập nhật địa điểm";
+}
+
+function formatEventPrice(event: EventSummary) {
+  if (typeof event.minPrice === "number") {
+    return `Từ ${event.minPrice.toLocaleString("vi-VN")} đ`;
+  }
+  return "Đang cập nhật";
+}
 
 export default function EventSearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -107,18 +150,26 @@ export default function EventSearchPage() {
   });
 
   // Handlers for updating URL search parameters
-  const updateFilter = (key: string, value: string | null) => {
+  const updateFilters = (updates: Record<string, string | null>) => {
     const newParams = new URLSearchParams(searchParams);
-    if (value) {
-      newParams.set(key, value);
-    } else {
-      newParams.delete(key);
-    }
-    // Reset page to 0 when filters change
-    if (key !== "page") {
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value) {
+        newParams.set(key, value);
+      } else {
+        newParams.delete(key);
+      }
+    });
+
+    if (!("page" in updates)) {
       newParams.set("page", "0");
     }
+
     setSearchParams(newParams);
+  };
+
+  const updateFilter = (key: string, value: string | null) => {
+    updateFilters({ [key]: value });
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -159,8 +210,8 @@ export default function EventSearchPage() {
                   border: "none",
                   cursor: "pointer",
                   fontFamily: "inherit",
-                  color: !queryCategory ? "var(--primary)" : "inherit",
-                  fontWeight: !queryCategory ? "bold" : "normal",
+                  color: !queryCategory ? "#CC9900" : "inherit",
+                  fontWeight: "600",
                 }}
               >
                 Tất cả
@@ -177,12 +228,8 @@ export default function EventSearchPage() {
                       border: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
-                      color:
-                        queryCategory === cat.slug
-                          ? "var(--primary)"
-                          : "inherit",
-                      fontWeight:
-                        queryCategory === cat.slug ? "bold" : "normal",
+                      color: queryCategory === cat.slug ? "#CC9900" : "inherit",
+                      fontWeight: "600",
                     }}
                   >
                     {cat.name}
@@ -221,6 +268,9 @@ export default function EventSearchPage() {
               borderRadius: "12px",
               border: "1px solid var(--border)",
               height: "fit-content",
+              position: "sticky",
+              top: "24px",
+              alignSelf: "flex-start",
             }}
           >
             <div
@@ -245,7 +295,7 @@ export default function EventSearchPage() {
                 onClick={clearFilters}
                 style={{
                   fontSize: "14px",
-                  color: "var(--primary)",
+                  color: "#000000",
                   background: "none",
                   border: "none",
                   cursor: "pointer",
@@ -452,6 +502,7 @@ export default function EventSearchPage() {
                     ].map((option) => (
                       <div
                         key={option.value || "all"}
+                        className={`event-search-dropdown-option ${queryCity === (option.value || "") ? "is-selected" : ""}`}
                         onClick={() => {
                           updateFilter("city", option.value);
                           setIsCityDropdownOpen(false);
@@ -460,24 +511,7 @@ export default function EventSearchPage() {
                           padding: "10px 16px",
                           cursor: "pointer",
                           fontSize: "14px",
-                          background:
-                            queryCity === (option.value || "")
-                              ? "#f0f0f0"
-                              : "transparent",
-                          fontWeight:
-                            queryCity === (option.value || "")
-                              ? "bold"
-                              : "normal",
                         }}
-                        onMouseOver={(e) =>
-                          (e.currentTarget.style.background = "#f9f9f9")
-                        }
-                        onMouseOut={(e) =>
-                          (e.currentTarget.style.background =
-                            queryCity === (option.value || "")
-                              ? "#f0f0f0"
-                              : "transparent")
-                        }
                       >
                         {option.label}
                       </div>
@@ -606,14 +640,15 @@ export default function EventSearchPage() {
               }}
             >
               <p
+                className="event-search-results-summary"
                 style={{
-                  color: "#FFFFFF",
+                  color: "#ffffff",
                   fontWeight: 600,
                 }}
               >
                 {isLoading
                   ? "Đang tìm kiếm"
-                  : `Tìm thấy ${(eventsPage as unknown as SpringPage<EventSummary>)?.totalElements || 0} sự kiện`}
+                  : `Tìm thấy ${eventsPage?.totalElements || 0} sự kiện`}
               </p>
               <div
                 style={{
@@ -625,7 +660,7 @@ export default function EventSearchPage() {
                 ref={sortDropdownRef}
               >
                 <label
-                  style={{ fontSize: "14px", color: "#FFFFFF" }}
+                  style={{ fontSize: "16px", fontWeight: 600, color: "#ffffff" }}
                 >
                   Sắp xếp:
                 </label>
@@ -687,6 +722,7 @@ export default function EventSearchPage() {
                     ].map((option) => (
                       <div
                         key={option.value}
+                        className={`event-search-dropdown-option ${querySort === option.value ? "is-selected" : ""}`}
                         onClick={() => {
                           updateFilter("sort", option.value);
                           setIsSortDropdownOpen(false);
@@ -695,22 +731,7 @@ export default function EventSearchPage() {
                           padding: "10px 16px",
                           cursor: "pointer",
                           fontSize: "14px",
-                          background:
-                            querySort === option.value
-                              ? "#f0f0f0"
-                              : "transparent",
-                          fontWeight:
-                            querySort === option.value ? "bold" : "normal",
                         }}
-                        onMouseOver={(e) =>
-                          (e.currentTarget.style.background = "#f9f9f9")
-                        }
-                        onMouseOut={(e) =>
-                          (e.currentTarget.style.background =
-                            querySort === option.value
-                              ? "#f0f0f0"
-                              : "transparent")
-                        }
                       >
                         {option.label}
                       </div>
@@ -771,8 +792,7 @@ export default function EventSearchPage() {
                       : "Max"}
                     <button
                       onClick={() => {
-                        updateFilter("minPrice", null);
-                        updateFilter("maxPrice", null);
+                        updateFilters({ minPrice: null, maxPrice: null });
                       }}
                       style={chipBtnStyle}
                     >
@@ -785,8 +805,7 @@ export default function EventSearchPage() {
                     Ngày: {queryStartDate || "..."} đến {queryEndDate || "..."}
                     <button
                       onClick={() => {
-                        updateFilter("startDate", null);
-                        updateFilter("endDate", null);
+                        updateFilters({ startDate: null, endDate: null });
                       }}
                       style={chipBtnStyle}
                     >
@@ -857,186 +876,63 @@ export default function EventSearchPage() {
               </div>
             ) : (
               <>
-                <div className="event-grid">
-                  {eventsPage.content.map((event: EventSummary) => (
-                    <Link
-                      to={`/event/${event.slug || event.id}`}
-                      className="standard-card"
-                      key={event.id}
-                      style={{
-                        background: "white",
-                        borderRadius: "12px",
-                        overflow: "hidden",
-                        border: "1px solid var(--border)",
-                        transition: "transform 0.2s, box-shadow 0.2s",
-                        textDecoration: "none",
-                        color: "inherit",
-                        display: "block",
-                      }}
-                    >
-                      <div
-                        className="thumb-wrapper"
-                        style={{
-                          position: "relative",
-                          height: "0",
-                          paddingBottom: "60%",
-                        }}
+                <div className="event-grid event-search-grid">
+                  {eventsPage.content.map((event: EventSummary) => {
+                    const eventDate = event.startDatetime
+                      ? new Date(event.startDatetime)
+                      : null;
+                    const isValidDate =
+                      eventDate !== null && !Number.isNaN(eventDate.getTime());
+                    const dayMonth = isValidDate
+                      ? `${eventDate.getDate()} ${monthShortNames[eventDate.getMonth()]}`
+                      : "";
+                    const year = isValidDate ? eventDate.getFullYear() : "";
+
+                    return (
+                      <article
+                        className="upcoming-event-card event-search-card"
+                        key={event.id}
                       >
-                        <img
-                          src={
-                            event.thumbnailUrl ||
-                            event.bannerUrl ||
-                            "https://via.placeholder.com/400x250?text=No+Image"
-                          }
-                          alt={event.title}
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                        {event.category && (
-                          <span
-                            style={{
-                              position: "absolute",
-                              top: "12px",
-                              left: "12px",
-                              background: "rgba(0,0,0,0.6)",
-                              color: "white",
-                              padding: "4px 8px",
-                              borderRadius: "4px",
-                              fontSize: "12px",
-                              fontWeight: "500",
-                            }}
-                          >
-                            {event.category.name}
-                          </span>
-                        )}
-                      </div>
-                      <div className="card-content" style={{ padding: "16px" }}>
-                        <h4
-                          className="card-title"
-                          style={{
-                            fontSize: "16px",
-                            fontWeight: "600",
-                            marginBottom: "12px",
-                            lineHeight: "1.4",
-                            height: "44px",
-                            overflow: "hidden",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                          }}
+                        <Link
+                          to={`/event/${event.slug || event.id}`}
+                          className="upcoming-card-image-wrapper"
                         >
-                          {event.title}
-                        </h4>
-                        <p
-                          className="card-meta"
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            color: "var(--text-secondary)",
-                            fontSize: "13px",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          <Calendar
-                            size={14}
-                            style={{
-                              marginRight: "6px",
-                              marginTop: "2px",
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span>
-                            {event.startDatetime
-                              ? new Date(event.startDatetime).toLocaleString(
-                                  "vi-VN",
-                                )
-                              : "Đang cập nhật"}
-                          </span>
-                        </p>
-                        <p
-                          className="card-meta"
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            color: "var(--text-secondary)",
-                            fontSize: "13px",
-                            marginBottom: "16px",
-                            height: "38px",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <MapPin
-                            size={14}
-                            style={{
-                              marginRight: "6px",
-                              marginTop: "2px",
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span>
-                            {event.venueName || event.city
-                              ? [event.venueName, event.city]
-                                  .filter(Boolean)
-                                  .join(", ")
-                              : event.venue
-                                ? `${event.venue.name}, ${event.venue.city}`
-                                : "Đang cập nhật địa điểm"}
-                          </span>
-                        </p>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "12px",
-                          }}
-                        >
-                          <p
-                            className="card-price"
-                            style={{
-                              color: "black",
-                              fontWeight: "bold",
-                              fontSize: "16px",
-                              margin: 0,
-                              textAlign: "center",
-                            }}
-                          >
-                            {event.minPrice
-                              ? `Từ ${event.minPrice.toLocaleString("vi-VN")} đ`
-                              : "Miễn phí"}
-                          </p>
-                          <button
-                            className="btn"
-                            style={{
-                              padding: "8px 16px",
-                              fontSize: "14px",
-                              borderRadius: "9999px",
-                              background: "#2DC275",
-                              color: "white",
-                              fontWeight: "600",
-                              border: "none",
-                              width: "100%",
-                              cursor: "pointer",
-                              transition: "background 0.2s",
-                            }}
-                            onMouseOver={(e) =>
-                              (e.currentTarget.style.background = "#25a764")
-                            }
-                            onMouseOut={(e) =>
-                              (e.currentTarget.style.background = "#2DC275")
-                            }
-                          >
-                            Mua vé
-                          </button>
+                          <img src={getEventImage(event)} alt={event.title} />
+                          {isValidDate && (
+                            <div className="upcoming-date-badge">
+                              <span className="upcoming-date-day">
+                                {dayMonth}
+                              </span>
+                              <span className="upcoming-date-year">{year}</span>
+                            </div>
+                          )}
+                        </Link>
+
+                        <div className="upcoming-card-content event-search-card-content">
+                          <h3 className="upcoming-card-title">
+                            <Link to={`/event/${event.slug || event.id}`}>
+                              {event.title}
+                            </Link>
+                          </h3>
+                          <div className="upcoming-card-location">
+                            <MapPin size={16} />
+                            <span>{getEventLocation(event)}</span>
+                          </div>
+                          <div className="upcoming-card-bottom">
+                            <span className="upcoming-card-price">
+                              {formatEventPrice(event)}
+                            </span>
+                            <Link
+                              to={`/event/${event.slug || event.id}`}
+                              className="upcoming-card-buy-btn"
+                            >
+                              Buy
+                            </Link>
+                          </div>
                         </div>
-                      </div>
-                    </Link>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
 
                 {/* PAGINATION */}
@@ -1053,6 +949,8 @@ export default function EventSearchPage() {
           </main>
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }
