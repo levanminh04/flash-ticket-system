@@ -1,6 +1,7 @@
 package com.flashticket.core.event.controller;
 
 import com.flashticket.core.event.dto.SeatMapResponse;
+import com.flashticket.core.event.service.SeatMapSyncService.SeatMapPublishRequest;
 import com.flashticket.core.event.service.SeatMapSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,5 +40,18 @@ public class EventSeatMapController {
         SeatMapResponse response = seatMapSyncService.getSeatMap(eventId, organizerId);
         
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/publish")
+    public ResponseEntity<Void> publishSeatMap(
+        @PathVariable UUID eventId,
+        @RequestBody SeatMapPublishRequest request,
+        @AuthenticationPrincipal Jwt jwt
+    ) {
+        String organizerId = jwt.getSubject();
+        log.info("POST /api/organizer/events/{}/seat-map/publish by organizer {}", eventId, organizerId);
+
+        seatMapSyncService.publishSeatMap(eventId, organizerId, request);
+        return ResponseEntity.ok().build();
     }
 }

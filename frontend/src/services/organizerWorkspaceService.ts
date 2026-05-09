@@ -240,6 +240,40 @@ export interface OrganizerSeat {
   inventoryStatus?: string;
 }
 
+export interface OrganizerSeatPublishPayload {
+  id: string;
+  rowName?: string;
+  seatNumber?: string;
+  seatLabel?: string;
+  coordX: number;
+  coordY: number;
+  seatType?: string;
+  isActive?: boolean;
+  coordMetadata?: Record<string, unknown>;
+}
+
+export interface OrganizerSeatSectorPublishPayload {
+  id: string;
+  name: string;
+  code?: string;
+  sectorType?: string;
+  colorCode?: string;
+  visible?: boolean;
+  displayOrder?: number;
+  mapData?: Record<string, unknown>;
+  seats?: OrganizerSeatPublishPayload[];
+}
+
+export interface OrganizerSeatMapPublishPayload {
+  name?: string;
+  backgroundImageUrl?: string;
+  backgroundPublicId?: string;
+  backgroundWidth?: number;
+  backgroundHeight?: number;
+  mapConfig?: Record<string, unknown>;
+  sectors?: OrganizerSeatSectorPublishPayload[];
+}
+
 async function getVenuesWithFallback(): Promise<OrganizerVenue[]> {
   try {
     const response = await axiosClient.get<OrganizerVenue[]>("/api/venues");
@@ -408,6 +442,16 @@ export const organizerWorkspaceService = {
       }
       throw error;
     }
+  },
+
+  publishSeatMap: async (
+    eventId: string,
+    payload: OrganizerSeatMapPublishPayload,
+  ): Promise<void> => {
+    await axiosClient.post(
+      `/api/organizer/events/${eventId}/seat-map/publish`,
+      payload,
+    );
   },
 
   getOrganizerByUserIdDirect: async (userId: string) => {

@@ -9,8 +9,12 @@ import com.flashticket.core.common.exception.InsufficientStockException;
 import com.flashticket.core.common.exception.InvalidRequestException;
 import com.flashticket.core.common.exception.ResourceNotFoundException;
 import com.flashticket.core.event.entity.Event;
+import com.flashticket.core.event.entity.EventSeat;
+import com.flashticket.core.event.entity.EventSeatInventory;
 import com.flashticket.core.event.entity.TicketType;
 import com.flashticket.core.event.repository.EventRepository;
+import com.flashticket.core.event.repository.EventSeatInventoryRepository;
+import com.flashticket.core.event.repository.EventSeatRepository;
 import com.flashticket.core.event.repository.TicketTypeRepository;
 import com.flashticket.core.promotion.service.PromotionService;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +27,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
+import org.springframework.util.CollectionUtils; 
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -33,7 +37,11 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -61,6 +69,8 @@ public class BookingService {
     private final OrderItemRepository orderItemRepository;
     private final EventRepository eventRepository;
     private final TicketTypeRepository ticketTypeRepository;
+    private final EventSeatRepository eventSeatRepository;
+    private final EventSeatInventoryRepository eventSeatInventoryRepository;
     private final TicketReservationService ticketReservationService;
     private final PromotionService promotionService;
     private final RedissonClient redissonClient;
@@ -154,8 +164,18 @@ public class BookingService {
             for (BookingItemContext ctx : contexts) {
                 //  Acquire distributed lock
                 // Single Responsibility - CHỈ GỌI method từ ticketReservationService , KHÔNG CHỨA logic tryLock(), getLock(), releaseLock() InterruptedException...
-                RLock lock = ticketReservationService.acquireZoneLock(ctx.ticketType().getId()); // nếu lock đã bị chiếm thì bên trong sẽ throw new LockAcquisitionException(...) (trước khi throw thì đã retry 1 vài lần (tùy theo cấu hình) rồi)
-                acquiredLocks.add(lock);
+                if (ctx.isSeated()) {
+                    ctx.seats().stream()
+                        .map(EventSeat::getId)
+                        .sorted(Comparator.naturalOrder())
+                        .forEach(seatId -> acquiredLocks.add(
+                            ticketReservationService.acquireSeatLock(event.getId(), seatId)
+                        ));
+                    reserveSelectedSeats(ctx, event, userId);
+                } else {
+                    RLock lock = ticketReservationService.acquireZoneLock(ctx.ticketType().getId()); // nếu lock đã bị chiếm thì bên trong sẽ throw new LockAcquisitionException(...) (trước khi throw thì đã retry 1 vài lần (tùy theo cấu hình) rồi)
+                    acquiredLocks.add(lock);
+                }
 
                 // Double-check stock SAU KHI có lock (quan trọng!) để tránh:
                 /**
@@ -231,6 +251,7 @@ public class BookingService {
             order = orderRepository.save(order);
 
             // Create OrderItems
+            attachReservedSeatsToOrder(order, contexts);
             List<OrderItem> items = buildOrderItems(order, contexts, event);
             orderItemRepository.saveAll(items);
 
@@ -386,12 +407,43 @@ public class BookingService {
                     "Vé '" + tt.getName() + "' tối đa " + tt.getMaxPerOrder() + " vé mỗi đơn");
             }
 
-            // Seated ticket — Phase 2D not yet implemented
+            List<EventSeat> seats = List.of();
+
+            // Seated ticket — Phase 2D
             if (Boolean.TRUE.equals(tt.getSeatSelectionEnabled())) {
-                if (!CollectionUtils.isEmpty(itemReq.seatIds())) {
+                if (CollectionUtils.isEmpty(itemReq.seatIds())) {
                     throw new InvalidRequestException(
-                        "Tính năng chọn ghế cụ thể chưa được hỗ trợ trong phiên bản này");
+                        "Vé '" + tt.getName() + "' yêu cầu chọn ghế cụ thể");
                 }
+                if (itemReq.seatIds().size() != itemReq.quantity()) {
+                    throw new InvalidRequestException(
+                        "Số ghế đã chọn phải bằng số lượng vé '" + tt.getName() + "'");
+                }
+
+                Set<UUID> uniqueSeatIds = new HashSet<>(itemReq.seatIds());
+                if (uniqueSeatIds.size() != itemReq.seatIds().size()) {
+                    throw new InvalidRequestException("Danh sách ghế có giá trị trùng lặp");
+                }
+
+                seats = uniqueSeatIds.stream()
+                    .map(seatId -> eventSeatRepository.findById(seatId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Ghế không tồn tại: " + seatId)))
+                    .toList();
+
+                for (EventSeat seat : seats) {
+                    Map<String, Object> sectorMapData = seat.getSector().getMapData();
+                    Object mappedTicketTypeId = sectorMapData != null ? sectorMapData.get("ticketTypeId") : null;
+                    boolean sectorMatchesTicketType = seat.getSector().getId().equals(tt.getEventSectorId());
+                    boolean mapDataMatchesTicketType = mappedTicketTypeId != null
+                        && mappedTicketTypeId.toString().equals(tt.getId().toString());
+                    if (!Boolean.TRUE.equals(seat.getIsActive())
+                        || !seat.getSector().getLayout().getEvent().getId().equals(event.getId())
+                        || (!sectorMatchesTicketType && !mapDataMatchesTicketType)) {
+                        throw new InvalidRequestException("Ghế không hợp lệ cho loại vé '" + tt.getName() + "'");
+                    }
+                }
+            } else if (!CollectionUtils.isEmpty(itemReq.seatIds())) {
+                throw new InvalidRequestException("Loại vé '" + tt.getName() + "' không hỗ trợ chọn ghế");
             }
 
             // Sơ bộ check stock (non-locked — chống request rõ ràng sai)
@@ -400,7 +452,7 @@ public class BookingService {
                     tt.getName(), tt.getQuantityAvailable(), itemReq.quantity());
             }
 
-            contexts.add(new BookingItemContext(tt, itemReq.quantity()));
+            contexts.add(new BookingItemContext(tt, itemReq.quantity(), seats));
         }
 
         return contexts;
@@ -438,12 +490,15 @@ public class BookingService {
         return contexts.stream().map(ctx -> {
             TicketType tt = ctx.ticketType();
             BigDecimal subtotal = tt.getPrice().multiply(BigDecimal.valueOf(ctx.quantity()));
+            UUID sectorId = tt.getEventSectorId() != null
+                ? tt.getEventSectorId()
+                : (ctx.isSeated() ? ctx.seats().get(0).getSector().getId() : null);
 
             return OrderItem.builder()
                 .orderId(order.getId())
                 .ticketTypeId(tt.getId())
                 .ticketTypeName(tt.getName())
-                .sectorId(tt.getEventSectorId())
+                .sectorId(sectorId)
                 // sectorName load riêng nếu cần — simplified cho MVP
                 .quantity(ctx.quantity())
                 .unitPrice(tt.getPrice())
@@ -461,6 +516,53 @@ public class BookingService {
         items.forEach(item ->
             ticketTypeRepository.restoreQuantity(item.getTicketTypeId(), item.getQuantity())
         );
+
+        eventSeatInventoryRepository.findByOrderId(orderId).forEach(inventory -> {
+            inventory.setStatus("AVAILABLE");
+            inventory.setOrderId(null);
+            inventory.setUserId(null);
+            inventory.setLockExpiresAt(null);
+            inventory.setUpdatedAt(Instant.now());
+            eventSeatInventoryRepository.save(inventory);
+        });
+    }
+
+    private void reserveSelectedSeats(BookingItemContext ctx, Event event, String userId) {
+        for (EventSeat seat : ctx.seats()) {
+            EventSeatInventory inventory = eventSeatInventoryRepository
+                .findByEventIdAndSeatId(event.getId(), seat.getId())
+                .orElseGet(() -> EventSeatInventory.builder()
+                    .eventId(event.getId())
+                    .eventSeat(seat)
+                    .createdAt(Instant.now())
+                    .build());
+
+            if (inventory.getStatus() != null && !"AVAILABLE".equals(inventory.getStatus())) {
+                throw new InvalidRequestException("Ghế " + seat.getSeatLabel() + " không còn khả dụng");
+            }
+
+            inventory.setStatus("RESERVED");
+            inventory.setUserId(userId);
+            inventory.setLockExpiresAt(Instant.now().plus(ORDER_EXPIRY_MINUTES, ChronoUnit.MINUTES));
+            inventory.setUpdatedAt(Instant.now());
+            eventSeatInventoryRepository.save(inventory);
+        }
+    }
+
+    private void attachReservedSeatsToOrder(Order order, List<BookingItemContext> contexts) {
+        for (BookingItemContext ctx : contexts) {
+            if (!ctx.isSeated()) {
+                continue;
+            }
+            for (EventSeat seat : ctx.seats()) {
+                EventSeatInventory inventory = eventSeatInventoryRepository
+                    .findByEventIdAndSeatId(order.getEventId(), seat.getId())
+                    .orElseThrow(() -> new InvalidRequestException("Không tìm thấy inventory cho ghế " + seat.getSeatLabel()));
+                inventory.setOrderId(order.getId());
+                inventory.setUpdatedAt(Instant.now());
+                eventSeatInventoryRepository.save(inventory);
+            }
+        }
     }
 
     /**
@@ -480,7 +582,12 @@ public class BookingService {
     /** Internal value object — context cho 1 booking item */
     private record BookingItemContext(
             TicketType ticketType,
-            int quantity) {
+            int quantity,
+            List<EventSeat> seats) {
+
+        private boolean isSeated() {
+            return !seats.isEmpty();
+        }
 
     }
 }

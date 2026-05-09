@@ -9,5 +9,6 @@ import java.util.UUID;
 
 @Repository
 public interface EventSectorRepository extends JpaRepository<EventSector, UUID> {
+    List<EventSector> findByLayoutId(UUID layoutId);
     List<EventSector> findByLayoutIdAndIsActiveTrue(UUID layoutId);
 }

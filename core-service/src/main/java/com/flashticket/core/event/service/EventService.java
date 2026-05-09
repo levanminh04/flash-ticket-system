@@ -86,6 +86,10 @@ public class EventService {
         log.info("Successfully fetched event: {} (ID: {})", event.getTitle(), event.getId());
         return response;
     }
+
+    public UUID resolveEventIdByIdOrSlug(String idOrSlug) {
+        return findEventByIdOrSlug(idOrSlug).getId();
+    }
     
     /**
      * Find event by ID or slug

@@ -8,7 +8,9 @@ import com.flashticket.core.booking.repository.OrderRepository;
 import com.flashticket.core.booking.repository.TicketRepository;
 import com.flashticket.core.common.exception.InvalidRequestException;
 import com.flashticket.core.common.exception.ResourceNotFoundException;
+import com.flashticket.core.event.entity.EventSeatInventory;
 import com.flashticket.core.event.repository.EventRepository;
+import com.flashticket.core.event.repository.EventSeatInventoryRepository;
 import com.flashticket.core.event.repository.TicketTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +51,7 @@ public class TicketIssuanceService {
     private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
     private final TicketTypeRepository ticketTypeRepository;
+    private final EventSeatInventoryRepository eventSeatInventoryRepository;
 
     @Value("${app.qr.secret-key}")
     private String qrSecretKey;
@@ -83,14 +86,22 @@ public class TicketIssuanceService {
         }
 
         List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
+        List<EventSeatInventory> reservedSeats = new ArrayList<>(eventSeatInventoryRepository.findByOrderId(orderId));
+        List<EventSeatInventory> ticketInventories = new ArrayList<>();
         List<Ticket> allTickets = new ArrayList<>();
         int sequenceNumber = 1;
 
         for (OrderItem item : items) {
             String ticketTypeName = item.getTicketTypeName();
             String venueName = order.getEventVenueName();
+            List<EventSeatInventory> itemReservedSeats = reservedSeats.stream()
+                .filter(inventory -> item.getSectorId() != null
+                    && inventory.getEventSeat().getSector().getId().equals(item.getSectorId()))
+                .limit(item.getQuantity())
+                .toList();
 
             for (int i = 0; i < item.getQuantity(); i++) {
+                EventSeatInventory inventory = i < itemReservedSeats.size() ? itemReservedSeats.get(i) : null;
                 String ticketCode = buildTicketCode(order.getOrderNumber(), sequenceNumber++);
                 String qrData = buildSignedQrData(ticketCode, order.getEventId(), item.getTicketTypeId());
 
@@ -101,8 +112,8 @@ public class TicketIssuanceService {
                     .userId(order.getUserId())
                     .eventId(order.getEventId())
                     .ticketTypeId(item.getTicketTypeId())
-                    .seatId(null)
-                    .seatLabel(null)
+                    .seatId(inventory != null ? inventory.getEventSeat().getId() : null)
+                    .seatLabel(inventory != null ? inventory.getEventSeat().getSeatLabel() : null)
                     .eventTitle(order.getEventTitle())
                     .eventStartDatetime(order.getEventStartDatetime())
                     .eventVenueName(venueName)
@@ -118,10 +129,22 @@ public class TicketIssuanceService {
                     .build();
 
                 allTickets.add(ticket);
+                ticketInventories.add(inventory);
             }
+            reservedSeats.removeAll(itemReservedSeats);
         }
 
         List<Ticket> saved = ticketRepository.saveAll(allTickets);
+
+        for (int i = 0; i < saved.size(); i++) {
+            EventSeatInventory inventory = ticketInventories.get(i);
+            if (inventory != null) {
+                inventory.setTicketId(saved.get(i).getId());
+                inventory.setStatus("SOLD");
+                inventory.setUpdatedAt(java.time.Instant.now());
+                eventSeatInventoryRepository.save(inventory);
+            }
+        }
 
         // Dùng Atomic Update số vé đã bán (Avoid Lost Update), không dùng:
         //            event.setTicketsSold(event.getTicketsSold() + totalTickets);   =>  bug read-modify-write
