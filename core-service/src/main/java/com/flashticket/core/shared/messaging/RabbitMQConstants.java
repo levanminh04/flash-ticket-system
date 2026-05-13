@@ -20,4 +20,10 @@ public final class RabbitMQConstants {
     public static final String QUEUE_TICKET_DLQ   = "q.ticket.issue.dlq";
     public static final String QUEUE_EMAIL_DLQ    = "q.email.send.dlq";
 
+    // ── Discovery Service sync ──────────────────────────────────────────────
+    public static final String EXCHANGE_DISCOVERY = "ex.discovery";
+    public static final String RK_EVENT_SYNC = "event.sync";
+    public static final String QUEUE_EVENT_SYNC = "q.discovery.event.sync";
+    public static final String QUEUE_EVENT_SYNC_DLQ = "q.discovery.event.sync.dlq";
+
 }
