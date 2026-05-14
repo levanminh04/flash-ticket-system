@@ -88,7 +88,7 @@ public class LangChainConfig {
                         .id(sessionId) // khách hàng A và khách hàng B. Mỗi người sẽ có một session riêng.
                         .maxMessages(20) // AI sẽ chỉ nhớ 20 tin nhắn gần nhất. Khi có tin nhắn thứ 21, tin nhắn số 1 sẽ bị xóa.
                         .build())        // MessageWindowChatMemory là cửa sổ trượt k = 20
-                .contentRetriever(adaptiveRagRouter)
+                .contentRetriever(adaptiveRagRouter) // không cấu hình contentRetriever() thì đây chỉ là call API LLM đơn thuần, không có RAG, Bất cứ khi nào tôi gọi hàm chat(), hãy dùng ông adaptiveRagRouter này để đi tìm kiếm ngữ cảnh (RAG) cho tôi
                 .tools(eventSearchTool, bookingTool, paymentTool) // LLM từ đọc mô tả của mỗi tool để chọn ra tool phù hợp
                 .build();
     }

@@ -92,3 +92,4 @@ run-all-services.ps1
 /docs/implementation_plan1.md
 package-lock.json
 /frontend/package-lock.json
+/docs/bug-discovery-service/metadata_analysis.md
