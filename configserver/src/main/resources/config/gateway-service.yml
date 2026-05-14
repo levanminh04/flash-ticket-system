@@ -69,7 +69,7 @@ resilience4j:
         failureRateThreshold: 50
         automaticTransitionFromOpenToHalfOpenEnabled: true
         slidingWindowType: count_based
-      aiServiceBreaker:
+      discoveryServiceBreaker:
         registerHealthIndicator: true
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
@@ -82,11 +82,11 @@ resilience4j:
   timelimiter:
     instances:
       coreServiceBreaker:
-        timeoutDuration: 5s
+        timeoutDuration: 10s
       userServiceBreaker:
-        timeoutDuration: 5s
-      aiServiceBreaker:
-        timeoutDuration: 5s
+        timeoutDuration: 10s
+      discoveryServiceBreaker:
+        timeoutDuration: 60s  # chatbot  response  hơi lâu
 
 # Logging
 logging:

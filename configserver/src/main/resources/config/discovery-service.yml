@@ -1,0 +1,81 @@
+server:
+  port: ${SERVER_PORT:8085}
+
+spring:
+  # PostgreSQL Database
+  datasource:
+    url: ${POSTGRES_URL}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: discovery_schema
+        format_sql: true
+
+  # RabbitMQ — Event data sync from core-service
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false
+
+  # Security — JWT validation (Keycloak)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+
+# Eureka Client
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}
+
+# LangChain4j Configuration
+langchain4j:
+  google-ai-gemini:
+    chat-model:
+      api-key: ${GEMINI_API_KEY}
+      model-name: ${GEMINI_MODEL:gemini-2.0-flash}
+      temperature: 0.3
+  open-ai:
+    chat-model:
+      api-key: ${OPENAI_API_KEY:}
+      model-name: ${OPENAI_MODEL:gpt-4o-mini}
+
+# Core Service base URL (for REST calls via Eureka load balancer)
+app:
+  core-service:
+    base-url: http://CORE-SERVICE
+  user-service:
+    base-url: http://USER-SERVICE
+
+# Management & Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+# Logging
+logging:
+  level:
+    com.flashticket.discovery: ${LOG_LEVEL:DEBUG}
+    dev.langchain4j: ${LOG_LEVEL_AI:DEBUG}

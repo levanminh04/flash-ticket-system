@@ -21,9 +21,8 @@
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "noFallthroughCasesInSwitch": true,
-        "ignoreDeprecations": "6.0",
+        "ignoreDeprecations": "5.0",
         /* Path aliases */
-        "baseUrl": ".",
         "paths": {
             "@/*": [
                 "./src/*"

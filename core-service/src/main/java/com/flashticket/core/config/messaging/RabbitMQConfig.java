@@ -127,6 +127,41 @@ public class RabbitMQConfig {
             .with(QUEUE_EMAIL_DLQ);
     }
 
+    // ══ Discovery Service Topology ════════════════════════════════════════════
+
+
+    @Bean
+    DirectExchange discoveryExchange() {
+        return new DirectExchange(EXCHANGE_DISCOVERY, true, false);
+    }
+
+    @Bean
+    Queue discoveryEventSyncQueue() {
+        return QueueBuilder.durable(QUEUE_EVENT_SYNC)
+            .withArgument("x-dead-letter-exchange", EXCHANGE_DEAD_LETTER)
+            .withArgument("x-dead-letter-routing-key", QUEUE_EVENT_SYNC_DLQ)
+            .build();
+    }
+
+    @Bean
+    Queue discoveryEventSyncDlq() {
+        return QueueBuilder.durable(QUEUE_EVENT_SYNC_DLQ).build();
+    }
+
+    @Bean
+    Binding bindingDiscoveryEventSync() {
+        return BindingBuilder.bind(discoveryEventSyncQueue())
+            .to(discoveryExchange())
+            .with(RK_EVENT_SYNC);
+    }
+
+    @Bean
+    Binding bindingDiscoveryEventSyncDlq() {
+        return BindingBuilder.bind(discoveryEventSyncDlq())
+            .to(deadLetterExchange())
+            .with(QUEUE_EVENT_SYNC_DLQ);
+    }
+
     // ══ Message Converter ═════════════════════════════════════════════════════
 
     /**
