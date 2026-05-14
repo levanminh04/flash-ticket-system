@@ -5,8 +5,11 @@ import com.flashticket.core.common.exception.ResourceNotFoundException;
 import com.flashticket.core.event.dto.*;
 import com.flashticket.core.event.entity.*;
 import com.flashticket.core.event.repository.*;
+import com.flashticket.core.shared.event.EventSyncHelper;
+import com.flashticket.core.shared.event.EventSyncSpringEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,7 @@ public class OrganizerEventService {
     private final CategoryRepository categoryRepository;
     private final VenueRepository venueRepository;
     private final TicketTypeRepository ticketTypeRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ═══════════════════════════════════════════════════════
     // READ
@@ -116,6 +120,7 @@ public class OrganizerEventService {
         }
 
         log.info("Created event id={}, slug={}", event.getId(), event.getSlug());
+        // Note: Event is DRAFT at creation — sync to discovery only on PUBLISH
         return mapToDetailResponse(event);
     }
 
@@ -179,6 +184,13 @@ public class OrganizerEventService {
         }
 
         event = eventRepository.save(event);
+
+        // Sync to discovery only if event is published (visible to users)
+        if (event.getStatus() == Event.EventStatus.PUBLISHED) {
+            eventPublisher.publishEvent(new EventSyncSpringEvent(
+                EventSyncHelper.buildSyncData(event, "UPDATED"), "UPDATED"));
+        }
+
         log.info("Updated event id={}", event.getId());
         return mapToDetailResponse(event);
     }
@@ -206,6 +218,9 @@ public class OrganizerEventService {
         event.setStatus(Event.EventStatus.PUBLISHED);
         event = eventRepository.save(event);
 
+        eventPublisher.publishEvent(new EventSyncSpringEvent(
+                EventSyncHelper.buildSyncData(event, "PUBLISHED"), "PUBLISHED"));
+
         log.info("Published event id={}", event.getId());
         return mapToDetailResponse(event);
     }
@@ -230,6 +245,9 @@ public class OrganizerEventService {
         event.setStatus(Event.EventStatus.CANCELLED);
         event = eventRepository.save(event);
 
+        eventPublisher.publishEvent(new EventSyncSpringEvent(
+                EventSyncHelper.buildSyncData(event, "DELETED"), "DELETED"));
+
         log.info("Cancelled event id={}", event.getId());
         return mapToDetailResponse(event);
     }
@@ -253,6 +271,9 @@ public class OrganizerEventService {
         event.setDeletedAt(Instant.now());
         event.setStatus(Event.EventStatus.CANCELLED);
         eventRepository.save(event);
+
+        eventPublisher.publishEvent(new EventSyncSpringEvent(
+                EventSyncHelper.buildSyncData(event, "DELETED"), "DELETED"));
 
         log.info("Soft deleted event id={} by organizer {}", eventId, organizerId);
     }

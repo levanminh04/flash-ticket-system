@@ -60,7 +60,7 @@ public class LangChainConfig {
                 .database(extractDatabase(url))
                 .user(user)
                 .password(password)
-                .table("discovery_schema.event_embeddings")
+                .table("discovery_schema.event_embeddings") // bảng event_embeddings do Langchain4j tự tạo với 4 cột mặc định
                 .dimension(768) // text-embedding-004 = 768 dims
                 .createTable(true)
                 .build();
