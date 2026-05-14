@@ -30,6 +30,7 @@ public class ChatService {
         try {
             // 3. Call assistant (ReAct loop — RAG + tools are automatic via AiServices)
             // AdaptiveRagRouter đã được gọi ngầm bên trong chat() thông qua sự điều phối của langchain4j
+            // Ngoài ra langchain4j còn dùng Reflection quét các file @Tool để dịch các annotation @Tool và @P thành JSON Schema.
             String response = assistant.chat(sessionId, userName, userEmail, message);
 
             // 4. Get actual RAG strategy used (set by AdaptiveRagRouter during retrieve)
