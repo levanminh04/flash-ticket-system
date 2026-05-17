@@ -30,6 +30,10 @@ public class EventSeatMapController {
      * GET /api/organizer/events/{eventId}/seat-map
      * Lấy toán bộ dữ liệu Layout, Sector, Seat và gán inventoryStatus cho từng ghế.
      */
+    /**
+     * Organizer/editor view: load seat map cho màn thiết kế.
+     * Có thể trả cả sector/seat inactive để organizer tiếp tục chỉnh sửa hoặc kiểm tra phần đã ẩn.
+     */
     @GetMapping
     public ResponseEntity<SeatMapResponse> getSeatMap(
         @PathVariable UUID eventId,
@@ -43,6 +47,9 @@ public class EventSeatMapController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Organizer publish view: lưu chính thức layout/sector/seat từ editor và đồng bộ inventory ghế.
+     */
     @PostMapping("/publish")
     public ResponseEntity<SeatMapResponse> publishSeatMap(
         @PathVariable UUID eventId,

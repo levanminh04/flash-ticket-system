@@ -100,6 +100,10 @@ public class EventController {
         return ResponseEntity.ok(event);
     }
 
+    /**
+     * Public buyer view: load seat map cho trang bán vé.
+     * Chỉ event PUBLISHED mới được trả dữ liệu và chỉ trả sector/seat active.
+     */
     @GetMapping("/{idOrSlug}/seat-map")
     public ResponseEntity<SeatMapResponse> getSeatMap(
         @PathVariable String idOrSlug
