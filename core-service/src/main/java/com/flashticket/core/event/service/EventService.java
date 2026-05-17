@@ -276,6 +276,7 @@ public class EventService {
                 .currency(tt.getCurrency())
                 .quantityTotal(tt.getQuantityTotal())
                 .quantityAvailable(tt.getQuantityAvailable())
+                .eventSectorId(tt.getEventSectorId())
                 .maxPerOrder(tt.getMaxPerOrder())
                 .saleStartDatetime(tt.getSaleStartDatetime())
                 .saleEndDatetime(tt.getSaleEndDatetime())

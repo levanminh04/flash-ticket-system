@@ -25,6 +25,7 @@ public class TicketTypeDTO {
     private String currency;
     private Integer quantityTotal;
     private Integer quantityAvailable;
+    private UUID eventSectorId;
     private Integer maxPerOrder;
     private Instant saleStartDatetime;
     private Instant saleEndDatetime;

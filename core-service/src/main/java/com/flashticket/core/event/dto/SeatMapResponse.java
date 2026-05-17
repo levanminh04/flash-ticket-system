@@ -29,9 +29,12 @@ public class SeatMapResponse {
     public static class SectorDto {
         private UUID id;
         private String name;
+        private String code;
         private String sectorType;
         private Map<String, Object> mapData;
         private String colorCode;
+        private Integer displayOrder;
+        private Boolean isActive;
         private List<SeatDto> seatsData;
     }
 

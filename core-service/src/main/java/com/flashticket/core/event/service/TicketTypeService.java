@@ -7,6 +7,7 @@ import com.flashticket.core.event.dto.TicketTypeOrganizerDTO;
 import com.flashticket.core.event.entity.Event;
 import com.flashticket.core.event.entity.TicketType;
 import com.flashticket.core.event.repository.EventRepository;
+import com.flashticket.core.event.repository.EventSectorRepository;
 import com.flashticket.core.event.repository.TicketTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class TicketTypeService {
 
     private final TicketTypeRepository ticketTypeRepository;
     private final EventRepository eventRepository;
+    private final EventSectorRepository eventSectorRepository;
 
     // ═══════════════════════════════════════════════════════
     // READ danh sách loại vé của sự kiện
@@ -64,6 +66,8 @@ public class TicketTypeService {
             && !req.saleEndDatetime().isAfter(req.saleStartDatetime())) {
             throw new InvalidRequestException("Ngày kết thúc bán vé phải sau ngày bắt đầu bán vé");
         }
+
+        validateEventSectorScope(eventId, req.eventSectorId());
 
         TicketType tt = TicketType.builder()
             .event(event)
@@ -130,7 +134,10 @@ public class TicketTypeService {
         if (req.seatSelectionEnabled() != null) tt.setSeatSelectionEnabled(req.seatSelectionEnabled());
         if (req.colorCode() != null) tt.setColorCode(req.colorCode());
         if (req.displayOrder() != null) tt.setDisplayOrder(req.displayOrder());
-        if (req.eventSectorId() != null) tt.setEventSectorId(req.eventSectorId());
+        if (req.eventSectorId() != null) {
+            validateEventSectorScope(eventId, req.eventSectorId());
+            tt.setEventSectorId(req.eventSectorId());
+        }
         if (req.isVisible() != null) tt.setIsVisible(req.isVisible());
         if (req.saleStartDatetime() != null) tt.setSaleStartDatetime(req.saleStartDatetime());
         if (req.saleEndDatetime() != null) tt.setSaleEndDatetime(req.saleEndDatetime());
@@ -175,5 +182,14 @@ public class TicketTypeService {
     private Event findOwnedEvent(UUID eventId, String organizerId) {
         return eventRepository.findByIdAndOrganizerIdAndIsDeletedFalse(eventId, organizerId)
             .orElseThrow(() -> new ResourceNotFoundException("Sự kiện không tồn tại: " + eventId));
+    }
+
+    private void validateEventSectorScope(UUID eventId, UUID eventSectorId) {
+        if (eventSectorId == null) {
+            return;
+        }
+        if (!eventSectorRepository.existsByIdAndEventId(eventSectorId, eventId)) {
+            throw new InvalidRequestException("Sector không thuộc event này");
+        }
     }
 }

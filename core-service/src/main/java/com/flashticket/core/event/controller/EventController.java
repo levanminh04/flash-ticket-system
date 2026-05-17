@@ -3,7 +3,9 @@ package com.flashticket.core.event.controller;
 import com.flashticket.core.event.dto.EventDetailResponse;
 import com.flashticket.core.event.dto.EventResponse;
 import com.flashticket.core.event.dto.EventSearchRequest;
+import com.flashticket.core.event.dto.SeatMapResponse;
 import com.flashticket.core.event.service.EventService;
+import com.flashticket.core.event.service.SeatMapSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -23,6 +25,7 @@ import java.util.List;
 public class EventController {
     
     private final EventService eventService;
+    private final SeatMapSyncService seatMapSyncService;
     
     /**
      * Query Parameters:
@@ -95,6 +98,14 @@ public class EventController {
             eventIdOrSlug, event.getTitle());
         
         return ResponseEntity.ok(event);
+    }
+
+    @GetMapping("/{idOrSlug}/seat-map")
+    public ResponseEntity<SeatMapResponse> getSeatMap(
+        @PathVariable String idOrSlug
+    ) {
+        log.info("GET /api/events/{}/seat-map - Fetching public seat map", idOrSlug);
+        return ResponseEntity.ok(seatMapSyncService.getPublicSeatMap(idOrSlug));
     }
     
     /**
