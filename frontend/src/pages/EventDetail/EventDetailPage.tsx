@@ -1,6 +1,6 @@
-import { CSSProperties, useEffect, useState } from "react";
+﻿import { CSSProperties, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Calendar, MapPin, Ticket } from "lucide-react";
+import { Calendar, LoaderCircle, MapPin, Ticket } from "lucide-react";
 import { categoryService } from "../../services/categoryService";
 import { eventService } from "../../services/eventService";
 import { venueService } from "../../services/venueService";
@@ -56,24 +56,61 @@ export default function EventDetailPage() {
       .catch((err) => console.error("Failed to load venue:", err));
   }, [event?.venue?.id]);
 
+  const categoryNav = (
+    <nav className="category-nav">
+      <div className="container">
+        <ul className="category-list">
+          <li className="category-item">
+            <Link to="/search" className="category-link">
+              Tất cả
+            </Link>
+          </li>
+          {allCategories.length > 0 ? (
+            allCategories.map((category) => (
+              <li className="category-item" key={category.id}>
+                <Link
+                  to={`/search?category=${category.slug || category.id}`}
+                  className="category-link"
+                >
+                  {category.name}
+                </Link>
+              </li>
+            ))
+          ) : (
+            <li className="category-item">
+              <span className="category-link">Đang tải</span>
+            </li>
+          )}
+        </ul>
+      </div>
+    </nav>
+  );
+
   if (isLoading) {
     return (
-      <div style={{ textAlign: "center", padding: "100px" }}>
-        <p>Đang tải thông tin sự kiện</p>
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div className="event-detail-loading" role="status" aria-live="polite">
+          <LoaderCircle className="event-detail-loading-icon" size={24} />
+          <span>Loading</span>
+        </div>
       </div>
     );
   }
 
   if (error || !event) {
     return (
-      <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-        <p>{error || "Không tìm thấy sự kiện"}</p>
-        <Link
-          to="/"
-          style={{ textDecoration: "underline", color: "var(--primary)" }}
-        >
-          Quay về trang chủ
-        </Link>
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
+          <p>{error || "Không tìm thấy sự kiện"}</p>
+          <Link
+            to="/"
+            style={{ textDecoration: "underline", color: "var(--primary)" }}
+          >
+            Quay về trang chủ
+          </Link>
+        </div>
       </div>
     );
   }
@@ -82,14 +119,17 @@ export default function EventDetailPage() {
   const endDatetime = event.schedule?.endDatetime || event.endDatetime;
   if (!startDatetime || !endDatetime) {
     return (
-      <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-        <p>Sự kiện không có thông tin thời gian hợp lệ</p>
-        <Link
-          to="/"
-          style={{ textDecoration: "underline", color: "var(--primary)" }}
-        >
-          Quay về trang chủ
-        </Link>
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
+          <p>Sự kiện không có thông tin thời gian hợp lệ</p>
+          <Link
+            to="/"
+            style={{ textDecoration: "underline", color: "var(--primary)" }}
+          >
+            Quay về trang chủ
+          </Link>
+        </div>
       </div>
     );
   }
@@ -176,33 +216,7 @@ export default function EventDetailPage() {
 
   return (
     <div className="event-detail-page" style={{ paddingBottom: 0 }}>
-      <nav className="category-nav">
-        <div className="container">
-          <ul className="category-list">
-            <li className="category-item">
-              <Link to="/search" className="category-link">
-                Tất cả
-              </Link>
-            </li>
-            {allCategories.length > 0 ? (
-              allCategories.map((category) => (
-                <li className="category-item" key={category.id}>
-                  <Link
-                    to={`/search?category=${category.slug || category.id}`}
-                    className="category-link"
-                  >
-                    {category.name}
-                  </Link>
-                </li>
-              ))
-            ) : (
-              <li className="category-item">
-                <span className="category-link">Đang tải</span>
-              </li>
-            )}
-          </ul>
-        </div>
-      </nav>
+      {categoryNav}
 
       <div
         style={{

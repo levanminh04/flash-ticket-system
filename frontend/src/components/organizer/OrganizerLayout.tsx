@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { useKeycloak } from "@react-keycloak/web";
-import { ShieldAlert } from "lucide-react";
+import { LoaderCircle, ShieldAlert } from "lucide-react";
 import OrganizerSidebar from "./OrganizerSidebar";
 import { hasRealmRole } from "../../lib/auth";
 
@@ -21,10 +21,11 @@ export default function OrganizerLayout({
 
   if (!initialized) {
     return (
-      <div className="organizer-page">
-        <div className="container organizer-state-card">
-          <div className="loading-spinner" />
-          <p>Đang khởi tạo</p>
+      <div className="organizer-page organizer-loading-page">
+        <div className="organizer-page-loading" role="status" aria-live="polite">
+          <LoaderCircle className="organizer-loading-icon" size={32} />
+          <h1>Loading Page</h1>
+          <p>Vui lòng chờ trong giây lát, hệ thống đang chuẩn bị workspace.</p>
         </div>
       </div>
     );

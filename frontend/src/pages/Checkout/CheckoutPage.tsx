@@ -23,10 +23,12 @@ import BookingStepIndicator from "../../components/common/BookingStepIndicator";
 import {
   User,
   AlertTriangle,
+  ChevronRight,
+  Home,
   ShieldCheck,
-  Ticket,
-  ReceiptText,
 } from "lucide-react";
+import { IoIosInformationCircle } from "react-icons/io";
+import { TiTicket } from "react-icons/ti";
 
 function formatCurrency(value: number): string {
   return `${value.toLocaleString("vi-VN")} đ`;
@@ -421,26 +423,45 @@ export default function CheckoutPage() {
     <div className="checkout-page">
       <div className="booking-focus-header">
         <div className="container">
-          <div className="focus-breadcrumb" aria-label="Breadcrumb">
-            <Link to="/" className="breadcrumb-home">
-              Home
-            </Link>
-            <span className="breadcrumb-separator">/</span>
-            <Link to={`/event/${event.slug || ""}`} className="breadcrumb-event">
-              Event
-            </Link>
-            <span className="breadcrumb-separator">/</span>
-            <Link
-              to={selectTicketPath}
-              className="breadcrumb-event-name"
-              title={event.title}
-              aria-label={event.title}
-            >
-              {breadcrumbEventName}
-            </Link>
-            <span className="breadcrumb-separator">/</span>
-            <span className="breadcrumb-current">Checkout</span>
-          </div>
+          <nav className="focus-breadcrumb" aria-label="Breadcrumb">
+            <ol className="breadcrumb-list">
+              <li className="breadcrumb-item">
+                <Link to="/" className="breadcrumb-home">
+                  <Home size={15} />
+                  Home
+                </Link>
+              </li>
+              <li className="breadcrumb-separator" aria-hidden="true">
+                <ChevronRight size={14} />
+              </li>
+              <li className="breadcrumb-item">
+                <Link to="/search" className="breadcrumb-event">
+                  Events
+                </Link>
+              </li>
+              <li className="breadcrumb-separator" aria-hidden="true">
+                <ChevronRight size={14} />
+              </li>
+              <li className="breadcrumb-item">
+                <Link
+                  to={selectTicketPath}
+                  className="breadcrumb-event-name"
+                  title={event.title}
+                  aria-label={event.title}
+                >
+                  {breadcrumbEventName}
+                </Link>
+              </li>
+              <li className="breadcrumb-separator" aria-hidden="true">
+                <ChevronRight size={14} />
+              </li>
+              <li className="breadcrumb-item">
+                <span className="breadcrumb-current" aria-current="page">
+                  Checkout
+                </span>
+              </li>
+            </ol>
+          </nav>
 
           <BookingStepIndicator currentStep={2} />
         </div>
@@ -552,7 +573,7 @@ export default function CheckoutPage() {
             <div className="sidebar-card">
               <div className="sidebar-card-header">
                 <h3>
-                  <Ticket size={16} /> Thông tin đặt vé
+                  <TiTicket size={22} /> Thông tin đặt vé
                 </h3>
                 <button
                   type="button"
@@ -623,7 +644,7 @@ export default function CheckoutPage() {
             <div className="sidebar-card">
               <div className="sidebar-card-header">
                 <h3>
-                  <ReceiptText size={16} /> Thông tin đơn hàng
+                  <IoIosInformationCircle size={22} /> Thông tin đơn hàng
                 </h3>
               </div>
 

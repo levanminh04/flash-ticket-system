@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, CircleAlert, MapPin, Search, Users } from "lucide-react";
+import { Building2, CircleAlert, Search } from "lucide-react";
+import { BsFillBuildingsFill } from "react-icons/bs";
+import { FaMapMarkedAlt } from "react-icons/fa";
+import { FaMapSigns } from "react-icons/fa";
+import { HiUserGroup } from "react-icons/hi2";
 import OrganizerSidebar from "../../components/organizer/OrganizerSidebar";
 import { venueService } from "../../services/venueService";
 import { Venue } from "../../types/api";
@@ -52,20 +56,23 @@ export default function VenuesPage() {
         <div className="container venues-hero__content">
           <div className="venues-hero__copy">
             <span className="venues-badge">Danh sách địa điểm</span>
-            <h1>Khám phá các venue đang mở bán trên FlashTicket</h1>
-            <p>
-              Trang này sử dụng trực tiếp dữ liệu để hiển thị địa điểm, sức chứa và tiện ích hiện có
-            </p>
+            <h1>Hãy cùng nhau khám phá các địa điểm thú vị</h1>
           </div>
 
           <div className="venues-hero__stats">
             <div className="venues-stat-card">
-              <span>Tổng venue</span>
-              <strong>{venues.length}</strong>
+              <BsFillBuildingsFill size={34} />
+              <div>
+                <span>Tổng venue</span>
+                <strong>{venues.length}</strong>
+              </div>
             </div>
             <div className="venues-stat-card">
-              <span>Thành phố</span>
-              <strong>{uniqueCities.length}</strong>
+              <FaMapSigns size={34} />
+              <div>
+                <span>Thành phố</span>
+                <strong>{uniqueCities.length}</strong>
+              </div>
             </div>
           </div>
         </div>
@@ -74,13 +81,15 @@ export default function VenuesPage() {
       <main className="container venues-content">
         <section className="venues-toolbar">
           <label className="venues-search">
-            <Search size={18} />
             <input
               type="text"
               placeholder="Tìm theo tên venue, thành phố, địa chỉ..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
+            <span className="venues-search__icon">
+              <Search size={18} />
+            </span>
           </label>
 
           <div className="venues-toolbar__meta">
@@ -132,11 +141,11 @@ export default function VenuesPage() {
                     </p>
                     <div className="venue-card__details">
                       <p>
-                        <MapPin size={16} />
+                        <FaMapMarkedAlt size={26} />
                         <span>{fullAddress}</span>
                       </p>
                       <p>
-                        <Users size={16} />
+                        <HiUserGroup size={28} />
                         <span>
                           {venue.totalCapacity
                             ? `${venue.totalCapacity.toLocaleString("vi-VN")} chỗ`

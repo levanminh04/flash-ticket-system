@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link, useSearchParams } from "react-router-dom";
-import { Check, Home, X } from "lucide-react";
-import BookingStepIndicator from "../../components/common/BookingStepIndicator";
+import { Check, Home, LoaderCircle, X } from "lucide-react";
+import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 import {
   paymentService,
   PaymentStatusResponse,
@@ -14,6 +14,10 @@ interface DisplayResult {
   transactionNumber?: string;
   amount?: number;
   message?: string;
+}
+
+function extractOrderNumber(orderInfo: string | null) {
+  return orderInfo?.match(/ORD-[A-Z0-9-]+/i)?.[0];
 }
 
 export default function PaymentResultPage() {
@@ -30,8 +34,13 @@ export default function PaymentResultPage() {
     const params = new URLSearchParams(paymentQuery);
     const vnpResponseCode = params.get("vnp_ResponseCode");
     const vnpAmount = params.get("vnp_Amount");
+    const vnpOrderInfo = params.get("vnp_OrderInfo");
+    const vnpTransactionNo = params.get("vnp_TransactionNo");
+    const vnpTxnRef = params.get("vnp_TxnRef");
     const orderId = sessionStorage.getItem("lastOrderId");
-    const orderNumber = sessionStorage.getItem("lastOrderNumber");
+    const orderNumber =
+      sessionStorage.getItem("lastOrderNumber") || extractOrderNumber(vnpOrderInfo);
+    const transactionNumber = vnpTxnRef || vnpTransactionNo || undefined;
 
     let cancelled = false;
 
@@ -41,7 +50,7 @@ export default function PaymentResultPage() {
       if (!vnpResponseCode && !orderId) {
         setResult({
           success: false,
-          message: "Khong co du lieu thanh toan.",
+          message: "Không có dữ liệu thanh toán.",
         });
         setIsLoading(false);
         return;
@@ -53,10 +62,12 @@ export default function PaymentResultPage() {
       if (!orderId) {
         setResult({
           success: false,
+          orderNumber: orderNumber || undefined,
+          transactionNumber,
           amount: quickAmount,
           message: quickSuccess
-            ? "Da nhan redirect tu VNPay, nhung khong tim thay ma don hang trong phien de doi soat. Vui long kiem tra lai trong Don hang cua toi."
-            : "Thanh toan khong thanh cong. Vui long thu lai.",
+            ? "Vui lòng kiểm tra lại trong Đơn hàng của tôi."
+            : "Thanh toán không thành công. Vui lòng thử lại.",
         });
         setIsLoading(false);
         return;
@@ -68,7 +79,7 @@ export default function PaymentResultPage() {
           orderNumber: orderNumber || undefined,
           amount: quickAmount,
           message:
-            "Phien dang nhap da het. Vui long dang nhap lai de he thong xac nhan trang thai thanh toan.",
+            "Phiên đăng nhập đã hết. Vui lòng đăng nhập lại để hệ thống xác nhận trạng thái thanh toán.",
         });
         setIsLoading(false);
         return;
@@ -92,11 +103,11 @@ export default function PaymentResultPage() {
             setResult({
               success: isConfirmed,
               orderNumber: orderNumber || undefined,
-              transactionNumber: latestTx?.transactionNumber,
+              transactionNumber: latestTx?.transactionNumber || transactionNumber,
               amount: Number(status.totalAmount) || quickAmount,
               message: isConfirmed
-                ? "Thanh toan thanh cong!"
-                : `Thanh toan chua duoc backend xac nhan (${status.orderStatus}). Vui long kiem tra lai trong Don hang cua toi.`,
+                ? "Thanh toán thành công!"
+                : `Thanh toán chưa được backend xác nhận (${status.orderStatus}). Vui lòng kiểm tra lại trong Đơn hàng của tôi.`,
             });
             setIsLoading(false);
             sessionStorage.removeItem("lastOrderId");
@@ -113,10 +124,10 @@ export default function PaymentResultPage() {
           const statusCode = error?.response?.status;
           const message =
             statusCode === 401 || statusCode === 403
-              ? "Khong the xac nhan don hang vi phien dang nhap khong hop le. Vui long dang nhap lai va kiem tra Don hang cua toi."
+              ? "Không thể xác nhận đơn hàng vì phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại và kiểm tra Đơn hàng của tôi."
               : statusCode === 503
-                ? "He thong thanh toan dang xu ly cham. Vui long kiem tra lai trong Don hang cua toi sau it phut."
-                : "Khong the xac nhan trang thai thanh toan luc nay. Vui long kiem tra lai trong Don hang cua toi.";
+                ? "Hệ thống thanh toán đang xử lý chậm. Vui lòng kiểm tra lại trong Đơn hàng của tôi sau ít phút."
+                : "Không thể xác nhận trạng thái thanh toán lúc này. Vui lòng kiểm tra lại trong Đơn hàng của tôi.";
 
           setResult({
             success: false,
@@ -144,99 +155,104 @@ export default function PaymentResultPage() {
 
   if (isLoading) {
     return (
-      <div className="payment-result-page">
-        <BookingStepIndicator currentStep={3} />
-        <div className="result-card">
-          <div className="result-loading">
-            <div className="loading-spinner"></div>
-            <div className="loading-text">Dang xac nhan thanh toan...</div>
+      <>
+        <AccountCategoryNav />
+        <div className="payment-result-page payment-result-loading-page">
+          <div className="payment-result-page-loading" role="status" aria-live="polite">
+            <LoaderCircle className="payment-result-loading-icon" size={32} />
+            <h1>Đang xác nhận thanh toán</h1>
+            <p>Vui lòng chờ trong giây lát, hệ thống đang đối soát kết quả từ VNPay.</p>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (!result) {
     return (
-      <div className="payment-result-page">
-        <BookingStepIndicator currentStep={3} />
-        <div className="result-card">
-          <p>Khong co thong tin ket qua thanh toan.</p>
-          <Link to="/" className="btn btn-primary" style={{ marginTop: 16 }}>
-            Ve trang chu
-          </Link>
+      <>
+        <AccountCategoryNav />
+        <div className="payment-result-page">
+          <div className="result-card">
+            <p>Không có thông tin kết quả thanh toán.</p>
+            <Link to="/" className="btn btn-primary" style={{ marginTop: 16 }}>
+              Về trang chủ
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="payment-result-page">
-      <BookingStepIndicator currentStep={3} />
-      <div
-        className={`result-card ${result.success ? "success-state" : ""}`}
-        style={{ position: "relative", overflow: "hidden" }}
-      >
-        <div className={`result-icon ${result.success ? "success" : "failure"}`}>
-          {result.success ? (
-            <Check size={28} strokeWidth={3.2} />
-          ) : (
-            <X size={28} strokeWidth={3.2} />
-          )}
-        </div>
-
-        <h1 className={`result-title ${result.success ? "success" : "failure"}`}>
-          {result.success ? "Thanh toan thanh cong!" : "Thanh toan that bai"}
-        </h1>
-
-        <p className="result-subtitle">
-          {result.success
-            ? "Chung toi da gui thong tin ve den email cua ban."
-            : result.message ||
-              "Da co loi xay ra trong qua trinh thanh toan. Vui long thu lai hoac lien he ho tro."}
-        </p>
-
-        {result.orderNumber || result.amount !== undefined ? (
-          <div className="result-order-info">
-            {result.orderNumber ? (
-              <div className="info-row">
-                <span className="label">Ma don hang</span>
-                <span className="value">{result.orderNumber}</span>
-              </div>
-            ) : null}
-            {result.transactionNumber ? (
-              <div className="info-row">
-                <span className="label">Ma giao dich</span>
-                <span className="value">{result.transactionNumber}</span>
-              </div>
-            ) : null}
-            {result.amount !== undefined ? (
-              <div className="info-row total">
-                <span className="label">So tien</span>
-                <span className="value">
-                  {result.amount.toLocaleString("vi-VN")} d
-                </span>
-              </div>
-            ) : null}
+    <>
+      <AccountCategoryNav />
+      <div className="payment-result-page">
+        <div
+          className={`result-card ${result.success ? "success-state" : ""}`}
+          style={{ position: "relative", overflow: "hidden" }}
+        >
+          <div className={`result-icon ${result.success ? "success" : "failure"}`}>
+            {result.success ? (
+              <Check size={28} strokeWidth={3.2} />
+            ) : (
+              <X size={28} strokeWidth={3.2} />
+            )}
           </div>
-        ) : null}
 
-        <div className="result-actions">
-          <Link to="/" className="btn btn-outline">
-            <Home size={16} />
-            Ve trang chu
-          </Link>
-          {result.success ? (
-            <Link to="/my-tickets" className="btn btn-primary">
-              Xem ve cua toi
+          <h1 className={`result-title ${result.success ? "success" : "failure"}`}>
+            {result.success ? "Thanh toán thành công!" : "Thanh toán thất bại"}
+          </h1>
+
+          <p className="result-subtitle">
+            {result.success
+              ? "Chúng tôi đã gửi thông tin vé đến email của bạn."
+              : result.message ||
+                "Đã có lỗi xảy ra trong quá trình thanh toán. Vui lòng thử lại hoặc liên hệ hỗ trợ."}
+          </p>
+
+          {result.orderNumber || result.amount !== undefined ? (
+            <div className="result-order-info">
+              {result.orderNumber ? (
+                <div className="info-row">
+                  <span className="label">Mã đơn hàng</span>
+                  <span className="value">{result.orderNumber}</span>
+                </div>
+              ) : null}
+              {result.transactionNumber ? (
+                <div className="info-row">
+                  <span className="label">Mã giao dịch</span>
+                  <span className="value">{result.transactionNumber}</span>
+                </div>
+              ) : null}
+              {result.amount !== undefined ? (
+                <div className="info-row total">
+                  <span className="label">Số tiền</span>
+                  <span className="value">
+                    {result.amount.toLocaleString("vi-VN")} đ
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="result-actions">
+            <Link to="/" className="btn btn-outline">
+              <Home size={16} />
+              Về trang chủ
             </Link>
-          ) : (
-            <Link to="/my-orders" className="btn btn-primary">
-              Kiem tra don hang
-            </Link>
-          )}
+            {result.success ? (
+              <Link to="/my-tickets" className="btn btn-primary">
+                Xem vé của tôi
+              </Link>
+            ) : (
+              <Link to="/my-orders" className="btn btn-primary">
+                Kiểm tra đơn hàng
+              </Link>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

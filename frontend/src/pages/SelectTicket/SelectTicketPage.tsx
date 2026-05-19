@@ -1,13 +1,18 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
+import { categoryService } from "../../services/categoryService";
 import { eventService } from "../../services/eventService";
-import { EventSummary, TicketType } from "../../types/api";
+import { Category, EventSummary, PublicSeat, PublicSeatMap, PublicSeatSector, TicketType } from "../../types/api";
 import BookingStepIndicator from "../../components/common/BookingStepIndicator";
+import BuyerSeatMapCanvas from "../../components/seat-map/runtime/BuyerSeatMapCanvas";
 import {
   MapPin,
   Calendar,
+  ChevronRight,
+  Home,
+  LoaderCircle,
   ZoomIn,
   ZoomOut,
   RotateCcw,
@@ -15,7 +20,6 @@ import {
   Info,
 } from "lucide-react";
 
-// ─── Types for local state ───────────────────────────────
 interface TicketSelection {
   [ticketTypeId: string]: number;
 }
@@ -27,156 +31,131 @@ interface SelectedSeat {
   price: number;
 }
 
-// Generated seat for client-side seat map
-interface GeneratedSeat {
-  id: string;
-  ticketTypeId: string;
-  rowName: string;
-  seatNumber: number;
-  seatLabel: string;
-  status: "AVAILABLE" | "SOLD" | "RESERVED";
-  colorCode: string;
-  price: number;
+function getTicketTypeSectorId(ticketType: TicketType) {
+  return ticketType.eventSectorId || ticketType.sectorId || "";
 }
 
-// ─── Generate seats from ticket types ────────────────────
-function generateSeatsFromTicketTypes(ticketTypes: TicketType[]) {
-  const sectors: {
-    id: string;
-    name: string;
-    code: string;
-    colorCode: string;
-    displayOrder: number;
-  }[] = [];
-  const seats: GeneratedSeat[] = [];
-  const SEATS_PER_ROW = 16;
-
-  ticketTypes
-    .filter((t) => t.isVisible !== false)
-    .sort((a, b) => a.displayOrder - b.displayOrder)
-    .forEach((tt, ttIdx) => {
-      sectors.push({
-        id: tt.id,
-        name: tt.name,
-        code: tt.name.substring(0, 3).toUpperCase(),
-        colorCode:
-          tt.colorCode ||
-          ["#FFD700", "#FFA500", "#4CAF50", "#2196F3", "#9C27B0"][ttIdx % 5],
-        displayOrder: tt.displayOrder,
-      });
-
-      const totalSeats = Math.min(tt.quantityTotal || 200, 80);
-      const soldSeats = Math.round(
-        totalSeats *
-          ((tt.quantityTotal - tt.quantityAvailable) / tt.quantityTotal),
-      );
-      const numRows = Math.max(2, Math.ceil(totalSeats / SEATS_PER_ROW));
-      const rowLabels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-      let seatIdx = 0;
-      for (let r = 0; r < numRows; r++) {
-        const seatsInRow = Math.min(
-          SEATS_PER_ROW,
-          totalSeats - r * SEATS_PER_ROW,
-        );
-        if (seatsInRow <= 0) break;
-
-        for (let s = 1; s <= seatsInRow; s++) {
-          seatIdx++;
-          const isSold = seatIdx <= soldSeats;
-          seats.push({
-            id: `gen-${tt.id}-${rowLabels[r]}-${s}`,
-            ticketTypeId: tt.id,
-            rowName: rowLabels[r],
-            seatNumber: s,
-            seatLabel: `${rowLabels[r]}${s}`,
-            status:
-              tt.status === "SOLD_OUT" ? "SOLD" : isSold ? "SOLD" : "AVAILABLE",
-            colorCode: tt.colorCode || "#4CAF50",
-            price: tt.price,
-          });
-        }
-      }
-    });
-
-  return { sectors, seats };
+function getSectorTicketTypeId(sector: PublicSeatSector) {
+  const mapData = sector.mapData ?? {};
+  return typeof mapData.ticketTypeId === "string" ? mapData.ticketTypeId : "";
 }
 
-// ─── Component ───────────────────────────────────────────
 export default function SelectTicketPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { keycloak } = useKeycloak();
 
-  // Data
   const [event, setEvent] = useState<EventSummary | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
+  const [seatMap, setSeatMap] = useState<PublicSeatMap | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
 
-  // Selection
   const [quantities, setQuantities] = useState<TicketSelection>({});
   const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([]);
 
-  // Zoom/Pan
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(0.40);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const panStart = useRef({ x: 0, y: 0 });
-  const mapRef = useRef<HTMLDivElement>(null);
 
-  const generated = useMemo(
-    () => generateSeatsFromTicketTypes(ticketTypes),
-    [ticketTypes],
-  );
-
-  // ─── Fetch data ──────────────────────────────────────────
   useEffect(() => {
-    if (!slug) return;
+    categoryService
+      .getCategories()
+      .then((res) => {
+        if (res && Array.isArray(res)) setAllCategories(res);
+      })
+      .catch((err) => console.error("Failed to load categories", err));
+  }, []);
+
+  useEffect(() => {
+    if (!slug) {
+      return;
+    }
+
     setIsLoading(true);
 
-    eventService
-      .getEventDetails(slug)
-      .then(async (data: any) => {
+    Promise.all([eventService.getEventDetails(slug), eventService.getSeatMap(slug)])
+      .then(([data, nextSeatMap]) => {
         setEvent(data);
         const types: TicketType[] = data.ticketTypes || [];
         setTicketTypes(types);
+        setSeatMap(nextSeatMap);
 
         const initQty: TicketSelection = {};
-        types.forEach((t: TicketType) => {
-          initQty[t.id] = 0;
+        types.forEach((ticketType: TicketType) => {
+          initQty[ticketType.id] = 0;
         });
         setQuantities(initQty);
         setError(null);
       })
       .catch((err: any) => {
-        console.error("Failed to load event:", err);
+        console.error("Failed to load event or seat map:", err);
         setError("Vui lòng tải lại trang");
         toast.error("Không thể tải thông tin sự kiện.");
       })
       .finally(() => setIsLoading(false));
   }, [slug]);
 
-  // ─── Selection logic ─────────────────────────────────────
-  const totalSelected =
-    Object.values(quantities).reduce((a, b) => a + b, 0) + selectedSeats.length;
-  const minPerOrder = (event as any)?.minTicketsPerOrder || 1;
-  const maxPerOrder = (event as any)?.maxTicketsPerOrder || 10;
+  const totalSelected = Object.values(quantities).reduce((a, b) => a + b, 0);
+  const minPerOrder = (event as any)?.config?.minTicketsPerOrder || (event as any)?.minTicketsPerOrder || 1;
+  const maxPerOrder = (event as any)?.config?.maxTicketsPerOrder || (event as any)?.maxTicketsPerOrder || 10;
 
-  // Generated seat click
-  const handleGenSeatClick = useCallback(
-    (seat: GeneratedSeat) => {
-      if (seat.status !== "AVAILABLE") return;
+  const ticketTypeBySectorId = useMemo(() => {
+    const mapping = new Map<string, TicketType>();
+    ticketTypes.forEach((ticketType) => {
+      const sectorId = getTicketTypeSectorId(ticketType);
+      if (sectorId) {
+        mapping.set(sectorId, ticketType);
+      }
+    });
+    return mapping;
+  }, [ticketTypes]);
 
-      const already = selectedSeats.find((s) => s.seatId === seat.id);
+  const ticketTypeById = useMemo(() => {
+    const mapping = new Map<string, TicketType>();
+    ticketTypes.forEach((ticketType) => {
+      mapping.set(ticketType.id, ticketType);
+    });
+    return mapping;
+  }, [ticketTypes]);
+
+  const availableSeatCount = useMemo(
+    () =>
+      (seatMap?.sectors ?? []).reduce(
+        (total, sector) =>
+          total +
+          (sector.seatsData ?? []).filter(
+            (seat) => seat.isActive !== false && seat.inventoryStatus === "AVAILABLE",
+          ).length,
+        0,
+      ),
+    [seatMap],
+  );
+
+  const handleSeatClick = useCallback(
+    (sector: PublicSeatSector, seat: PublicSeat) => {
+      if (seat.isActive === false || seat.inventoryStatus !== "AVAILABLE") {
+        return;
+      }
+
+      const ticketType =
+        ticketTypeBySectorId.get(sector.id) ||
+        ticketTypeById.get(getSectorTicketTypeId(sector));
+      if (!ticketType) {
+        toast.warning("Khu vực này chưa được gắn loại vé.");
+        return;
+      }
+
+      const already = selectedSeats.find((selectedSeat) => selectedSeat.seatId === seat.id);
       if (already) {
-        setSelectedSeats((prev) => prev.filter((s) => s.seatId !== seat.id));
+        setSelectedSeats((prev) => prev.filter((selectedSeat) => selectedSeat.seatId !== seat.id));
         setQuantities((prev) => ({
           ...prev,
-          [seat.ticketTypeId]: Math.max(0, (prev[seat.ticketTypeId] || 0) - 1),
+          [ticketType.id]: Math.max(0, (prev[ticketType.id] || 0) - 1),
         }));
         return;
       }
+
       if (totalSelected >= maxPerOrder) {
         toast.warning(`Bạn chỉ được chọn tối đa ${maxPerOrder} vé.`, {
           toastId: "max-ticket-limit",
@@ -184,38 +163,42 @@ export default function SelectTicketPage() {
         return;
       }
 
-      const tt = ticketTypes.find((t) => t.id === seat.ticketTypeId);
-      if (!tt) return;
-      if ((quantities[tt.id] || 0) >= tt.quantityAvailable) {
+      if ((quantities[ticketType.id] || 0) >= (ticketType.quantityAvailable || 0)) {
         toast.warning("Loại vé này không còn số lượng phù hợp.", {
-          toastId: `ticket-available-${tt.id}`,
+          toastId: `ticket-available-${ticketType.id}`,
         });
         return;
       }
+
+      const displayLabel = sector.mapData?.code && seat.seatLabel
+        ? `${String(sector.mapData.code)}-${seat.seatLabel}`
+        : seat.seatLabel || `${seat.rowName || ""}${seat.seatNumber || ""}`;
 
       setSelectedSeats((prev) => [
         ...prev,
         {
           seatId: seat.id,
-          ticketTypeId: seat.ticketTypeId,
-          seatLabel: seat.seatLabel,
-          price: seat.price,
+          ticketTypeId: ticketType.id,
+          seatLabel: displayLabel,
+          price: Number(ticketType.price || 0),
         },
       ]);
       setQuantities((prev) => ({
         ...prev,
-        [seat.ticketTypeId]: (prev[seat.ticketTypeId] || 0) + 1,
+        [ticketType.id]: (prev[ticketType.id] || 0) + 1,
       }));
     },
-    [selectedSeats, totalSelected, maxPerOrder, ticketTypes, quantities],
+    [maxPerOrder, quantities, selectedSeats, ticketTypeById, ticketTypeBySectorId, totalSelected],
   );
 
-  // Remove seat tag
   const handleRemoveSeat = useCallback(
     (seatId: string) => {
-      const seat = selectedSeats.find((s) => s.seatId === seatId);
-      if (!seat) return;
-      setSelectedSeats((prev) => prev.filter((s) => s.seatId !== seatId));
+      const seat = selectedSeats.find((selectedSeat) => selectedSeat.seatId === seatId);
+      if (!seat) {
+        return;
+      }
+
+      setSelectedSeats((prev) => prev.filter((selectedSeat) => selectedSeat.seatId !== seatId));
       setQuantities((prev) => ({
         ...prev,
         [seat.ticketTypeId]: Math.max(0, (prev[seat.ticketTypeId] || 0) - 1),
@@ -224,48 +207,36 @@ export default function SelectTicketPage() {
     [selectedSeats],
   );
 
-  // Zoom/Pan
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    setZoom((prev) => Math.min(3, Math.max(0.5, prev - e.deltaY * 0.001)));
-  }, []);
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      setIsPanning(true);
-      panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-    },
-    [pan],
-  );
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!isPanning) return;
-      setPan({
-        x: e.clientX - panStart.current.x,
-        y: e.clientY - panStart.current.y,
-      });
-    },
-    [isPanning],
-  );
-
-  const handleMouseUp = useCallback(() => setIsPanning(false), []);
-
   const resetView = () => {
-    setZoom(1);
+    setZoom(0.35);
     setPan({ x: 0, y: 0 });
   };
 
-  // ─── Submit ──────────────────────────────────────────────
   const handleContinue = () => {
     if (totalSelected < minPerOrder) {
       toast.warning(`Vui lòng chọn ít nhất ${minPerOrder} vé.`);
       return;
     }
 
-    const items = Object.entries(quantities)
-      .filter(([, qty]) => qty > 0)
-      .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity }));
+    const items = Array.from(
+      selectedSeats.reduce<
+        Map<string, { ticketTypeId: string; quantity: number; seatIds: string[] }>
+      >((acc, seat) => {
+        const current = acc.get(seat.ticketTypeId);
+        if (current) {
+          current.quantity += 1;
+          current.seatIds.push(seat.seatId);
+          return acc;
+        }
+
+        acc.set(seat.ticketTypeId, {
+          ticketTypeId: seat.ticketTypeId,
+          quantity: 1,
+          seatIds: [seat.seatId],
+        });
+        return acc;
+      }, new Map()).values(),
+    );
     const selectedSeatSnapshot = selectedSeats.map((seat) => ({
       seatId: seat.seatId,
       ticketTypeId: seat.ticketTypeId,
@@ -275,10 +246,7 @@ export default function SelectTicketPage() {
     sessionStorage.setItem("bookingItems", JSON.stringify(items));
     sessionStorage.setItem("bookingEvent", JSON.stringify(event));
     sessionStorage.setItem("bookingTicketTypes", JSON.stringify(ticketTypes));
-    sessionStorage.setItem(
-      "bookingSelectedSeats",
-      JSON.stringify(selectedSeatSnapshot),
-    );
+    sessionStorage.setItem("bookingSelectedSeats", JSON.stringify(selectedSeatSnapshot));
 
     if (!keycloak?.authenticated) {
       keycloak?.login({
@@ -290,8 +258,7 @@ export default function SelectTicketPage() {
     navigate("/checkout");
   };
 
-  // ─── Computed ────────────────────────────────────────────
-  const subtotal = selectedSeats.reduce((sum, s) => sum + s.price, 0);
+  const subtotal = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
 
   const bannerUrl =
     (event as any)?.images?.find((i: any) => i.type === "BANNER")?.url ||
@@ -301,217 +268,168 @@ export default function SelectTicketPage() {
     (event as any)?.startDatetime ||
     (event as any)?.startTime;
   const startDate = startStr ? new Date(startStr) : null;
-  const venueName =
-    (event as any)?.venue?.name || (event as any)?.venueName || "";
-  const venueAddress =
-    (event as any)?.venue?.address || (event as any)?.venueAddress || "";
+  const venueName = (event as any)?.venue?.name || (event as any)?.venueName || "";
+  const venueAddress = (event as any)?.venue?.address || (event as any)?.venueAddress || "";
 
-  // Group seats
-  const genSeatsBySector: Record<string, GeneratedSeat[]> = {};
-  generated.seats.forEach((gs) => {
-    if (!genSeatsBySector[gs.ticketTypeId])
-      genSeatsBySector[gs.ticketTypeId] = [];
-    genSeatsBySector[gs.ticketTypeId].push(gs);
-  });
+  const categoryNav = (
+    <nav className="category-nav">
+      <div className="container">
+        <ul className="category-list">
+          <li className="category-item">
+            <Link to="/search" className="category-link">
+              Tất cả
+            </Link>
+          </li>
+          {allCategories.length > 0 ? (
+            allCategories.map((category) => (
+              <li className="category-item" key={category.id}>
+                <Link
+                  to={`/search?category=${category.slug || category.id}`}
+                  className="category-link"
+                >
+                  {category.name}
+                </Link>
+              </li>
+            ))
+          ) : (
+            <li className="category-item">
+              <span className="category-link">Đang tải</span>
+            </li>
+          )}
+        </ul>
+      </div>
+    </nav>
+  );
 
-  // ─── Loading / Error ────────────────────────────────────
   if (isLoading) {
     return (
-      <div style={{ textAlign: "center", padding: "100px" }}>
-        <p>Đang tải thông tin vé</p>
+      <div className="select-ticket-page">
+        {categoryNav}
+        <div className="select-ticket-loading" role="status" aria-live="polite">
+          <LoaderCircle className="select-ticket-loading-icon" size={24} />
+          <span>Loading</span>
+        </div>
       </div>
     );
   }
 
   if (error || !event) {
     return (
-      <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-        <p>{error || "Không tìm thấy sự kiện"}</p>
-        <Link
-          to="/"
-          style={{ textDecoration: "underline", color: "var(--primary)" }}
-        >
-          Quay về trang chủ
-        </Link>
+      <div className="select-ticket-page">
+        {categoryNav}
+        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
+          <p>{error || "Không tìm thấy sự kiện"}</p>
+          <Link
+            to="/"
+            style={{ textDecoration: "underline", color: "var(--primary)" }}
+          >
+            Quay về trang chủ
+          </Link>
+        </div>
       </div>
     );
   }
+
+  const breadcrumbEventName =
+    event.title.length > 24 ? `${event.title.slice(0, 24)}...` : event.title;
 
   return (
     <div className="select-ticket-page">
       <div className="booking-focus-header">
         <div className="container">
-          <div className="focus-breadcrumb" aria-label="Breadcrumb">
-            <Link to="/" className="breadcrumb-home">
-              Home
-            </Link>
-            <span className="breadcrumb-separator">/</span>
-            <Link to={`/event/${slug || ""}`} className="breadcrumb-event">
-              Event
-            </Link>
-            <span className="breadcrumb-separator">/</span>
-            <span className="breadcrumb-current">{event.title}</span>
-          </div>
+          <nav className="focus-breadcrumb" aria-label="Breadcrumb">
+            <ol className="breadcrumb-list">
+              <li className="breadcrumb-item">
+                <Link to="/" className="breadcrumb-home">
+                  <Home size={15} />
+                  Home
+                </Link>
+              </li>
+              <li className="breadcrumb-separator" aria-hidden="true">
+                <ChevronRight size={14} />
+              </li>
+              <li className="breadcrumb-item">
+                <Link to="/search" className="breadcrumb-event">
+                  Events
+                </Link>
+              </li>
+              <li className="breadcrumb-separator" aria-hidden="true">
+                <ChevronRight size={14} />
+              </li>
+              <li className="breadcrumb-item">
+                <Link
+                  to={`/event/${slug || ""}`}
+                  className="breadcrumb-event-name"
+                  title={event.title}
+                  aria-label={event.title}
+                >
+                  {breadcrumbEventName}
+                </Link>
+              </li>
+              <li className="breadcrumb-separator" aria-hidden="true">
+                <ChevronRight size={14} />
+              </li>
+              <li className="breadcrumb-item">
+                <span className="breadcrumb-current" aria-current="page">Book</span>
+              </li>
+            </ol>
+          </nav>
 
           <BookingStepIndicator currentStep={1} />
         </div>
       </div>
 
-      {/* MAIN LAYOUT */}
       <div className="container">
         <div className="select-ticket-layout">
           <div className="seat-map-section">
             <div className="section-header">
               <h2>Sơ đồ chỗ ngồi</h2>
-              <span className="hint">
-                Click ghế · Cuộn zoom · Kéo di chuyển
-              </span>
+              <span className="hint">Click ghế để chọn</span>
             </div>
 
             <div className="seat-map-container">
-              <div
-                className="seat-map-viewport"
-                ref={mapRef}
-                onWheel={handleWheel}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-              >
-                <div
-                  className="seat-map-content"
-                  style={{
-                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                  }}
-                >
-                  {/* Stage */}
-                  <div className="stage-indicator">
-                    <div className="stage-box">SÂN KHẤU</div>
-                  </div>
-
-                  {/* Generated Seats */}
-                  {generated.sectors.map((sector) => {
-                    const seatsIn = genSeatsBySector[sector.id] || [];
-                    const rows: Record<string, GeneratedSeat[]> = {};
-                    seatsIn.forEach((gs) => {
-                      if (!rows[gs.rowName]) rows[gs.rowName] = [];
-                      rows[gs.rowName].push(gs);
-                    });
-
-                    return (
-                      <div
-                        key={sector.id}
-                        className="sector-block"
-                        style={{ borderColor: sector.colorCode || "#cbd5e1" }}
-                      >
-                        <div
-                          className="sector-label"
-                          style={{
-                            backgroundColor: sector.colorCode || "#94a3b8",
-                          }}
-                        >
-                          {sector.name} ({sector.code})
-                        </div>
-
-                        {Object.entries(rows)
-                          .sort(([a], [b]) => a.localeCompare(b))
-                          .map(([rowName, seats]) => (
-                            <div key={rowName} className="seat-row">
-                              <span className="seat-row-label">{rowName}</span>
-                              {seats
-                                .sort((a, b) => a.seatNumber - b.seatNumber)
-                                .map((gs) => {
-                                  const isSelected = selectedSeats.some(
-                                    (s) => s.seatId === gs.id,
-                                  );
-                                  let cls = gs.status.toLowerCase();
-                                  if (isSelected) cls = "selected";
-                                  return (
-                                    <div
-                                      key={gs.id}
-                                      className={`seat ${cls}`}
-                                      onClick={() => handleGenSeatClick(gs)}
-                                      title={`${gs.seatLabel} - ${sector.name}`}
-                                      style={{
-                                        ...(gs.status === "AVAILABLE" &&
-                                        !isSelected
-                                          ? {
-                                              background: `${sector.colorCode}30`,
-                                              borderColor: `${sector.colorCode}80`,
-                                              color: sector.colorCode,
-                                            }
-                                          : {}),
-                                      }}
-                                    >
-                                      {gs.seatNumber}
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          ))}
-                      </div>
-                    );
-                  })}
+              {seatMap ? (
+                <BuyerSeatMapCanvas
+                  seatMap={seatMap}
+                  zoom={zoom}
+                  pan={pan}
+                  selectedSeatIds={selectedSeats.map((seat) => seat.seatId)}
+                  onPanChange={setPan}
+                  onZoomChange={setZoom}
+                  onSeatClick={handleSeatClick}
+                />
+              ) : (
+                <div className="buyer-seat-map-empty">
+                  <p>Sự kiện này chưa có sơ đồ chỗ ngồi được publish</p>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Bottom: Legend + Zoom */}
             <div className="seat-map-bottom">
               <div className="seat-legend">
                 <div className="legend-item">
-                  <div
-                    className="legend-dot"
-                    style={{
-                      background: "#d1fae5",
-                      border: "2px solid #a7f3d0",
-                    }}
-                  />
-                  Trống
+                  <div className="legend-dot legend-dot-available" />
+                  Trong
                 </div>
                 <div className="legend-item">
-                  <div
-                    className="legend-dot"
-                    style={{
-                      background: "var(--primary)",
-                      border: "2px solid var(--primary-dark)",
-                    }}
-                  />
+                  <div className="legend-dot legend-dot-selected" />
                   Đang chọn
                 </div>
                 <div className="legend-item">
-                  <div
-                    className="legend-dot"
-                    style={{
-                      background: "#fef3c7",
-                      border: "2px solid #fde68a",
-                    }}
-                  />
+                  <div className="legend-dot legend-dot-reserved" />
                   Đã giữ
                 </div>
                 <div className="legend-item">
-                  <div
-                    className="legend-dot"
-                    style={{
-                      background: "#e2e8f0",
-                      border: "2px solid #cbd5e1",
-                    }}
-                  />
+                  <div className="legend-dot legend-dot-sold" />
                   Đã bán
                 </div>
               </div>
 
               <div className="zoom-controls">
-                <button
-                  className="zoom-btn"
-                  onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
-                >
+                <button className="zoom-btn" onClick={() => setZoom((z) => Math.min(3, z + 0.25))}>
                   <ZoomIn size={14} />
                 </button>
-                <button
-                  className="zoom-btn"
-                  onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
-                >
+                <button className="zoom-btn" onClick={() => setZoom((z) => Math.max(0.2, z - 0.25))}>
                   <ZoomOut size={14} />
                 </button>
                 <button className="zoom-btn" onClick={resetView}>
@@ -521,16 +439,10 @@ export default function SelectTicketPage() {
             </div>
           </div>
 
-          {/* ════════════ RIGHT: SIDEBAR ════════════ */}
           <div className="booking-sidebar">
-            {/* Event Card */}
             <div className="sidebar-event-card">
               {bannerUrl && (
-                <img
-                  src={bannerUrl}
-                  alt={event.title}
-                  className="event-poster"
-                />
+                <img src={bannerUrl} alt={event.title} className="event-poster" />
               )}
               <div className="event-details">
                 <div className="event-title">{event.title}</div>
@@ -566,36 +478,29 @@ export default function SelectTicketPage() {
               </div>
             </div>
 
-            {/* Ticket Tiers */}
             <div className="sidebar-tiers">
               <h3>Hạng vé</h3>
               {ticketTypes
-                .filter((t) => t.isVisible !== false)
+                .filter((ticketType) => ticketType.isVisible !== false)
                 .sort((a, b) => a.displayOrder - b.displayOrder)
-                .map((tt) => {
-                  const isSoldOut =
-                    tt.status === "SOLD_OUT" || tt.quantityAvailable === 0;
-                  const hasSelection = (quantities[tt.id] || 0) > 0;
+                .map((ticketType) => {
+                  const isSoldOut = ticketType.status === "SOLD_OUT" || ticketType.quantityAvailable === 0;
+                  const hasSelection = (quantities[ticketType.id] || 0) > 0;
 
                   return (
                     <div
-                      key={tt.id}
+                      key={ticketType.id}
                       className={`tier-item ${isSoldOut ? "sold-out" : ""} ${hasSelection ? "active" : ""}`}
                     >
                       <div className="tier-left">
                         <span
                           className="tier-dot"
-                          style={{
-                            backgroundColor:
-                              tt.colorCode || "var(--text-muted)",
-                          }}
+                          style={{ backgroundColor: ticketType.colorCode || "var(--text-muted)" }}
                         />
-                        <span className="tier-name">{tt.name}</span>
+                        <span className="tier-name">{ticketType.name}</span>
                       </div>
                       <span className="tier-price">
-                        {isSoldOut
-                          ? "Hết vé"
-                          : `${tt.price.toLocaleString("vi-VN")} đ`}
+                        {isSoldOut ? "Hết vé" : `${ticketType.price.toLocaleString("vi-VN")} đ`}
                       </span>
                     </div>
                   );
@@ -604,12 +509,11 @@ export default function SelectTicketPage() {
               <div className="ticket-notice" style={{ marginTop: 12 }}>
                 <Info size={14} />
                 <span>
-                  Tối thiểu {minPerOrder}, tối đa {maxPerOrder} vé
+                  Tối thiểu {minPerOrder}, tối đa {maxPerOrder} vé · {availableSeatCount} ghế trống
                 </span>
               </div>
             </div>
 
-            {/* Selected Seats */}
             <div className="sidebar-selected">
               <div className="selected-header">
                 <span className="label">Đã chọn</span>
@@ -624,13 +528,10 @@ export default function SelectTicketPage() {
                 <div className="selected-empty">Chưa chọn ghế nào</div>
               ) : (
                 <div className="selected-seats-list">
-                  {selectedSeats.map((s) => (
-                    <span key={s.seatId} className="selected-seat-tag">
-                      {s.seatLabel}
-                      <span
-                        className="remove-seat"
-                        onClick={() => handleRemoveSeat(s.seatId)}
-                      >
+                  {selectedSeats.map((seat) => (
+                    <span key={seat.seatId} className="selected-seat-tag">
+                      {seat.seatLabel}
+                      <span className="remove-seat" onClick={() => handleRemoveSeat(seat.seatId)}>
                         <X size={12} />
                       </span>
                     </span>
@@ -638,7 +539,6 @@ export default function SelectTicketPage() {
                 </div>
               )}
 
-              {/* Action Button inside Selected */}
               <div className="sidebar-action-embedded">
                 {selectedSeats.length === 0 ? (
                   <button className="action-btn disabled-state" disabled>
@@ -650,10 +550,8 @@ export default function SelectTicketPage() {
                     onClick={handleContinue}
                     disabled={totalSelected < minPerOrder}
                   >
-                    <span className="btn-label">{"Thanh toán ngay"}</span>
-                    <span className="btn-total">
-                      {subtotal.toLocaleString("vi-VN")} đ
-                    </span>
+                    <span className="btn-label">Thanh toán ngay</span>
+                    <span className="btn-total">{subtotal.toLocaleString("vi-VN")} đ</span>
                   </button>
                 )}
               </div>

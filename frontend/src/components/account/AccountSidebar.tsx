@@ -1,5 +1,7 @@
 import { NavLink } from "react-router-dom";
-import { UserRound, Ticket, ShoppingBag } from "lucide-react";
+import { FaUserLarge } from "react-icons/fa6";
+import { ImTicket } from "react-icons/im";
+import { HiMiniShoppingBag } from "react-icons/hi2";
 
 export default function AccountSidebar() {
   return (
@@ -13,7 +15,7 @@ export default function AccountSidebar() {
             `profile-sidebar-link ${isActive ? "active" : ""}`
           }
         >
-          <UserRound size={18} />
+          <FaUserLarge size={18} />
           <span>Hồ sơ cá nhân</span>
         </NavLink>
 
@@ -23,7 +25,7 @@ export default function AccountSidebar() {
             `profile-sidebar-link ${isActive ? "active" : ""}`
           }
         >
-          <Ticket size={18} />
+          <ImTicket size={18} />
           <span>Vé của tôi</span>
         </NavLink>
 
@@ -33,7 +35,7 @@ export default function AccountSidebar() {
             `profile-sidebar-link ${isActive ? "active" : ""}`
           }
         >
-          <ShoppingBag size={18} />
+          <HiMiniShoppingBag size={18} />
           <span>Đơn hàng của tôi</span>
         </NavLink>
       </nav>

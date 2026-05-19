@@ -1,13 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Edit, Trash2 } from "lucide-react";
+import { Edit, Search, Trash2 } from "lucide-react";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
 import { confirmDestructiveAction } from "../../lib/swal";
 import {
   organizerWorkspaceService,
-  OrganizerEventDetail,
   OrganizerTicketType,
   OrganizerTicketTypePayload,
 } from "../../services/organizerWorkspaceService";
@@ -110,14 +109,12 @@ function toPayload(
 export default function OrganizerTicketTypesPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const { ready } = useOrganizerGate();
-  const [eventDetail, setEventDetail] = useState<OrganizerEventDetail | null>(
-    null,
-  );
   const [ticketTypes, setTicketTypes] = useState<OrganizerTicketType[]>([]);
   const [formState, setFormState] =
     useState<TicketTypeFormState>(defaultFormState);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
+  const [ticketSearch, setTicketSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -132,16 +129,13 @@ export default function OrganizerTicketTypesPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [nextEvent, nextTicketTypes] = await Promise.all([
-          organizerWorkspaceService.getMyEvent(eventId),
-          organizerWorkspaceService.getTicketTypes(eventId),
-        ]);
+        const nextTicketTypes =
+          await organizerWorkspaceService.getTicketTypes(eventId);
 
         if (cancelled) {
           return;
         }
 
-        setEventDetail(nextEvent);
         setTicketTypes(nextTicketTypes);
       } catch {
         if (!cancelled) {
@@ -277,6 +271,20 @@ export default function OrganizerTicketTypesPage() {
     }
   };
 
+  const filteredTicketTypes = ticketTypes.filter((ticketType) => {
+    const keyword = ticketSearch.trim().toLowerCase();
+    if (!keyword) return true;
+
+    return [
+      ticketType.name,
+      ticketType.description,
+      ticketType.colorCode,
+      ticketType.status,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword));
+  });
+
   return (
     <OrganizerLayout
       title="Quản lý loại vé"
@@ -291,39 +299,6 @@ export default function OrganizerTicketTypesPage() {
         </section>
       ) : (
         <>
-          <section className="organizer-panel organizer-toolbar-panel">
-            <div className="organizer-panel-heading-row">
-              <div>
-                <p className="organizer-panel-title-pill">Ticket types</p>
-                <h2 style={{ marginBottom: "4px" }}>
-                  <strong>Tên sự kiện: </strong>
-                  {eventDetail?.title || "Sự kiện chưa xác định"}
-                </h2>
-                <h2 style={{ marginTop: 0 }}>
-                  <strong>Slug: </strong>
-                  {eventDetail?.slug || "Sự kiện chưa xác định"}
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="btn"
-                onClick={handleCreateClick}
-                style={{
-                  color: "#19454F",
-                  fontWeight: 700,
-                  background: "transparent",
-                  border: "none",
-                  padding: "8px 0",
-                  alignSelf: "flex-start",
-                  marginRight: "24px",
-                  boxShadow: "none"
-                }}
-              >
-                Tạo vé sự kiện
-              </button>
-            </div>
-          </section>
-
           {isCreateFormOpen ? (
             <form
               className="organizer-panel organizer-event-form"
@@ -540,13 +515,36 @@ export default function OrganizerTicketTypesPage() {
           ) : null}
 
           <section className="organizer-panel">
-            <div className="organizer-panel-heading">
+            <div className="organizer-panel-heading-row organizer-ticket-header-row">
               <h2 className="organizer-panel-title-pill">Danh sách loại vé</h2>
+              <div className="organizer-ticket-header-actions">
+                <label className="organizer-ticket-search">
+                  <input
+                    value={ticketSearch}
+                    onChange={(event) => setTicketSearch(event.target.value)}
+                    placeholder="Tìm loại vé..."
+                  />
+                  <span className="organizer-ticket-search-icon">
+                    <Search size={16} />
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  className="organizer-ticket-create-button"
+                  onClick={handleCreateClick}
+                >
+                  Tạo vé sự kiện
+                </button>
+              </div>
             </div>
 
             {ticketTypes.length === 0 ? (
               <div className="organizer-empty-state compact">
                 <p>Event này chưa có loại vé nào</p>
+              </div>
+            ) : filteredTicketTypes.length === 0 ? (
+              <div className="organizer-empty-state compact">
+                <p>Không có loại vé nào phù hợp</p>
               </div>
             ) : (
               <div className="organizer-ticket-table-wrap">
@@ -555,6 +553,7 @@ export default function OrganizerTicketTypesPage() {
                     <tr>
                       <th>STT</th>
                       <th>Tên loại vé</th>
+                      <th>Màu vé</th>
                       <th>Giá bán</th>
                       <th>Giá gốc</th>
                       <th>Số lượng</th>
@@ -566,7 +565,7 @@ export default function OrganizerTicketTypesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {ticketTypes.map((ticketType, index) => {
+                    {filteredTicketTypes.map((ticketType, index) => {
                       const statusMeta = getTicketTypeStatusMeta(
                         ticketType.status,
                       );
@@ -579,19 +578,17 @@ export default function OrganizerTicketTypesPage() {
                             <span>
                               {ticketType.description || "Chưa có mô tả."}
                             </span>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
-                              <div
-                                style={{
-                                  width: "12px",
-                                  height: "12px",
-                                  borderRadius: "50%",
-                                  backgroundColor: ticketType.colorCode || "#16a34a",
-                                }}
-                              />
-                              <span style={{ fontSize: "12px", fontWeight: 500, color: "#6b7280" }}>
-                                {(ticketType.colorCode || "#16a34a").toUpperCase()}
-                              </span>
-                            </div>
+                          </td>
+                          <td className="organizer-ticket-color-cell">
+                            <span
+                              className="organizer-ticket-color-dot"
+                              style={{
+                                backgroundColor: ticketType.colorCode || "#16a34a",
+                              }}
+                            />
+                            <span>
+                              {(ticketType.colorCode || "#16a34a").toUpperCase()}
+                            </span>
                           </td>
                           <td>{formatMoney(ticketType.price)}</td>
                           <td>

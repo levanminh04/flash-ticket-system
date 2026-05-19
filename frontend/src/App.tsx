@@ -12,6 +12,7 @@ import PaymentResultPage from "./pages/Payment/PaymentResultPage";
 import ProfilePage from "./pages/Profile/ProfilePage";
 import MyTicketsPage from "./pages/MyTickets/MyTicketsPage";
 import MyOrdersPage from "./pages/MyOrders/MyOrdersPage";
+import ChatbotPage from "./pages/Chatbot/ChatbotPage";
 import VenuesPage from "./pages/Venues/VenuesPage";
 import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
 import OrganizerMediaPage from "./pages/Organizer/OrganizerMediaPage";
@@ -26,6 +27,7 @@ import OrganizerSeatMapPage from "./pages/Organizer/OrganizerSeatMapPage";
 import { ReactKeycloakProvider } from "@react-keycloak/web";
 import keycloak from "./lib/keycloak";
 import Navbar from "./components/layout/Navbar";
+import FloatingChatbot from "./components/chatbot/FloatingChatbot";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +76,7 @@ function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/my-tickets" element={<MyTicketsPage />} />
               <Route path="/my-orders" element={<MyOrdersPage />} />
+              <Route path="/chatbot" element={<ChatbotPage />} />
               <Route path="/organizer" element={<OrganizerHubPage />} />
               <Route path="/organizer/events" element={<OrganizerEventsPage />} />
               <Route
@@ -107,6 +110,7 @@ function App() {
               />
             </Routes>
           </div>
+          <FloatingChatbot />
         </Router>
       </QueryClientProvider>
     </ReactKeycloakProvider>

@@ -204,8 +204,15 @@ function formatDate(value?: string) {
 }
 
 function formatPrice(event?: Partial<EventSummary>) {
-  if (typeof event?.minPrice === "number") {
-    return `Từ ${event.minPrice.toLocaleString("vi-VN")} đ`;
+  const minPrice =
+    typeof event?.minPrice === "number"
+      ? event.minPrice
+      : typeof event?.minPrice === "string"
+        ? Number(event.minPrice)
+        : undefined;
+
+  if (typeof minPrice === "number" && Number.isFinite(minPrice)) {
+    return `Từ ${minPrice.toLocaleString("vi-VN")} đ`;
   }
   return "Đang cập nhật";
 }

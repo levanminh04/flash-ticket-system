@@ -320,14 +320,15 @@ export default function OrganizerEventEditorPage() {
       setCancelling(false);
     }
   };
+
+  const pageDescription = isCreateMode
+    ? "Tạo event, gắn category, venue và cấu hình bán vé"
+    : `Cập nhật gần nhất: ${formatDateTime(currentEvent?.updatedAt)}`;
+
   return (
     <OrganizerLayout
       title={isCreateMode ? "Tạo sự kiện mới" : currentEvent?.title || ""}
-      description={
-        isCreateMode
-          ? "Tạo event, gắn category, venue và cấu hình bán vé"
-          : "Cập nhật thông tin sự kiện, publish, hủy hoặc xóa sự kiện"
-      }
+      description={pageDescription}
       actions={null}
     >
       {!isCreateMode && eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
@@ -339,22 +340,6 @@ export default function OrganizerEventEditorPage() {
         </section>
       ) : (
         <>
-          {!isCreateMode && currentEvent ? (
-            <section className="organizer-panel organizer-toolbar-panel">
-              <div className="organizer-panel-heading-row">
-                <div>
-                  <p className="organizer-panel-title-pill">Event metadata</p>
-                  <h2><strong>Tên sự kiện:</strong> {currentEvent.title}</h2>
-                  <p>
-                    <strong>Slug:</strong> {currentEvent.slug}
-                    <br />
-                    <strong>Cập nhật gần nhất:</strong> {formatDateTime(currentEvent.updatedAt)}
-                  </p>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
           <form className="organizer-panel organizer-event-form" onSubmit={handleSubmit}>
             <div className="organizer-panel-heading">
               <p className="organizer-panel-title-pill">Event editor</p>
@@ -610,4 +595,3 @@ export default function OrganizerEventEditorPage() {
     </OrganizerLayout>
   );
 }
-

@@ -1,6 +1,8 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
 import { confirmDestructiveAction } from "../../lib/swal";
@@ -93,6 +95,20 @@ export default function OrganizerLayoutPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [backgroundLightboxOpen, setBackgroundLightboxOpen] = useState(false);
+
+  const backgroundLightboxSlides = useMemo(
+    () =>
+      formState.backgroundImageUrl.trim()
+        ? [
+            {
+              src: formState.backgroundImageUrl.trim(),
+              alt: formState.name || "Layout background",
+            },
+          ]
+        : [],
+    [formState.backgroundImageUrl, formState.name],
+  );
 
   useEffect(() => {
     if (!ready) return;
@@ -207,7 +223,7 @@ export default function OrganizerLayoutPage() {
           <p>Đang tải layout sự kiện</p>
         </section>
       ) : (
-        <section className="organizer-grid organizer-grid-wide">
+        <section className="organizer-grid organizer-layout-editor-single">
           <form className="organizer-panel organizer-event-form" onSubmit={handleSubmit}>
             <div className="organizer-panel-heading">
               <p className="organizer-panel-title-pill">Layout editor</p>
@@ -233,12 +249,30 @@ export default function OrganizerLayoutPage() {
 
               <label className="organizer-field organizer-form-span-2">
                 <span>Background image URL</span>
-                <input
-                  className="organizer-input"
-                  value={formState.backgroundImageUrl}
-                  onChange={(event) => handleChange("backgroundImageUrl", event.target.value)}
-                  placeholder="Dán URL ảnh seat map hoặc nền sơ đồ"
-                />
+                <div className="organizer-layout-url-field">
+                  {formState.backgroundImageUrl.trim() ? (
+                    <button
+                      type="button"
+                      className="organizer-layout-url-preview-button"
+                      onClick={() => setBackgroundLightboxOpen(true)}
+                      aria-label="Xem ảnh nền ở kích thước lớn"
+                      title="Xem ảnh nền"
+                    >
+                      <img
+                        src={formState.backgroundImageUrl}
+                        alt={formState.name || "Layout thumbnail"}
+                      />
+                    </button>
+                  ) : (
+                    <div className="organizer-layout-url-thumbnail-placeholder" />
+                  )}
+                  <input
+                    className="organizer-input"
+                    value={formState.backgroundImageUrl}
+                    onChange={(event) => handleChange("backgroundImageUrl", event.target.value)}
+                    placeholder="Dán URL ảnh seat map hoặc nền sơ đồ"
+                  />
+                </div>
               </label>
 
               <label className="organizer-field">
@@ -325,29 +359,14 @@ export default function OrganizerLayoutPage() {
             </div>
           </form>
 
-          <section className="organizer-panel">
-            <div className="organizer-panel-heading">
-              <h2>Xem trước layout</h2>
-            </div>
-
-            {formState.backgroundImageUrl ? (
-              <div className="organizer-layout-preview">
-                <img src={formState.backgroundImageUrl} alt={formState.name || "Layout preview"} />
-              </div>
-            ) : (
-              <div className="organizer-empty-state compact">
-                <p>Chưa có ảnh nền để preview.</p>
-              </div>
-            )}
-
-            <div className="organizer-card-metadata">
-              <span>Source type: {formState.sourceType}</span>
-              <span>Width: {formState.backgroundWidth || "-"}</span>
-              <span>Height: {formState.backgroundHeight || "-"}</span>
-            </div>
-          </section>
         </section>
       )}
+      <Lightbox
+        open={backgroundLightboxOpen && backgroundLightboxSlides.length > 0}
+        close={() => setBackgroundLightboxOpen(false)}
+        slides={backgroundLightboxSlides}
+        index={0}
+      />
     </OrganizerLayout>
   );
 }

@@ -43,6 +43,7 @@ export interface OrganizerProfile {
   description?: string | null;
   websiteUrl?: string | null;
   isVerified?: boolean | null;
+  createdAt?: string | null;
   totalEvents?: number | null;
   totalTicketsSold?: number | null;
   followerCount?: number | null;
@@ -55,6 +56,38 @@ export interface OrganizerEventImageUpdatePayload {
   altText?: string | null;
   displayOrder?: number | null;
   imageType?: OrganizerImageType | null;
+}
+
+async function uploadOrganizerProfileImage(
+  path: "/api/organizers/me/logo" | "/api/organizers/me/banner",
+  file: File,
+): Promise<OrganizerProfile> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const response = await gatewayFallbackClient.post<OrganizerProfile>(
+      path,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+    return response.data;
+  } catch {
+    const response = await userDirectClient.post<OrganizerProfile>(
+      path,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+    return response.data;
+  }
 }
 
 export const organizerService = {
@@ -78,6 +111,12 @@ export const organizerService = {
     );
     return response.data;
   },
+
+  uploadLogo: async (file: File): Promise<OrganizerProfile> =>
+    uploadOrganizerProfileImage("/api/organizers/me/logo", file),
+
+  uploadBanner: async (file: File): Promise<OrganizerProfile> =>
+    uploadOrganizerProfileImage("/api/organizers/me/banner", file),
 
   getEventImages: async (eventId: string): Promise<OrganizerEventImage[]> => {
     const response = await axiosClient.get<OrganizerEventImage[]>(

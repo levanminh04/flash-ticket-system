@@ -46,7 +46,7 @@ function statusLabel(status: string) {
 }
 
 export default function MyTicketsPage() {
-  const { keycloak } = useKeycloak();
+  const { keycloak, initialized } = useKeycloak();
   const [data, setData] = useState<TicketsPageResponse | null>(null);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -57,7 +57,14 @@ export default function MyTicketsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
-    if (!keycloak.authenticated) return;
+    if (!initialized) return;
+    if (!keycloak.authenticated) {
+      void keycloak.login({
+        redirectUri: `${window.location.origin}/my-tickets`,
+      });
+      return;
+    }
+
     let cancelled = false;
     const load = async () => {
       setLoading(true);
@@ -75,7 +82,7 @@ export default function MyTicketsPage() {
     return () => {
       cancelled = true;
     };
-  }, [keycloak.authenticated, page]);
+  }, [initialized, keycloak, keycloak.authenticated, page]);
 
   const openTicketDetail = async (ticket: TicketSummary) => {
     setSelectedTicket(ticket);
@@ -118,19 +125,7 @@ export default function MyTicketsPage() {
   ).length;
   const isFiltering = statusFilter !== "ALL" || keyword.length > 0;
 
-  if (!keycloak.authenticated) {
-    return (
-      <div className="my-tickets-page">
-        <AccountCategoryNav />
-        <div className="container">
-          <p>Vui lòng đăng nhập để xem vé của bạn.</p>
-          <button onClick={() => keycloak.login()} className="btn btn-primary">
-            Đăng nhập
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!initialized || !keycloak.authenticated) return null;
 
   return (
     <div className="my-tickets-page">
@@ -159,57 +154,25 @@ export default function MyTicketsPage() {
           ) : (
             <>
               <div className="ticket-summary-strip">
-                <div className="ticket-summary-pill">
-                  <span>Tổng vé trang này</span>
-                  <strong>{tickets.length}</strong>
-                </div>
-                <div className="ticket-summary-pill">
-                  <span>Hợp lệ</span>
-                  <strong>{validCount}</strong>
-                </div>
-                <div className="ticket-summary-pill">
-                  <span>Đã sử dụng</span>
-                  <strong>{usedCount}</strong>
-                </div>
-                <div className="ticket-summary-pill">
-                  <span>Đã hủy</span>
-                  <strong>{cancelledCount}</strong>
-                </div>
+                <div className="ticket-summary-pill"><span>Tổng vé trang này</span><strong>{tickets.length}</strong></div>
+                <div className="ticket-summary-pill"><span>Hợp lệ</span><strong>{validCount}</strong></div>
+                <div className="ticket-summary-pill"><span>Đã sử dụng</span><strong>{usedCount}</strong></div>
+                <div className="ticket-summary-pill"><span>Đã hủy</span><strong>{cancelledCount}</strong></div>
               </div>
 
               <div className="ticket-tools">
                 <div className="ticket-search-field">
                   <Search size={16} />
-                  <input
-                    type="text"
-                    value={searchValue}
-                    onChange={(event) => setSearchValue(event.target.value)}
-                    placeholder="Tìm theo tên sự kiện, mã vé, loại vé"
-                  />
+                  <input type="text" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} placeholder="Tìm theo tên sự kiện, mã vé, loại vé" />
                 </div>
-
-                <select
-                  className="ticket-status-filter"
-                  value={statusFilter}
-                  onChange={(event) =>
-                    setStatusFilter(event.target.value as TicketStatusFilter)
-                  }
-                >
+                <select className="ticket-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TicketStatusFilter)}>
                   <option value="ALL">Tất cả trạng thái</option>
                   <option value="VALID">Hợp lệ</option>
                   <option value="USED">Đã sử dụng</option>
                   <option value="CANCELLED">Đã hủy</option>
                 </select>
-
                 {isFiltering ? (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => {
-                      setStatusFilter("ALL");
-                      setSearchValue("");
-                    }}
-                  >
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => { setStatusFilter("ALL"); setSearchValue(""); }}>
                     Xóa lọc
                   </button>
                 ) : null}
@@ -225,41 +188,27 @@ export default function MyTicketsPage() {
                   {filteredTickets.map((ticket) => {
                     const sl = statusLabel(ticket.status);
                     return (
-                      <div
-                        key={ticket.id}
-                        className="ticket-card"
-                        onClick={() => void openTicketDetail(ticket)}
-                      >
+                      <div key={ticket.id} className="ticket-card" onClick={() => void openTicketDetail(ticket)}>
                         <div className="ticket-card-main">
                           <h3 className="ticket-event-title">{ticket.eventTitle}</h3>
                           <p className="ticket-meta">
                             {formatDate(ticket.eventStartDatetime)}
-                            {ticket.eventVenueName
-                              ? ` • ${ticket.eventVenueName}`
-                              : ""}
+                            {ticket.eventVenueName ? ` • ${ticket.eventVenueName}` : ""}
                           </p>
                           <div className="ticket-card-footer">
                             <span className="ticket-type">{ticket.ticketTypeName}</span>
-                            {ticket.seatLabel ? (
-                              <span className="ticket-seat">Ghế: {ticket.seatLabel}</span>
-                            ) : null}
+                            {ticket.seatLabel ? <span className="ticket-seat">Ghế: {ticket.seatLabel}</span> : null}
                             <span className={`ticket-status ${sl.cls}`}>{sl.text}</span>
                           </div>
                         </div>
-                        <div className="ticket-card-action">
-                          <span className="view-detail">Xem chi tiết</span>
-                        </div>
+                        <div className="ticket-card-action"><span className="view-detail">Xem chi tiết</span></div>
                       </div>
                     );
                   })}
                 </div>
               )}
 
-              <AppPagination
-                currentPage={data.number}
-                pageCount={data.totalPages}
-                onPageChange={setPage}
-              />
+              <AppPagination currentPage={data.number} pageCount={data.totalPages} onPageChange={setPage} />
             </>
           )}
         </div>
@@ -267,82 +216,27 @@ export default function MyTicketsPage() {
 
       {selectedTicket ? (
         <div className="modal-overlay" onClick={closeModal}>
-          <div
-            className="modal-content ticket-detail-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button className="modal-close" onClick={closeModal}>
-              <X size={24} />
-            </button>
+          <div className="modal-content ticket-detail-modal" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" onClick={closeModal}><X size={24} /></button>
             {detailLoading ? (
-              <div className="modal-inline-loading">
-                <div className="loading-spinner"></div>
-                <span>Đang tải chi tiết vé mới nhất...</span>
-              </div>
+              <div className="modal-inline-loading"><div className="loading-spinner"></div><span>Đang tải chi tiết vé mới nhất...</span></div>
             ) : null}
             <h2>{selectedTicket.eventTitle}</h2>
-            <p className="modal-meta">
-              {formatDate(selectedTicket.eventStartDatetime)}
-              {selectedTicket.eventVenueName
-                ? ` • ${selectedTicket.eventVenueName}`
-                : ""}
-            </p>
+            <p className="modal-meta">{formatDate(selectedTicket.eventStartDatetime)}{selectedTicket.eventVenueName ? ` • ${selectedTicket.eventVenueName}` : ""}</p>
             <div className="ticket-detail-info">
-              <div className="info-row">
-                <span className="label">Mã vé</span>
-                <span className="value">{selectedTicket.ticketCode}</span>
-              </div>
-              <div className="info-row">
-                <span className="label">Loại vé</span>
-                <span className="value">{selectedTicket.ticketTypeName}</span>
-              </div>
-              {selectedTicket.seatLabel ? (
-                <div className="info-row">
-                  <span className="label">Ghế</span>
-                  <span className="value">{selectedTicket.seatLabel}</span>
-                </div>
-              ) : null}
-              {selectedTicket.holderName ? (
-                <div className="info-row">
-                  <span className="label">Người sở hữu</span>
-                  <span className="value">{selectedTicket.holderName}</span>
-                </div>
-              ) : null}
-              {selectedTicket.holderEmail ? (
-                <div className="info-row">
-                  <span className="label">Email</span>
-                  <span className="value">{selectedTicket.holderEmail}</span>
-                </div>
-              ) : null}
-              <div className="info-row">
-                <span className="label">Giá</span>
-                <span className="value">
-                  {Number(selectedTicket.price).toLocaleString("vi-VN")} đ
-                </span>
-              </div>
-              <div className="info-row">
-                <span className="label">Trạng thái</span>
-                <span className={`value ${statusLabel(selectedTicket.status).cls}`}>
-                  {statusLabel(selectedTicket.status).text}
-                </span>
-              </div>
-              {selectedTicket.checkedInAt ? (
-                <div className="info-row">
-                  <span className="label">Thời gian check-in</span>
-                  <span className="value">
-                    {formatDate(selectedTicket.checkedInAt)}
-                  </span>
-                </div>
-              ) : null}
+              <div className="info-row"><span className="label">Mã vé</span><span className="value">{selectedTicket.ticketCode}</span></div>
+              <div className="info-row"><span className="label">Loại vé</span><span className="value">{selectedTicket.ticketTypeName}</span></div>
+              {selectedTicket.seatLabel ? <div className="info-row"><span className="label">Ghế</span><span className="value">{selectedTicket.seatLabel}</span></div> : null}
+              {selectedTicket.holderName ? <div className="info-row"><span className="label">Người sở hữu</span><span className="value">{selectedTicket.holderName}</span></div> : null}
+              {selectedTicket.holderEmail ? <div className="info-row"><span className="label">Email</span><span className="value">{selectedTicket.holderEmail}</span></div> : null}
+              <div className="info-row"><span className="label">Giá</span><span className="value">{Number(selectedTicket.price).toLocaleString("vi-VN")} đ</span></div>
+              <div className="info-row"><span className="label">Trạng thái</span><span className={`value ${statusLabel(selectedTicket.status).cls}`}>{statusLabel(selectedTicket.status).text}</span></div>
+              {selectedTicket.checkedInAt ? <div className="info-row"><span className="label">Thời gian check-in</span><span className="value">{formatDate(selectedTicket.checkedInAt)}</span></div> : null}
             </div>
             {selectedTicket.qrCodeData && selectedTicket.status === "VALID" ? (
               <div className="qr-section">
                 <p className="qr-label">Mã QR (quét tại cổng)</p>
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(selectedTicket.qrCodeData)}`}
-                  alt="QR Code"
-                  className="qr-image"
-                />
+                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(selectedTicket.qrCodeData)}`} alt="QR Code" className="qr-image" />
               </div>
             ) : null}
           </div>

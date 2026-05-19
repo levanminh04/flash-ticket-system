@@ -26,6 +26,9 @@
 }
 
 .venues-hero__copy {
+  background:
+    linear-gradient(90deg, rgba(8, 40, 29, 0.9), rgba(8, 40, 29, 0.58)),
+    url("https://jdc-events.com/wp-content/uploads/2022/11/iStock-491667770-scaled.jpg") center / cover;
   padding: 36px;
   color: white;
 }
@@ -62,6 +65,9 @@
 }
 
 .venues-hero__stats {
+  background:
+    linear-gradient(135deg, rgba(8, 40, 29, 0.88), rgba(8, 40, 29, 0.58)),
+    url("https://res.klook.com/klook-hotel/image/upload/w_750,c_fill,q_85/agodahotel/agoda-homes/15225763/52d97356075c8685a90a0f1d964393c4.jpg") center / cover;
   padding: 24px;
   display: grid;
   gap: 16px;
@@ -72,11 +78,26 @@
   border-radius: var(--radius-md);
   padding: 22px;
   color: white;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.venues-stat-card > svg {
+  width: 42px;
+  height: 42px;
+  color: #ffffff;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.28));
+}
+
+.venues-stat-card div {
+  min-width: 0;
 }
 
 .venues-stat-card span {
   display: block;
-  font-size: 13px;
+  font-size: 16px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.72);
@@ -105,16 +126,27 @@
   align-items: center;
   gap: 12px;
   width: min(100%, 520px);
-  padding: 14px 18px;
+  padding: 8px 10px 8px 18px;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: var(--shadow-md);
 }
 
-.venues-search svg {
-  color: var(--text-muted);
+.venues-search__icon {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.venues-search__icon svg {
+  color: currentColor;
 }
 
 .venues-search input {
