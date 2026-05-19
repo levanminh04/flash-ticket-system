@@ -2,7 +2,7 @@ package com.flashticket.gateway;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collections;
@@ -18,21 +18,27 @@ public class FallBackController {
      * */
 
 
-    @GetMapping("/fallback/core")
+    /**
+     * Lệnh forward: của Spring Cloud Gateway có một đặc điểm là giữ nguyên Method gốc của request.
+     * Nếu gửi POST /api/chat, nó sẽ forward thành POST /fallback/discovery.
+     * Vì vậy phải để @RequestMapping => chấp nhận mọi method
+     * */
+
+    @RequestMapping("/fallback/core")
     public ResponseEntity<List<String>> coreFallBack(){
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Collections.singletonList("Core service is currently slow or unavailable. Please try again later."));
     }
 
-    @GetMapping("/fallback/user")
+    @RequestMapping("/fallback/user")
     public ResponseEntity<List<String>> userFallBack(){
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Collections.singletonList("User service is currently slow or unavailable. Please try again later."));
     }
 
-    @GetMapping("/fallback/ai")
-    public ResponseEntity<List<String>> aiFallBack(){
+    @RequestMapping("/fallback/discovery")
+    public ResponseEntity<List<String>> discoveryFallBack(){
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(Collections.singletonList("AI service is currently slow or unavailable. Please try again later."));
+                .body(Collections.singletonList("Discovery service is currently slow or unavailable. Please try again later."));
     }
 }

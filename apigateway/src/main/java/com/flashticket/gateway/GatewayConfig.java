@@ -78,16 +78,15 @@ public class GatewayConfig {
                         .uri("lb://USER-SERVICE")
                 )
                 
-                // AI Service - Recommendations, Analytics
-                .route("ai-service", r -> r
-                        .path("/api/recommendations/**", "/api/analytics/**")
+                // Discovery Service - AI Chat, Semantic Search, Recommendations
+                .route("discovery-service", r -> r
+                        .path("/api/discovery/**", "/api/chat/**")
                         .filters(f -> f
                                 .circuitBreaker(config -> config
-                                        .setName("aiServiceBreaker")
-                                        .setFallbackUri("forward:/fallback/ai")
-                                )
-                        )
-                        .uri("lb://AI-SERVICE")
+                                        .setName("discoveryServiceBreaker")
+                                        .setFallbackUri("forward:/fallback/discovery")
+                                ))
+                        .uri("lb://DISCOVERY-SERVICE")
                 )
                 
                 // Eureka Dashboard (for development)

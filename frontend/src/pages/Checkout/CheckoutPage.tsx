@@ -38,21 +38,8 @@ function formatTimer(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
-function formatSeatLabel(seatId: string): string {
-  const match = seatId.match(/-([A-Za-z]+)-(\d+)$/);
-  if (match) {
-    return `${match[1].toUpperCase()}-${match[2]}`;
-  }
-  return seatId;
-}
-
 function normalizeSeatLabel(value: string): string {
-  const trimmed = value.trim();
-  const directLabel = trimmed.match(/^([A-Za-z]+)-?(\d+)$/);
-  if (directLabel) {
-    return `${directLabel[1].toUpperCase()}-${directLabel[2]}`;
-  }
-  return formatSeatLabel(trimmed);
+  return value.trim();
 }
 
 function truncateBreadcrumbLabel(value: string, maxLength = 70): string {
@@ -63,9 +50,8 @@ function truncateBreadcrumbLabel(value: string, maxLength = 70): string {
   return `${value.slice(0, maxLength)}...`;
 }
 
-function getSeatLabelsFromSeatIds(seatIds?: string[]): string[] {
-  if (!seatIds || seatIds.length === 0) return [];
-  return seatIds.map((seatId) => normalizeSeatLabel(formatSeatLabel(seatId)));
+function getSeatLabelsFromSeatIds(_seatIds?: string[]): string[] {
+  return [];
 }
 
 function getSeatLabelsFromLabels(labels?: string[]): string[] {
@@ -591,12 +577,13 @@ export default function CheckoutPage() {
                   );
                   const unitPrice = ticketType?.price || 0;
                   const lineTotal = unitPrice * item.quantity;
+                  const labelsFromSelection = getSeatLabelsFromLabels(
+                    selectedSeatLabelsByType[item.ticketTypeId],
+                  );
                   const rawSeatLabels =
-                    getSeatLabelsFromSeatIds(item.seatIds).length > 0
-                      ? getSeatLabelsFromSeatIds(item.seatIds)
-                      : getSeatLabelsFromLabels(
-                          selectedSeatLabelsByType[item.ticketTypeId],
-                        );
+                    labelsFromSelection.length > 0
+                      ? labelsFromSelection
+                      : getSeatLabelsFromSeatIds(item.seatIds);
                   const seatLabels = Array.from(new Set(rawSeatLabels));
                   const zoneTag = ticketType?.sectorId
                     ? `Zone ${ticketType.sectorId.slice(0, 6)}`

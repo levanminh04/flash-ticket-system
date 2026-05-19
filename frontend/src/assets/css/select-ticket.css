@@ -226,6 +226,27 @@
   position: relative;
 }
 
+.buyer-seat-map-canvas {
+  width: 100%;
+  flex: 1;
+  min-height: 480px;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.buyer-seat-map-canvas.is-panning {
+  cursor: grabbing;
+}
+
+.buyer-seat-map-empty {
+  min-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text-muted);
+}
+
 .seat-map-content {
   position: absolute;
   top: 0;
@@ -404,6 +425,26 @@
   width: 14px;
   height: 14px;
   border-radius: 4px;
+}
+
+.legend-dot-available {
+  background: #f8fafc;
+  border: 2px solid #16a34a;
+}
+
+.legend-dot-selected {
+  background: #16a34a;
+  border: 2px solid #166534;
+}
+
+.legend-dot-reserved {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+}
+
+.legend-dot-sold {
+  background: #e2e8f0;
+  border: 2px solid #cbd5e1;
 }
 
 /* Zoom Controls — inline */

@@ -157,7 +157,7 @@ export default function SelectTicketPage() {
       }
 
       if (totalSelected >= maxPerOrder) {
-        toast.warning(`Bạn chỉ được chọn tối đa ${maxPerOrder} vé.`, {
+        toast.warning(`Ban chi duoc chon toi da ${maxPerOrder} ve.`, {
           toastId: "max-ticket-limit",
         });
         return;
@@ -214,7 +214,7 @@ export default function SelectTicketPage() {
 
   const handleContinue = () => {
     if (totalSelected < minPerOrder) {
-      toast.warning(`Vui lòng chọn ít nhất ${minPerOrder} vé.`);
+      toast.warning(`Vui long chon it nhat ${minPerOrder} ve.`);
       return;
     }
 
@@ -516,10 +516,10 @@ export default function SelectTicketPage() {
 
             <div className="sidebar-selected">
               <div className="selected-header">
-                <span className="label">Đã chọn</span>
+                <span className="label">Da chon</span>
                 {selectedSeats.length > 0 && (
                   <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                    {selectedSeats.length} ghế
+                    {selectedSeats.length} ghe
                   </span>
                 )}
               </div>
@@ -542,7 +542,7 @@ export default function SelectTicketPage() {
               <div className="sidebar-action-embedded">
                 {selectedSeats.length === 0 ? (
                   <button className="action-btn disabled-state" disabled>
-                    Vui lòng lựa chọn ghế
+                    Vui long lua chon ghe
                   </button>
                 ) : (
                   <button

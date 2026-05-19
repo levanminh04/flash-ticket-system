@@ -34,9 +34,10 @@ CREATE SCHEMA IF NOT EXISTS booking_schema;
 CREATE SCHEMA IF NOT EXISTS payment_schema;
 CREATE SCHEMA IF NOT EXISTS promotion_schema;
 CREATE SCHEMA IF NOT EXISTS ai_schema;
+CREATE SCHEMA IF NOT EXISTS discovery_schema;
 
 -- Set default search path
-SET search_path TO public, event_schema, booking_schema, payment_schema, promotion_schema, ai_schema;
+SET search_path TO public, event_schema, booking_schema, payment_schema, promotion_schema, ai_schema, discovery_schema;
 
 
 -- ============================================================================
@@ -182,6 +183,10 @@ CREATE TABLE event_schema.events (
     status VARCHAR(50) DEFAULT 'DRAFT' NOT NULL,
     visibility VARCHAR(50) DEFAULT 'PUBLIC', -- kiểm soát ai có quyền tìm thấy và nhìn thấy sự kiện trên ứng dụng/website. PUBLIC, PRIVATE, UNLISTED: có thể bán sự kiện nội bộ, pre-sale cho fan cứng
     is_featured BOOLEAN DEFAULT FALSE,
+    
+    -- Denormalized fields (V3 migration)
+    min_price DECIMAL(15, 2),                    -- Cache giá thấp nhất từ ticket_types
+    banner_url VARCHAR(500),                     -- Cache URL ảnh banner từ event_images
     
     -- Statistics (denormalized for performance)
     total_capacity INT DEFAULT 0,
@@ -877,6 +882,9 @@ CREATE TABLE booking_schema.tickets (
     transferred_from_ticket_id UUID,
     transferred_at TIMESTAMPTZ,
     
+    -- User tracking (V5 migration)
+    user_id VARCHAR(255),                        -- LOGICAL REFERENCE → User Service MongoDB
+    
     -- Audit Columns
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -1154,6 +1162,61 @@ COMMENT ON TABLE ai_schema.messages IS 'Chat history - lưu để analysis và i
 
 -- ============================================================================
 -- ============================================================================
+--                           DISCOVERY_SCHEMA
+-- ============================================================================
+-- Module quản lý: AI Discovery Service — Chat, RAG, Mood-Aware
+-- Owner: Discovery Service (refactored từ ai-service)
+-- Sử dụng PGVector cho embedding, LangChain4j tự quản lý bảng event_embeddings
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Table: discovery_schema.chat_sessions
+-- Mô tả: Phiên chat của user với AI assistant
+-- ----------------------------------------------------------------------------
+CREATE TABLE discovery_schema.chat_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id VARCHAR(255) NOT NULL,               -- LOGICAL REFERENCE → User Service MongoDB
+    title VARCHAR(500),                          -- Tiêu đề session (auto hoặc user đặt)
+    mood VARCHAR(20) DEFAULT 'NEUTRAL',          -- Mood phát hiện gần nhất
+    message_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE INDEX idx_chat_sessions_user ON discovery_schema.chat_sessions(user_id);
+
+COMMENT ON TABLE discovery_schema.chat_sessions IS 'Phiên chat AI — mỗi user có thể có nhiều session';
+
+-- ----------------------------------------------------------------------------
+-- Table: discovery_schema.chat_messages
+-- Mô tả: Tin nhắn trong phiên chat (persistent memory cho LangChain4j)
+-- ----------------------------------------------------------------------------
+CREATE TABLE discovery_schema.chat_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL REFERENCES discovery_schema.chat_sessions(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL,                   -- USER, AI, SYSTEM, TOOL
+    content TEXT NOT NULL,
+    tool_name VARCHAR(100),                      -- Tên tool nếu role=TOOL
+    tool_result TEXT,                            -- Kết quả tool trả về
+    mood VARCHAR(20),                            -- Mood tại thời điểm gửi
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    
+    CONSTRAINT chk_chat_message_role CHECK (role IN ('USER', 'AI', 'SYSTEM', 'TOOL'))
+);
+
+CREATE INDEX idx_chat_messages_session ON discovery_schema.chat_messages(session_id);
+
+COMMENT ON TABLE discovery_schema.chat_messages IS 'Chat history — persistent memory, lưu tool calls và mood';
+
+-- NOTE: PGVector embedding table (discovery_schema.event_embeddings)
+-- được LangChain4j PgVectorEmbeddingStore tự tạo khi khởi tạo (createTable=true).
+-- Dimension: 768 (Google text-embedding-004)
+-- Schema: discovery_schema.event_embeddings
+
+
+-- ============================================================================
+-- ============================================================================
 --                           TRIGGERS & FUNCTIONS
 -- ============================================================================
 
@@ -1178,7 +1241,7 @@ BEGIN
         SELECT table_schema || '.' || table_name 
         FROM information_schema.columns 
         WHERE column_name = 'updated_at' 
-        AND table_schema IN ('event_schema', 'booking_schema', 'payment_schema', 'promotion_schema', 'ai_schema')
+        AND table_schema IN ('event_schema', 'booking_schema', 'payment_schema', 'promotion_schema', 'ai_schema', 'discovery_schema')
     LOOP
         EXECUTE format('
             DROP TRIGGER IF EXISTS update_updated_at ON %s;
@@ -1306,36 +1369,39 @@ VALUES
 
 -- Verify schemas created
 SELECT schema_name FROM information_schema.schemata 
-WHERE schema_name IN ('event_schema', 'booking_schema', 'payment_schema', 'promotion_schema', 'ai_schema');
+WHERE schema_name IN ('event_schema', 'booking_schema', 'payment_schema', 'promotion_schema', 'ai_schema', 'discovery_schema');
 
 -- Verify tables per schema
 SELECT table_schema, table_name 
 FROM information_schema.tables 
-WHERE table_schema IN ('event_schema', 'booking_schema', 'payment_schema', 'promotion_schema', 'ai_schema')
+WHERE table_schema IN ('event_schema', 'booking_schema', 'payment_schema', 'promotion_schema', 'ai_schema', 'discovery_schema')
 ORDER BY table_schema, table_name;
 
 -- Count tables
 SELECT table_schema, COUNT(*) as table_count
 FROM information_schema.tables 
-WHERE table_schema IN ('event_schema', 'booking_schema', 'payment_schema', 'promotion_schema', 'ai_schema')
+WHERE table_schema IN ('event_schema', 'booking_schema', 'payment_schema', 'promotion_schema', 'ai_schema', 'discovery_schema')
 GROUP BY table_schema;
 
 
 -- ============================================================================
 -- END OF SCRIPT
 -- ============================================================================
--- Total Tables: 25
--- - event_schema: 9 tables
+-- Total Tables: 27 (25 original + 2 discovery)
+-- - event_schema: 10 tables
 --     Global: categories, venues
 --     Core: events, event_categories, event_images, ticket_types, event_seat_inventory
 --     Per-event layout: event_layouts, event_sectors, event_seats
 -- - promotion_schema: 2 tables (promotions, promotion_usages)
 -- - booking_schema: 7 tables (carts, cart_items, orders, order_items, order_item_seats, tickets, reservations)
 -- - payment_schema: 2 tables (transactions, refunds)
--- - ai_schema: 3 tables (documents, conversations, messages)
+-- - ai_schema: 3 tables (documents, conversations, messages) — legacy, giữ nguyên
+-- - discovery_schema: 2 tables (chat_sessions, chat_messages) + 1 auto-created (event_embeddings)
 --
--- v3 Changes (2026-03-25):
+-- Changelog:
+-- v3 (2026-03-25):
 --   + venues.seat_map_config JSONB
+--   + events.min_price DECIMAL, events.banner_url VARCHAR (denormalized cache)
 --   + events.status: thêm 'PENDING_APPROVAL'
 --   + ticket_types.event_sector_id UUID FK → event_sectors
 --   + event_seat_inventory.event_seat_id UUID FK → event_seats
@@ -1343,4 +1409,9 @@ GROUP BY table_schema;
 --   - DELETED: venue_sectors, venue_seats (thay bằng event_sectors, event_seats)
 --   - DELETED: ticket_types.sector_id (thay bằng event_sector_id)
 --   - DELETED: event_seat_inventory.seat_id (thay bằng event_seat_id)
+-- v5 (2026-04):
+--   + tickets.user_id VARCHAR(255) — logical reference tới User Service
+-- v6 (2026-05):
+--   + NEW SCHEMA: discovery_schema (chat_sessions, chat_messages)
+--   + event_embeddings auto-created by LangChain4j (dimension 768)
 -- ============================================================================

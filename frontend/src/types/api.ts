@@ -128,6 +128,7 @@ export interface TicketType {
   id: string;
   eventId: string;
   sectorId?: string;
+  eventSectorId?: string;
   name: string;
   description?: string;
   price: number;
@@ -144,6 +145,36 @@ export interface TicketType {
   colorCode?: string;
   status: string;
   isVisible: boolean;
+}
+
+export interface PublicSeatMap {
+  layoutId?: string;
+  backgroundImageUrl?: string;
+  backgroundWidth?: number;
+  backgroundHeight?: number;
+  mapConfig?: Record<string, unknown>;
+  sectors?: PublicSeatSector[];
+}
+
+export interface PublicSeatSector {
+  id: string;
+  name: string;
+  sectorType?: string;
+  mapData?: Record<string, unknown>;
+  colorCode?: string;
+  seatsData?: PublicSeat[];
+}
+
+export interface PublicSeat {
+  id: string;
+  rowName?: string;
+  seatNumber?: string;
+  seatLabel?: string;
+  coordX?: number;
+  coordY?: number;
+  seatType?: string;
+  isActive?: boolean;
+  inventoryStatus?: string;
 }
 
 export interface VenueSector {
