@@ -27,6 +27,9 @@ public class EventSeat {
     @JoinColumn(name = "sector_id", nullable = false)
     private EventSector sector;
 
+    @Column(name = "ticket_type_id")
+    private UUID ticketTypeId;
+
     @Column(name = "row_name", nullable = false, length = 10)
     private String rowName;
 
@@ -48,6 +51,9 @@ public class EventSeat {
 
     @Column(name = "seat_type", length = 50)
     private String seatType = "REGULAR";
+
+    @Column(name = "color_code", length = 7)
+    private String colorCode;
 
     @Column(name = "is_aisle")
     private Boolean isAisle = false;

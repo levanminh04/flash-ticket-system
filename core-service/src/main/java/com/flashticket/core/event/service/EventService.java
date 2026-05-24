@@ -277,6 +277,8 @@ public class EventService {
                 .quantityTotal(tt.getQuantityTotal())
                 .quantityAvailable(tt.getQuantityAvailable())
                 .eventSectorId(tt.getEventSectorId())
+                .inventoryMode(tt.getInventoryMode() != null ? tt.getInventoryMode().name() : null)
+                .accessScope(tt.getAccessScope() != null ? tt.getAccessScope().name() : null)
                 .maxPerOrder(tt.getMaxPerOrder())
                 .saleStartDatetime(tt.getSaleStartDatetime())
                 .saleEndDatetime(tt.getSaleEndDatetime())
