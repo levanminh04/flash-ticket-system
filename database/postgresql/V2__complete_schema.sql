@@ -421,6 +421,7 @@ CREATE INDEX idx_seat_inventory_event_seat ON event_schema.event_seat_inventory(
 
 COMMENT ON TABLE event_schema.event_seat_inventory IS 'Inventory ghế theo event - sync với Redis cho distributed lock';
 COMMENT ON COLUMN event_schema.event_seat_inventory.event_seat_id IS 'FK → event_seats (per-event layout)';
+COMMENT ON COLUMN event_schema.event_seat_inventory.ticket_type_id IS 'Snapshot từ event_seats.ticket_type_id để booking validate nhanh seat thuộc đúng TicketType';
 COMMENT ON COLUMN event_schema.event_seat_inventory.lock_expires_at IS 'Sync với Redis TTL - background job cleanup expired locks';
 COMMENT ON COLUMN event_schema.event_seat_inventory.version IS 'Optimistic locking - increment on update to prevent race condition';
 
@@ -509,6 +510,7 @@ CREATE TABLE event_schema.event_seats (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
     sector_id UUID NOT NULL REFERENCES event_schema.event_sectors(id) ON DELETE CASCADE,
+    ticket_type_id UUID REFERENCES event_schema.ticket_types(id) ON DELETE SET NULL,
 
     row_name VARCHAR(10) NOT NULL,               -- "A", "B", "1"
     seat_number VARCHAR(10) NOT NULL,            -- "1", "2", "3"
@@ -521,6 +523,7 @@ CREATE TABLE event_schema.event_seats (
 
     -- Thuộc tính ghế
     seat_type VARCHAR(50) DEFAULT 'REGULAR',
+    color_code VARCHAR(7),                       -- Màu hiển thị ghế trên FE, thường sync từ ticket_types.color_code
     is_aisle BOOLEAN DEFAULT FALSE,
     has_obstruction BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
@@ -533,8 +536,11 @@ CREATE TABLE event_schema.event_seats (
 
 CREATE INDEX idx_event_seats_sector ON event_schema.event_seats(sector_id);
 CREATE INDEX idx_event_seats_active ON event_schema.event_seats(sector_id, is_active);
+CREATE INDEX idx_event_seats_ticket_type ON event_schema.event_seats(ticket_type_id);
 
 COMMENT ON TABLE event_schema.event_seats IS 'Per-event seats với tọa độ cho Seat Map Renderer (v3)';
+COMMENT ON COLUMN event_schema.event_seats.ticket_type_id IS 'TicketType/vùng giá của ghế trong SEATED sector; source of truth để sync sang event_seat_inventory.ticket_type_id';
+COMMENT ON COLUMN event_schema.event_seats.color_code IS 'Màu hiển thị ghế trên FE; không dùng cho booking validation';
 
 
 -- ============================================================================
