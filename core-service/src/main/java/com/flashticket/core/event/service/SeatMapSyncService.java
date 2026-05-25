@@ -2,6 +2,7 @@ package com.flashticket.core.event.service;
 
 import com.flashticket.core.common.exception.InvalidRequestException;
 import com.flashticket.core.common.exception.ResourceNotFoundException;
+import com.flashticket.core.booking.event.SeatStatusChangedEvent;
 import com.flashticket.core.event.dto.SeatMapPublishRequest;
 import com.flashticket.core.event.dto.SeatMapResponse;
 import com.flashticket.core.event.entity.Event;
@@ -19,6 +20,7 @@ import com.flashticket.core.event.repository.EventSectorRepository;
 import com.flashticket.core.event.repository.TicketTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.redisson.api.RMapCache;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
@@ -58,6 +60,7 @@ public class SeatMapSyncService {
     private final EventSeatInventoryRepository eventSeatInventoryRepository;
     private final TicketTypeRepository ticketTypeRepository;
     private final RedissonClient redissonClient;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Organizer/editor view: includes inactive sectors and seats.
@@ -228,9 +231,9 @@ public class SeatMapSyncService {
 
         syncAssignedSeatTicketCounters(eventId);
         if (event.getStatus() == Event.EventStatus.PUBLISHED) {
-            warmSeatStatusCache(eventId, activeSeatedSectorIds);
+            publishSeatStatusSnapshot(eventId, activeSeatedSectorIds);
         } else {
-            clearSeatStatusCache(eventId);
+            eventPublisher.publishEvent(new SeatStatusChangedEvent(eventId, Map.of(), true));
         }
 
         log.info("Published seat map for event {} with {} sectors", eventId, sectorPayloads.size());
@@ -285,7 +288,7 @@ public class SeatMapSyncService {
                             .colorCode(resolveSeatColor(ticketType))
                             .seatType(seat.getSeatType())
                             .isActive(seat.getIsActive())
-                            .inventoryStatus(inventoryStatusMap.getOrDefault(seat.getId(), "AVAILABLE"))
+                            .inventoryStatus(resolveInventoryStatus(inventoryStatusMap, seat.getId(), includeInactive))
                             .build();
                     })
                     .toList();
@@ -535,9 +538,10 @@ public class SeatMapSyncService {
     private Map<UUID, String> readSeatStatus(UUID eventId, boolean includeInactive, Collection<UUID> seatedSectorIds) {
         if (!includeInactive) { // Nếu là public view thì đọc cache trước. Nếu cache có dữ liệu thì trả luôn, không cần query DB.
             try {
+                Set<UUID> expectedSeatIds = activeSeatIds(seatedSectorIds);
                 RMapCache<UUID, String> cache = redissonClient.getMapCache("seat_status:" + eventId);
                 Map<UUID, String> cached = cache.readAllMap();
-                if (!cached.isEmpty()) {
+                if (!cached.isEmpty() && cached.keySet().containsAll(expectedSeatIds)) {
                     return cached;
                 }
             } catch (RuntimeException ex) {
@@ -557,6 +561,24 @@ public class SeatMapSyncService {
             warmSeatStatusCache(eventId, seatedSectorIds);
         }
         return statuses;
+    }
+
+    private Set<UUID> activeSeatIds(Collection<UUID> seatedSectorIds) {
+        if (seatedSectorIds == null || seatedSectorIds.isEmpty()) {
+            return Set.of();
+        }
+        return eventSeatRepository.findAllBySectorIdIn(seatedSectorIds).stream()
+            .filter(seat -> Boolean.TRUE.equals(seat.getIsActive()))
+            .map(EventSeat::getId)
+            .collect(Collectors.toSet());
+    }
+
+    private String resolveInventoryStatus(Map<UUID, String> inventoryStatusMap, UUID seatId, boolean includeInactive) {
+        String status = inventoryStatusMap.get(seatId);
+        if (status != null) {
+            return status;
+        }
+        return includeInactive ? "AVAILABLE" : "BLOCKED";
     }
 
     private Optional<Event> resolveEvent(String idOrSlug) {
@@ -751,9 +773,10 @@ public class SeatMapSyncService {
                     (left, right) -> left
                 ));
             Map<UUID, String> cacheValues = activeSeats.stream()
+                .filter(seat -> inventoryStatusMap.containsKey(seat.getId()))
                 .collect(Collectors.toMap(
                     EventSeat::getId,
-                    seat -> inventoryStatusMap.getOrDefault(seat.getId(), "AVAILABLE")
+                    seat -> inventoryStatusMap.get(seat.getId())
                 ));
             cache.clear();
             cache.putAll(cacheValues);
@@ -761,6 +784,22 @@ public class SeatMapSyncService {
         } catch (RuntimeException ex) {
             log.warn("Failed to warm seat status cache for event {}: {}", eventId, ex.getMessage());
         }
+    }
+
+    private void publishSeatStatusSnapshot(UUID eventId, Collection<UUID> seatedSectorIds) {
+        if (seatedSectorIds == null || seatedSectorIds.isEmpty()) {
+            eventPublisher.publishEvent(new SeatStatusChangedEvent(eventId, Map.of(), true));
+            return;
+        }
+        Set<UUID> activeSeats = activeSeatIds(seatedSectorIds);
+        Map<UUID, String> inventoryStatusMap = eventSeatInventoryRepository.findByEventId(eventId).stream()
+            .filter(inv -> activeSeats.contains(inv.getEventSeat().getId()))
+            .collect(Collectors.toMap(
+                inv -> inv.getEventSeat().getId(),
+                EventSeatInventory::getStatus,
+                (left, right) -> left
+            ));
+        eventPublisher.publishEvent(new SeatStatusChangedEvent(eventId, inventoryStatusMap, true));
     }
 
     private void clearSeatStatusCache(UUID eventId) {

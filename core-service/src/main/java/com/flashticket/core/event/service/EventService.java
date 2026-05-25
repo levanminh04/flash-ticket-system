@@ -76,6 +76,9 @@ public class EventService {
         log.info("Fetching event detail for: {}", idOrSlug);
         
         Event event = findEventByIdOrSlug(idOrSlug);
+        if (event.getStatus() != Event.EventStatus.PUBLISHED) {
+            throw new ResourceNotFoundException("Event not found: " + idOrSlug);
+        }
         
         // 2. Map to DTO
         EventDetailResponse response = mapToEventDetailResponse(event);
@@ -266,7 +269,11 @@ public class EventService {
         if (ticketTypes == null) return List.of();
         
         return ticketTypes.stream()
-            .filter(tt -> !tt.getIsDeleted() && tt.getIsVisible())
+            .filter(tt -> !tt.getIsDeleted()
+                && tt.getIsVisible()
+                && tt.getStatus() == TicketType.TicketStatus.ACTIVE
+                && tt.getQuantityAvailable() != null
+                && tt.getQuantityAvailable() > 0)
             .map(tt -> TicketTypeDTO.builder()
                 .id(tt.getId())
                 .name(tt.getName())

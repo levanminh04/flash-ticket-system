@@ -15,6 +15,8 @@ public record TicketTypeOrganizerDTO(
     UUID id,
     UUID eventId,
     UUID eventSectorId,
+    String inventoryMode,
+    String accessScope,
     String name,
     String description,
     BigDecimal price,
@@ -39,6 +41,8 @@ public record TicketTypeOrganizerDTO(
             .id(tt.getId())
             .eventId(tt.getEvent().getId())
             .eventSectorId(tt.getEventSectorId())
+            .inventoryMode(tt.getInventoryMode() != null ? tt.getInventoryMode().name() : null)
+            .accessScope(tt.getAccessScope() != null ? tt.getAccessScope().name() : null)
             .name(tt.getName())
             .description(tt.getDescription())
             .price(tt.getPrice())

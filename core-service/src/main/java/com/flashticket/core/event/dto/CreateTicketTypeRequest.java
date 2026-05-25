@@ -1,7 +1,12 @@
 package com.flashticket.core.event.dto;
 
-import com.flashticket.core.event.entity.TicketType.TicketStatus;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -9,50 +14,51 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Request để tạo mới TicketType.
- * eventSectorId: null = Zone ticket, có giá trị = Block/Seated ticket.
+ * Request tao/sua TicketType.
+ *
+ * quantityTotal duoc validate trong service theo inventoryMode backend tu derive:
+ * - QUANTITY: bat buoc >= 1
+ * - ASSIGNED_SEAT: bo qua gia tri client gui, lay tu so ghe active da gan vao TicketType
  */
 @Builder
 public record CreateTicketTypeRequest(
 
-    @NotBlank(message = "Tên loại vé không được để trống")
+    @NotBlank(message = "Ten loai ve khong duoc de trong")
     @Size(max = 100)
     String name,
 
     String description,
 
-    @NotNull(message = "Giá vé không được để trống")
-    @DecimalMin(value = "0.0", inclusive = true, message = "Giá vé không được âm")
+    @NotNull(message = "Gia ve khong duoc de trong")
+    @DecimalMin(value = "0.0", inclusive = true, message = "Gia ve khong duoc am")
     BigDecimal price,
 
     BigDecimal originalPrice,
 
-    @NotNull(message = "Tổng số lượng vé không được để trống")
-    @Min(value = 1, message = "Số lượng vé tối thiểu là 1")
     Integer quantityTotal,
 
-    @Min(value = 1, message = "Số vé tối đa mỗi lần mua tối thiểu là 1")
-    @Max(value = 20, message = "Số vé tối đa mỗi lần mua là 20")
+    @Min(value = 1, message = "So ve toi da moi lan mua toi thieu la 1")
+    @Max(value = 20, message = "So ve toi da moi lan mua la 20")
     Integer maxPerOrder,
 
     Instant saleStartDatetime,
     Instant saleEndDatetime,
 
     /**
-     * true → Seated ticket (Phase 2D), user phải chọn ghế.
-     * false → Zone/Block ticket, chỉ cần chọn số lượng.
+     * Deprecated compatibility flag. Backend derives it from inventoryMode.
      */
     Boolean seatSelectionEnabled,
 
-    /** Màu hiển thị trên Frontend: "#FF5733" */
+    /** Mau hien thi tren Frontend: "#FF5733" */
     @Size(max = 7)
+    @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "Mau ve phai dung dinh dang #RRGGBB")
     String colorCode,
 
     Integer displayOrder,
 
     /**
-     * Gắn loại vé vào khu vực cụ thể (event_sectors).
-     * null → Zone ticket không thuộc sector nào.
+     * null -> event-level general admission.
+     * non-null -> sector-level ticket, backend derives mode from sectorType.
      */
     UUID eventSectorId,
 

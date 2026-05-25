@@ -7,6 +7,10 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -56,6 +60,40 @@ public class TicketReservationService {
     public RLock acquireSeatLock(UUID eventId, UUID seatId) {
         String lockKey = "lock:seat:" + eventId + ":" + seatId;
         return tryAcquireLock(lockKey, 10, 30);
+    }
+
+    /**
+     * Global booking lock order:
+     * 1. ticket type locks, sorted by UUID
+     * 2. seat locks, sorted by UUID
+     *
+     * All booking paths must use this order to avoid deadlocks when a request
+     * contains multiple ticket types and seats.
+     */
+    public List<RLock> acquireGlobalLocks(
+        UUID eventId,
+        Collection<UUID> ticketTypeIds,
+        Collection<UUID> seatIds
+    ) {
+        List<RLock> locks = new ArrayList<>();
+        try {
+            ticketTypeIds.stream()
+                .distinct()
+                .sorted(Comparator.comparing(UUID::toString))
+                .map(this::acquireZoneLock)
+                .forEach(locks::add);
+
+            seatIds.stream()
+                .distinct()
+                .sorted(Comparator.comparing(UUID::toString))
+                .map(seatId -> acquireSeatLock(eventId, seatId))
+                .forEach(locks::add);
+
+            return locks;
+        } catch (RuntimeException ex) {
+            locks.forEach(this::releaseLock);
+            throw ex;
+        }
     }
 
     /**

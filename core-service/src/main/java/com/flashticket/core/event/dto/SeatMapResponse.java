@@ -31,6 +31,7 @@ public class SeatMapResponse {
         private String name;
         private String code;
         private String sectorType;
+        private Integer totalCapacity;
         private Map<String, Object> mapData;
         private String colorCode;
         private Integer displayOrder;
@@ -49,6 +50,9 @@ public class SeatMapResponse {
         private String seatLabel;
         private BigDecimal coordX;
         private BigDecimal coordY;
+        private UUID ticketTypeId;
+        private BigDecimal price;
+        private String colorCode;
         private String seatType;
         private Boolean isActive;
         private String inventoryStatus; // AVAILABLE, SOLD, LOCKED, RESERVED

@@ -53,15 +53,20 @@ public class OrderExpirationHelper {
      */
     @Transactional
     public void expireOne(Order order) {
+        int updated = orderRepository.markExpiredIfPending(order.getId());
+        if (updated == 0) {
+            log.debug("Skip expiring order {} because it is no longer PENDING", order.getOrderNumber());
+            return;
+        }
+
         // 1. Restore stock về ticket_types (quantity_available += N, quantity_reserved -= N)
         bookingService.restoreStock(order.getId());
+        bookingService.restoreSeatsForExpiredOrder(order.getId());
 
         // 2. Release promotion slot nếu order có dùng voucher
         promotionService.releasePromotion(order.getPromotionId());
 
         // 3. Update order status — nếu step này lỗi, cả 3 bước đều rollback
-        order.setStatus(Order.OrderStatus.EXPIRED);
-        orderRepository.save(order);
 
         log.debug("Order {} expired — stock & promotion slot restored", order.getOrderNumber());
     }
