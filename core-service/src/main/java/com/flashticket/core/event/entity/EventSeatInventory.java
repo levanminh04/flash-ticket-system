@@ -29,6 +29,9 @@ public class EventSeatInventory {
     @JoinColumn(name = "event_seat_id", nullable = false)
     private EventSeat eventSeat;
 
+    @Column(name = "ticket_type_id")
+    private UUID ticketTypeId;
+
     @Column(length = 50, nullable = false)
     private String status; // AVAILABLE, LOCKED, RESERVED, SOLD, BLOCKED
 

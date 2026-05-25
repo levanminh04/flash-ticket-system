@@ -299,7 +299,7 @@ CREATE TABLE event_schema.ticket_types (
     event_id UUID NOT NULL REFERENCES event_schema.events(id) ON DELETE CASCADE,
     
     -- Event Sector (optional — per-event sector tùy biến bởi Organizer)
-    event_sector_id UUID REFERENCES event_schema.event_sectors(id) ON DELETE SET NULL,
+    event_sector_id UUID,
     
     -- Basic Information
     name VARCHAR(100) NOT NULL,                  -- Tên loại vé: "VIP", "Regular"
@@ -318,6 +318,8 @@ CREATE TABLE event_schema.ticket_types (
     
     -- Seat Selection
     seat_selection_enabled BOOLEAN DEFAULT FALSE,-- Có cho chọn ghế không
+    inventory_mode VARCHAR(50) DEFAULT 'QUANTITY' NOT NULL,
+    access_scope VARCHAR(50) DEFAULT 'EVENT' NOT NULL,
     
     -- Sales Window
     sale_start_datetime TIMESTAMPTZ,
@@ -341,7 +343,9 @@ CREATE TABLE event_schema.ticket_types (
     
     CONSTRAINT chk_ticket_quantity CHECK (quantity_available >= 0 AND quantity_available <= quantity_total),
     CONSTRAINT chk_ticket_price CHECK (price >= 0),
-    CONSTRAINT chk_ticket_status CHECK (status IN ('ACTIVE', 'SOLD_OUT', 'HIDDEN'))
+    CONSTRAINT chk_ticket_status CHECK (status IN ('ACTIVE', 'SOLD_OUT', 'HIDDEN')),
+    CONSTRAINT chk_tt_inventory_mode CHECK (inventory_mode IN ('QUANTITY', 'ASSIGNED_SEAT')),
+    CONSTRAINT chk_tt_access_scope CHECK (access_scope IN ('EVENT', 'SECTOR'))
 );
 
 CREATE INDEX idx_ticket_types_event ON event_schema.ticket_types(event_id) WHERE is_deleted = FALSE;
@@ -362,8 +366,9 @@ CREATE TABLE event_schema.event_seat_inventory (
     
     -- Composite key: Event + Seat
     event_id UUID NOT NULL REFERENCES event_schema.events(id) ON DELETE CASCADE,
-    event_seat_id UUID NOT NULL REFERENCES event_schema.event_seats(id) ON DELETE CASCADE,
+    event_seat_id UUID NOT NULL,
     ticket_type_id UUID REFERENCES event_schema.ticket_types(id) ON DELETE SET NULL,
+
     
     -- ========== REDIS LOCK SYNC FIELDS ==========
     -- Redis key format: "seat_lock:{event_id}:{event_seat_id}"
@@ -416,6 +421,7 @@ CREATE INDEX idx_seat_inventory_event_seat ON event_schema.event_seat_inventory(
 
 COMMENT ON TABLE event_schema.event_seat_inventory IS 'Inventory ghế theo event - sync với Redis cho distributed lock';
 COMMENT ON COLUMN event_schema.event_seat_inventory.event_seat_id IS 'FK → event_seats (per-event layout)';
+COMMENT ON COLUMN event_schema.event_seat_inventory.ticket_type_id IS 'Snapshot từ event_seats.ticket_type_id để booking validate nhanh seat thuộc đúng TicketType';
 COMMENT ON COLUMN event_schema.event_seat_inventory.lock_expires_at IS 'Sync với Redis TTL - background job cleanup expired locks';
 COMMENT ON COLUMN event_schema.event_seat_inventory.version IS 'Optimistic locking - increment on update to prevent race condition';
 
@@ -473,7 +479,7 @@ CREATE TABLE event_schema.event_sectors (
     name VARCHAR(100) NOT NULL,                  -- "Khán đài A", "VIP Zone"
     code VARCHAR(20),                            -- "A", "VIP", "GA"
     description TEXT,
-    sector_type VARCHAR(50) NOT NULL,            -- SEATED | STANDING | VIP_BOX | ACCESSIBLE
+    sector_type VARCHAR(50) NOT NULL,            -- ví dụ: SEATED | STANDING | VIP_BOX | ACCESSIBLE
 
     total_capacity INT NOT NULL,                 -- Tổng sức chứa
 
@@ -504,6 +510,7 @@ CREATE TABLE event_schema.event_seats (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
     sector_id UUID NOT NULL REFERENCES event_schema.event_sectors(id) ON DELETE CASCADE,
+    ticket_type_id UUID REFERENCES event_schema.ticket_types(id) ON DELETE SET NULL,
 
     row_name VARCHAR(10) NOT NULL,               -- "A", "B", "1"
     seat_number VARCHAR(10) NOT NULL,            -- "1", "2", "3"
@@ -516,6 +523,7 @@ CREATE TABLE event_schema.event_seats (
 
     -- Thuộc tính ghế
     seat_type VARCHAR(50) DEFAULT 'REGULAR',
+    color_code VARCHAR(7),                       -- Màu hiển thị ghế trên FE, thường sync từ ticket_types.color_code
     is_aisle BOOLEAN DEFAULT FALSE,
     has_obstruction BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
@@ -528,8 +536,11 @@ CREATE TABLE event_schema.event_seats (
 
 CREATE INDEX idx_event_seats_sector ON event_schema.event_seats(sector_id);
 CREATE INDEX idx_event_seats_active ON event_schema.event_seats(sector_id, is_active);
+CREATE INDEX idx_event_seats_ticket_type ON event_schema.event_seats(ticket_type_id);
 
 COMMENT ON TABLE event_schema.event_seats IS 'Per-event seats với tọa độ cho Seat Map Renderer (v3)';
+COMMENT ON COLUMN event_schema.event_seats.ticket_type_id IS 'TicketType/vùng giá của ghế trong SEATED sector; source of truth để sync sang event_seat_inventory.ticket_type_id';
+COMMENT ON COLUMN event_schema.event_seats.color_code IS 'Màu hiển thị ghế trên FE; không dùng cho booking validation';
 
 
 -- ============================================================================
@@ -1415,3 +1426,17 @@ GROUP BY table_schema;
 --   + NEW SCHEMA: discovery_schema (chat_sessions, chat_messages)
 --   + event_embeddings auto-created by LangChain4j (dimension 768)
 -- ============================================================================
+-- Foreign Keys added at the bottom to avoid circular/forward references on fresh DB setups
+-- ============================================================================
+ALTER TABLE event_schema.ticket_types 
+    ADD CONSTRAINT fk_ticket_types_sector_id 
+    FOREIGN KEY (event_sector_id) 
+    REFERENCES event_schema.event_sectors(id) 
+    ON DELETE SET NULL;
+
+ALTER TABLE event_schema.event_seat_inventory 
+    ADD CONSTRAINT fk_esi_seat_id 
+    FOREIGN KEY (event_seat_id) 
+    REFERENCES event_schema.event_seats(id) 
+    ON DELETE CASCADE;
+

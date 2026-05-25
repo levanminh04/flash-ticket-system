@@ -1,7 +1,9 @@
 package com.flashticket.core.event.controller;
 
+import com.flashticket.core.event.dto.SeatMapPublishRequest;
 import com.flashticket.core.event.dto.SeatMapResponse;
 import com.flashticket.core.event.service.SeatMapSyncService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +30,10 @@ public class EventSeatMapController {
      * GET /api/organizer/events/{eventId}/seat-map
      * Lấy toán bộ dữ liệu Layout, Sector, Seat và gán inventoryStatus cho từng ghế.
      */
+    /**
+     * Organizer/editor view: load seat map cho màn thiết kế.
+     * Có thể trả cả sector/seat inactive để organizer tiếp tục chỉnh sửa hoặc kiểm tra phần đã ẩn.
+     */
     @GetMapping
     public ResponseEntity<SeatMapResponse> getSeatMap(
         @PathVariable UUID eventId,
@@ -38,6 +44,22 @@ public class EventSeatMapController {
 
         SeatMapResponse response = seatMapSyncService.getSeatMap(eventId, organizerId);
         
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Organizer publish view: lưu chính thức layout/sector/seat từ editor và đồng bộ inventory ghế.
+     */
+    @PostMapping("/publish")
+    public ResponseEntity<SeatMapResponse> publishSeatMap(
+        @PathVariable UUID eventId,
+        @RequestBody @Valid SeatMapPublishRequest payload,
+        @AuthenticationPrincipal Jwt jwt
+    ) {
+        String organizerId = jwt.getSubject();
+        log.info("POST /api/organizer/events/{}/seat-map/publish by organizer {}", eventId, organizerId);
+
+        SeatMapResponse response = seatMapSyncService.publishSeatMap(eventId, payload, organizerId);
         return ResponseEntity.ok(response);
     }
 }

@@ -1,7 +1,11 @@
 package com.flashticket.core.payment.repository;
 
 import com.flashticket.core.payment.entity.Transaction;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -36,6 +40,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
      * Dùng khi IPN/ReturnUrl callback — VNPay trả vnp_TxnRef = transactionNumber.
      */
     Optional<Transaction> findByTransactionNumber(String transactionNumber);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM Transaction t WHERE t.transactionNumber = :transactionNumber")
+    Optional<Transaction> findByTransactionNumberForUpdate(@Param("transactionNumber") String transactionNumber);
 
     /**
      * Transaction SUCCESS mới nhất của order — dùng để confirm payment.

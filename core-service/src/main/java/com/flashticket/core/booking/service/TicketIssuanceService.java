@@ -2,14 +2,16 @@ package com.flashticket.core.booking.service;
 
 import com.flashticket.core.booking.entity.Order;
 import com.flashticket.core.booking.entity.OrderItem;
+import com.flashticket.core.booking.entity.OrderItemSeat;
 import com.flashticket.core.booking.entity.Ticket;
 import com.flashticket.core.booking.repository.OrderItemRepository;
+import com.flashticket.core.booking.repository.OrderItemSeatRepository;
 import com.flashticket.core.booking.repository.OrderRepository;
 import com.flashticket.core.booking.repository.TicketRepository;
 import com.flashticket.core.common.exception.InvalidRequestException;
 import com.flashticket.core.common.exception.ResourceNotFoundException;
 import com.flashticket.core.event.repository.EventRepository;
-import com.flashticket.core.event.repository.TicketTypeRepository;
+import com.flashticket.core.event.service.TicketInventoryCounterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,9 +48,11 @@ public class TicketIssuanceService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderItemSeatRepository orderItemSeatRepository;
     private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
-    private final TicketTypeRepository ticketTypeRepository;
+    private final TicketInventoryCounterService ticketInventoryCounterService;
+    private final SeatBookingService seatBookingService;
 
     @Value("${app.qr.secret-key}")
     private String qrSecretKey;
@@ -84,11 +88,51 @@ public class TicketIssuanceService {
 
         List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
         List<Ticket> allTickets = new ArrayList<>();
+        List<SeatTicketLink> seatTicketLinks = new ArrayList<>();
         int sequenceNumber = 1;
 
         for (OrderItem item : items) {
             String ticketTypeName = item.getTicketTypeName();
             String venueName = order.getEventVenueName();
+            List<OrderItemSeat> seats = orderItemSeatRepository.findByOrderItemId(item.getId());
+
+            if (!seats.isEmpty() && seats.size() != item.getQuantity()) {
+                throw new InvalidRequestException("Số ghế đã giữ không khớp số lượng vé trong đơn hàng");
+            }
+
+            if (!seats.isEmpty()) {
+                for (OrderItemSeat seat : seats) {
+                    String ticketCode = buildTicketCode(order.getOrderNumber(), sequenceNumber++);
+                    String qrData = buildSignedQrData(ticketCode, order.getEventId(), item.getTicketTypeId());
+
+                    Ticket ticket = Ticket.builder()
+                        .ticketCode(ticketCode)
+                        .orderId(order.getId())
+                        .orderItemId(item.getId())
+                        .userId(order.getUserId())
+                        .eventId(order.getEventId())
+                        .ticketTypeId(item.getTicketTypeId())
+                        .seatId(seat.getSeatId())
+                        .seatLabel(seat.getSeatLabel())
+                        .eventTitle(order.getEventTitle())
+                        .eventStartDatetime(order.getEventStartDatetime())
+                        .eventVenueName(venueName)
+                        .ticketTypeName(ticketTypeName)
+                        .holderName(order.getCustomerName())
+                        .holderEmail(order.getCustomerEmail())
+                        .holderPhone(order.getCustomerPhone())
+                        .price(seat.getPrice())
+                        .qrCodeData(qrData)
+                        .status(Ticket.TicketStatus.VALID)
+                        .isDeleted(false)
+                        .isTransferable(true)
+                        .build();
+
+                    allTickets.add(ticket);
+                    seatTicketLinks.add(new SeatTicketLink(order.getEventId(), order.getId(), seat.getSeatId(), ticket));
+                }
+                continue;
+            }
 
             for (int i = 0; i < item.getQuantity(); i++) {
                 String ticketCode = buildTicketCode(order.getOrderNumber(), sequenceNumber++);
@@ -122,6 +166,8 @@ public class TicketIssuanceService {
         }
 
         List<Ticket> saved = ticketRepository.saveAll(allTickets);
+        seatTicketLinks.forEach(link -> seatBookingService.attachTicketToSeatInventory(
+            link.eventId(), link.seatId(), link.orderId(), link.ticket().getId()));
 
         // Dùng Atomic Update số vé đã bán (Avoid Lost Update), không dùng:
         //            event.setTicketsSold(event.getTicketsSold() + totalTickets);   =>  bug read-modify-write
@@ -132,7 +178,8 @@ public class TicketIssuanceService {
 
         // Giảm quantity_reserved sau khi tickets được cấp
         items.forEach(item ->
-            ticketTypeRepository.decrementReserved(item.getTicketTypeId(), item.getQuantity()));
+            ticketInventoryCounterService.confirmReserved(item.getTicketTypeId(), item.getQuantity()));
+        seatBookingService.confirmSeatsSold(orderId);
 
         log.info("Issued {} tickets for order {} (event: {})",
             saved.size(), order.getOrderNumber(), order.getEventTitle());
@@ -235,5 +282,13 @@ public class TicketIssuanceService {
         } catch (Exception e) {
             throw new RuntimeException("Không thể tạo HMAC signature", e);
         }
+    }
+
+    private record SeatTicketLink(
+        UUID eventId,
+        UUID orderId,
+        UUID seatId,
+        Ticket ticket
+    ) {
     }
 }
