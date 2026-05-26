@@ -2,6 +2,10 @@ server:
   port: 8081
 
 spring:
+  cloud:
+    bus:
+      enabled: false
+
   # PostgreSQL Database
   datasource:
     url: ${POSTGRES_URL}
@@ -44,7 +48,7 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD}
+      password: ${REDIS_PASSWORD:}
       timeout: ${REDIS_TIMEOUT:2000ms}
       lettuce:  # Lettuce pool = Connection Pool cho Redis
         pool:

@@ -7,8 +7,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI}
-          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://15.134.248.39:9090/realms/flash-ticket}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://15.134.248.39:9090/realms/flash-ticket/protocol/openid-connect/certs}
   
   # Redis Configuration (for rate limiting, session storage)
   data:

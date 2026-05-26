@@ -2,6 +2,10 @@ server:
   port: ${SERVER_PORT:8082}
 
 spring:
+  cloud:
+    bus:
+      enabled: false
+
   # MongoDB Configuration
   data:
     mongodb:
@@ -80,4 +84,4 @@ cloudinary:
   folders:
     user-avatars: flash-ticket/users/avatars
     organizer-logos: flash-ticket/organizers/logos
-    organizer-banners: flash-ticket/organizers/banners
+    organizer-banners: flash-ticket/organizers/banners

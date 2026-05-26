@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -118,6 +119,36 @@ public interface EventRepository extends JpaRepository<Event, UUID>,
      */
     @EntityGraph(attributePaths = {"venue"})
     Page<Event> findByOrganizerIdAndIsDeletedFalse(String organizerId, Pageable pageable);
+
+    /**
+     * Live organizer statistics from source-of-truth tables.
+     *
+     * Columns:
+     * 0 = event_id (UUID)
+     * 1 = tickets_sold from CONFIRMED orders
+     * 2 = total_capacity from active ticket types
+     */
+    @Query(value = """
+        SELECT
+            e.id AS event_id,
+            COALESCE(SUM(oi.quantity), 0) AS tickets_sold,
+            COALESCE((
+                SELECT SUM(tt.quantity_total)
+                FROM event_schema.ticket_types tt
+                WHERE tt.event_id = e.id
+                  AND tt.is_deleted = false
+            ), 0) AS total_capacity
+        FROM event_schema.events e
+        LEFT JOIN booking_schema.orders o
+          ON o.event_id = e.id
+         AND o.is_deleted = false
+         AND o.status = 'CONFIRMED'
+        LEFT JOIN booking_schema.order_items oi
+          ON oi.order_id = o.id
+        WHERE e.id IN (:eventIds)
+        GROUP BY e.id
+        """, nativeQuery = true)
+    List<Object[]> findLiveOrganizerStatsByEventIds(@Param("eventIds") List<UUID> eventIds);
 
     /**
      * Kiểm tra slug đã tồn tại chưa (để auto-gen slug unique).

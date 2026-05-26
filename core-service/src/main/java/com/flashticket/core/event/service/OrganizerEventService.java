@@ -19,7 +19,9 @@ import org.springframework.util.StringUtils;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
 /**
@@ -40,6 +42,12 @@ public class OrganizerEventService {
     private final TicketTypeRepository ticketTypeRepository;
     private final ApplicationEventPublisher eventPublisher;
 
+    private record EventLiveStats(int ticketsSold, int totalCapacity) {
+        static EventLiveStats empty() {
+            return new EventLiveStats(0, 0);
+        }
+    }
+
     // ═══════════════════════════════════════════════════════
     // READ
     // ═══════════════════════════════════════════════════════
@@ -47,15 +55,17 @@ public class OrganizerEventService {
     @Transactional(readOnly = true)
     public Page<EventDetailResponse> getMyEvents(String organizerId, Pageable pageable) {
         log.debug("Fetching events for organizer: {}", organizerId);
-        return eventRepository
-            .findByOrganizerIdAndIsDeletedFalse(organizerId, pageable)
-            .map(this::mapToDetailResponse);
+        Page<Event> events = eventRepository.findByOrganizerIdAndIsDeletedFalse(organizerId, pageable);
+        Map<UUID, EventLiveStats> liveStatsByEventId = loadLiveStats(events.getContent());
+        return events.map(event -> mapToDetailResponse(
+            event,
+            liveStatsByEventId.getOrDefault(event.getId(), EventLiveStats.empty())));
     }
 
     @Transactional(readOnly = true)
     public EventDetailResponse getMyEvent(UUID eventId, String organizerId) {
         Event event = findOwnedEvent(eventId, organizerId);
-        return mapToDetailResponse(event);
+        return mapToDetailResponse(event, loadLiveStats(event));
     }
 
     // ═══════════════════════════════════════════════════════
@@ -364,6 +374,10 @@ public class OrganizerEventService {
      * Tái sử dụng EventService.mapToEventDetailResponse() logic.
      */
     private EventDetailResponse mapToDetailResponse(Event event) {
+        return mapToDetailResponse(event, loadLiveStats(event));
+    }
+
+    private EventDetailResponse mapToDetailResponse(Event event, EventLiveStats liveStats) {
         return EventDetailResponse.builder()
             .id(event.getId())
             .title(event.getTitle())
@@ -377,7 +391,7 @@ public class OrganizerEventService {
             .venue(mapVenue(event.getVenue()))
             .schedule(mapSchedule(event))
             .config(mapConfig(event))
-            .statistics(mapStatistics(event))
+            .statistics(mapStatistics(event, liveStats))
             .organizer(OrganizerDTO.builder()
                 .id(event.getOrganizerId())
                 .name(event.getOrganizerName())
@@ -390,6 +404,33 @@ public class OrganizerEventService {
             .createdAt(event.getCreatedAt())
             .updatedAt(event.getUpdatedAt())
             .build();
+    }
+
+    private Map<UUID, EventLiveStats> loadLiveStats(List<Event> events) {
+        if (events == null || events.isEmpty()) {
+            return Map.of();
+        }
+
+        List<UUID> eventIds = events.stream()
+            .map(Event::getId)
+            .toList();
+
+        return eventRepository.findLiveOrganizerStatsByEventIds(eventIds).stream()
+            .collect(Collectors.toMap(
+                row -> (UUID) row[0],
+                row -> new EventLiveStats(toInt(row[1]), toInt(row[2]))
+            ));
+    }
+
+    private EventLiveStats loadLiveStats(Event event) {
+        return loadLiveStats(List.of(event)).getOrDefault(event.getId(), EventLiveStats.empty());
+    }
+
+    private int toInt(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return 0;
     }
 
     private List<EventImageDTO> mapImages(List<EventImage> images) {
@@ -477,11 +518,11 @@ public class OrganizerEventService {
             .build();
     }
 
-    private StatisticsDTO mapStatistics(Event event) {
+    private StatisticsDTO mapStatistics(Event event, EventLiveStats liveStats) {
         return StatisticsDTO.builder()
             .viewCount(event.getViewCount())
-            .ticketsSold(event.getTicketsSold())
-            .totalCapacity(event.getTotalCapacity())
+            .ticketsSold(liveStats.ticketsSold())
+            .totalCapacity(liveStats.totalCapacity())
             .build();
     }
 }
