@@ -55,8 +55,17 @@ services:
       POSTGRES_PASSWORD: ticket@7#
       REDIS_HOST: redis_flash_ticket
       RABBITMQ_HOST: rabbitmq_flash_ticket
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
       KEYCLOAK_ISSUER_URI: http://keycloak-flash-ticket:8080/realms/flash-ticket
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      MAIL_USERNAME: "5minhmanhme@gmail.com"
+      MAIL_PASSWORD: "rlje tmew prrs xcej"
+      VNPAY_TMN_CODE: "UVPHUAJF"
+      VNPAY_HASH_SECRET: "ETWXSW8TEI0A4YLR58QBJJKC4WMOD3UW"
+      CLOUDINARY_CLOUD_NAME: dze56dvqq
+      CLOUDINARY_API_KEY: "771351561328966"
+      CLOUDINARY_API_SECRET: iTdOkiYNNArQ9tOJN0RfICzUucs
     networks:
       - ec2-db-network
     depends_on:
@@ -73,7 +82,13 @@ services:
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       MONGO_URI: mongodb://mongodb_flash_ticket:27017/ticketbox_users
       RABBITMQ_HOST: rabbitmq_flash_ticket
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+      KEYCLOAK_ISSUER_URI: http://keycloak-flash-ticket:8080/realms/flash-ticket
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      CLOUDINARY_CLOUD_NAME: dze56dvqq
+      CLOUDINARY_API_KEY: "771351561328966"
+      CLOUDINARY_API_SECRET: iTdOkiYNNArQ9tOJN0RfICzUucs
     networks:
       - ec2-db-network
     depends_on:
@@ -89,7 +104,10 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       POSTGRES_URL: jdbc:postgresql://postgres_flash_ticket:5432/flash-ticket?currentSchema=discovery_schema,public
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ticket@7#
       RABBITMQ_HOST: rabbitmq_flash_ticket
+      KEYCLOAK_ISSUER_URI: http://keycloak-flash-ticket:8080/realms/flash-ticket
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
     networks:
       - ec2-db-network
