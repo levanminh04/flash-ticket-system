@@ -1,24 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Circle,
-  Ellipse,
   Group,
   Layer,
-  Line,
   Rect,
   Stage,
   Text,
 } from "react-konva";
 import { PublicSeatMap, PublicSeatSector, PublicSeat } from "../../../types/api";
+import { SectorRenderer } from "../shared/SectorRenderer";
+import { SeatRenderer } from "../shared/SeatRenderer";
 
 interface BuyerSeatMapCanvasProps {
   seatMap: PublicSeatMap;
   zoom: number;
-  pan: { x: number; y: number };
   selectedSeatIds: string[];
-  onPanChange: (pan: { x: number; y: number }) => void;
+  selectedSectorId?: string | null;
+  getSeatColor?: (sector: PublicSeatSector, seat: PublicSeat) => string;
   onZoomChange: (zoom: number) => void;
   onSeatClick: (sector: PublicSeatSector, seat: PublicSeat) => void;
+  onSectorClick?: (sector: PublicSeatSector) => void;
 }
 
 function asNumber(value: unknown): number | null {
@@ -51,15 +51,6 @@ function getSectorBounds(sector: PublicSeatSector) {
   return { x, y, width, height };
 }
 
-function getPolygonPoints(sector: PublicSeatSector) {
-  const points = Array.isArray(sector.mapData?.points) ? sector.mapData?.points : [];
-  return points.filter((point): point is number => typeof point === "number");
-}
-
-function getShapeType(sector: PublicSeatSector) {
-  return typeof sector.mapData?.shapeType === "string" ? sector.mapData.shapeType : "rectangle";
-}
-
 function getSeatRadius(sector: PublicSeatSector) {
   return Math.max(
     asNumber((sector.mapData?.seatLayout as Record<string, unknown> | undefined)?.seatRadius) ?? 6,
@@ -67,55 +58,49 @@ function getSeatRadius(sector: PublicSeatSector) {
   );
 }
 
-function getSeatFill(status?: string, selected = false) {
-  if (selected) {
-    return "#16a34a";
-  }
-
-  switch (status) {
-    case "SOLD":
-      return "#e2e8f0";
-    case "RESERVED":
-      return "#fef3c7";
-    case "LOCKED":
-      return "#dbeafe";
-    default:
-      return "#f8fafc";
-  }
-}
-
-function getSeatStroke(status?: string, selected = false, colorCode?: string) {
-  if (selected) {
-    return "#166534";
-  }
-
-  switch (status) {
-    case "SOLD":
-      return "#cbd5e1";
-    case "RESERVED":
-      return "#f59e0b";
-    case "LOCKED":
-      return "#60a5fa";
-    default:
-      return colorCode || "#16a34a";
-  }
+function getSeatPosition(seat: PublicSeat) {
+  return {
+    x: asNumber(seat.coordX) ?? 0,
+    y: asNumber(seat.coordY) ?? 0,
+  };
 }
 
 export default function BuyerSeatMapCanvas({
   seatMap,
   zoom,
-  pan,
   selectedSeatIds,
-  onPanChange,
+  selectedSectorId,
+  getSeatColor,
   onZoomChange,
   onSeatClick,
+  onSectorClick,
 }: BuyerSeatMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 620 });
-  const [isPanning, setIsPanning] = useState(false);
-  const panOriginRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(
-    null,
+
+  const maxSectorRight = Math.max(0, ...(seatMap.sectors ?? []).map(s => getSectorBounds(s).x + getSectorBounds(s).width));
+  const maxSectorBottom = Math.max(0, ...(seatMap.sectors ?? []).map(s => getSectorBounds(s).y + getSectorBounds(s).height));
+
+  // Add bottom/right padding so seats do not sit on the edge.
+  const fallbackWidth = maxSectorRight + 80;
+  const fallbackHeight = maxSectorBottom + 80;
+  const maxSeatRight = Math.max(
+    0,
+    ...(seatMap.sectors ?? []).flatMap((sector) => {
+      const radius = getSeatRadius(sector);
+      return (sector.seatsData ?? []).map((seat) => getSeatPosition(seat).x + radius);
+    }),
   );
+  const maxSeatBottom = Math.max(
+    0,
+    ...(seatMap.sectors ?? []).flatMap((sector) => {
+      const radius = getSeatRadius(sector);
+      return (sector.seatsData ?? []).map((seat) => getSeatPosition(seat).y + radius);
+    }),
+  );
+
+  const documentWidth = Math.max(seatMap.backgroundWidth ?? 0, fallbackWidth, maxSeatRight + 60, 640);
+  const documentHeight = Math.max(seatMap.backgroundHeight ?? 0, fallbackHeight + 160, maxSeatBottom + 160, 600);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -125,10 +110,10 @@ export default function BuyerSeatMapCanvas({
 
     const observer = new ResizeObserver((entries) => {
       const nextWidth = entries[0]?.contentRect.width ?? element.clientWidth;
-      const nextHeight = Math.max(420, Math.min(760, nextWidth * 0.62));
+      const nextHeight = entries[0]?.contentRect.height ?? element.clientHeight;
       setViewportSize({
         width: Math.max(320, nextWidth),
-        height: nextHeight,
+        height: Math.max(400, nextHeight),
       });
     });
 
@@ -136,114 +121,50 @@ export default function BuyerSeatMapCanvas({
     return () => observer.disconnect();
   }, []);
 
-  const maxSectorRight = Math.max(0, ...(seatMap.sectors ?? []).map(s => getSectorBounds(s).x + getSectorBounds(s).width));
-  const maxSectorBottom = Math.max(0, ...(seatMap.sectors ?? []).map(s => getSectorBounds(s).y + getSectorBounds(s).height));
+  const fitZoom = clamp(
+    Math.min(viewportSize.width / documentWidth, viewportSize.height / documentHeight) * 0.85,
+    0.1,
+    3,
+  );
+  const effectiveZoom = zoom > 0 ? zoom : fitZoom;
+  const baseX = (viewportSize.width - documentWidth * effectiveZoom) / 2;
+  const baseY = (viewportSize.height - documentHeight * effectiveZoom) / 2;
 
-  // Tăng vùng đệm bottom/right để các ghế không bị sát mép
-  const fallbackWidth = maxSectorRight + 160;
-  const fallbackHeight = maxSectorBottom + 160;
-
-  // Tính toán vùng render vừa khít với nội dung map + lề thay vì lấy cứng 1280x720 gây khoảng trắng dư
-  const documentWidth = Math.max(seatMap.backgroundWidth ? Math.min(seatMap.backgroundWidth, fallbackWidth) : fallbackWidth, 640);
-  const documentHeight = Math.max(seatMap.backgroundHeight ? Math.min(seatMap.backgroundHeight, fallbackHeight) : fallbackHeight, 420);
-
-  const baseX = (viewportSize.width - documentWidth * zoom) / 2;
-  const baseY = (viewportSize.height - documentHeight * zoom) / 2;
+  useEffect(() => {
+    if (zoom <= 0) {
+      onZoomChange(fitZoom);
+    }
+  }, [fitZoom, onZoomChange, zoom]);
 
   const worldStyle = useMemo(
     () => ({
-      x: baseX + pan.x,
-      y: baseY + pan.y,
-      scaleX: zoom,
-      scaleY: zoom,
+      x: baseX,
+      y: baseY,
+      scaleX: effectiveZoom,
+      scaleY: effectiveZoom,
     }),
-    [baseX, baseY, pan.x, pan.y, zoom],
+    [baseX, baseY, effectiveZoom],
   );
 
   const handleWheel = (event: any) => {
     event.evt.preventDefault();
-    const stage = event.target.getStage();
-    const pointer = stage?.getPointerPosition();
-    if (!pointer) {
-      return;
-    }
-
-    const oldScale = zoom;
+    const oldScale = effectiveZoom;
     const direction = event.evt.deltaY > 0 ? -1 : 1;
-    const nextScale = clamp(direction > 0 ? oldScale * 1.08 : oldScale / 1.08, 0.2, 3);
-    
-    // Position of mouse relative to unscaled document
-    const mousePoint = {
-      x: (pointer.x - (baseX + pan.x)) / oldScale,
-      y: (pointer.y - (baseY + pan.y)) / oldScale,
-    };
-
-    const nextBaseX = (viewportSize.width - documentWidth * nextScale) / 2;
-    const nextBaseY = (viewportSize.height - documentHeight * nextScale) / 2;
-
-    const newWorldX = pointer.x - mousePoint.x * nextScale;
-    const newWorldY = pointer.y - mousePoint.y * nextScale;
+    const nextScale = clamp(direction > 0 ? oldScale * 1.08 : oldScale / 1.08, 0.1, 3);
 
     onZoomChange(nextScale);
-    onPanChange({
-      x: newWorldX - nextBaseX,
-      y: newWorldY - nextBaseY,
-    });
-  };
-
-  const handleMouseDown = (event: any) => {
-    if (event.target.attrs?.name === "seat-node") {
-      return;
-    }
-
-    panOriginRef.current = {
-      pointerX: event.evt.clientX,
-      pointerY: event.evt.clientY,
-      x: pan.x,
-      y: pan.y,
-    };
-    setIsPanning(true);
-  };
-
-  const handleMouseMove = (event: any) => {
-    if (!isPanning || !panOriginRef.current) {
-      return;
-    }
-
-    onPanChange({
-      x: panOriginRef.current.x + event.evt.clientX - panOriginRef.current.pointerX,
-      y: panOriginRef.current.y + event.evt.clientY - panOriginRef.current.pointerY,
-    });
-  };
-
-  const endPan = () => {
-    panOriginRef.current = null;
-    setIsPanning(false);
   };
 
   return (
     <div
       ref={containerRef}
-      className={`buyer-seat-map-canvas ${isPanning ? "is-panning" : ""}`}
+      className="buyer-seat-map-canvas"
     >
       <Stage
         width={viewportSize.width}
         height={viewportSize.height}
         onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={endPan}
-        onMouseLeave={endPan}
       >
-        <Layer>
-          <Rect
-            x={0}
-            y={0}
-            width={viewportSize.width}
-            height={viewportSize.height}
-            fill="#071722"
-          />
-        </Layer>
         <Layer>
           <Group {...worldStyle}>
             <Rect
@@ -299,62 +220,69 @@ export default function BuyerSeatMapCanvas({
 
             {(seatMap.sectors ?? []).map((sector) => {
               const bounds = getSectorBounds(sector);
-              const points = getPolygonPoints(sector);
-              const shapeType = getShapeType(sector);
               const seatRadius = getSeatRadius(sector);
               const colorCode = sector.colorCode || "#16a34a";
+              const isStandingSector = String(sector.sectorType || "").toUpperCase() === "STANDING";
+              const canSelectSector = Boolean(onSectorClick) && isStandingSector;
 
               return (
                 <Group key={sector.id}>
-                  {points.length >= 6 ? (
-                    <Line
-                      x={0}
-                      y={0}
-                      points={points}
-                      closed
-                      fill={`${colorCode}1f`}
-                      stroke={colorCode}
-                      strokeWidth={2}
-                      listening={false}
-                    />
-                  ) : shapeType === "circle" || shapeType === "ellipse" ? (
-                    <Ellipse
-                      x={bounds.x + bounds.width / 2}
-                      y={bounds.y + bounds.height / 2}
-                      radiusX={bounds.width / 2}
-                      radiusY={bounds.height / 2}
-                      fill={`${colorCode}1f`}
-                      stroke={colorCode}
-                      strokeWidth={2}
-                      listening={false}
-                    />
-                  ) : (
-                    <Rect
-                      x={bounds.x}
-                      y={bounds.y}
-                      width={bounds.width}
-                      height={bounds.height}
-                      cornerRadius={20}
-                      fill={`${colorCode}1f`}
-                      stroke={colorCode}
-                      strokeWidth={2}
-                      listening={false}
-                    />
-                  )}
-
+                  <SectorRenderer
+                    sector={{
+                      id: sector.id,
+                      name: sector.name,
+                      sectorType: sector.sectorType,
+                      colorCode,
+                      bounds,
+                      mapData: sector.mapData,
+                    }}
+                    selected={selectedSectorId === sector.id}
+                    listening={canSelectSector}
+                    onClick={(event) => {
+                      event.cancelBubble = true;
+                      onSectorClick?.(sector);
+                    }}
+                    onTap={(event) => {
+                      event.cancelBubble = true;
+                      onSectorClick?.(sector);
+                    }}
+                    onMouseEnter={(event) => {
+                      const container = event.target.getStage()?.container();
+                      if (container && canSelectSector) {
+                        container.style.cursor = "pointer";
+                      }
+                    }}
+                    onMouseLeave={(event) => {
+                      const container = event.target.getStage()?.container();
+                      if (container) {
+                        container.style.cursor = "";
+                      }
+                    }}
+                    showDepth
+                    showLabel={false}
+                  />
 
                   {(sector.seatsData ?? []).map((seat) => {
                     const isSelected = selectedSeatIds.includes(seat.id);
-                    const disabled = seat.isActive === false || seat.inventoryStatus !== "AVAILABLE";
+                    const disabledStatuses = new Set(["RESERVED", "SOLD", "BLOCKED", "LOCKED"]);
+                    const disabled =
+                      seat.isActive === false ||
+                      disabledStatuses.has(String(seat.inventoryStatus || "").toUpperCase()) ||
+                      seat.inventoryStatus !== "AVAILABLE";
                     const x = asNumber(seat.coordX) ?? 0;
                     const y = asNumber(seat.coordY) ?? 0;
 
                     return (
-                      <Group
+                      <SeatRenderer
                         key={seat.id}
-                        name="seat-node"
+                        id={seat.id}
                         x={x}
                         y={y}
+                        radius={seatRadius}
+                        status={seat.inventoryStatus}
+                        selected={isSelected}
+                        disabled={disabled}
+                        color={getSeatColor?.(sector, seat) ?? seat.colorCode ?? colorCode}
                         onClick={() => onSeatClick(sector, seat)}
                         onTap={() => onSeatClick(sector, seat)}
                         onMouseEnter={(e) => {
@@ -369,36 +297,7 @@ export default function BuyerSeatMapCanvas({
                             container.style.cursor = "";
                           }
                         }}
-                        opacity={disabled ? 0.78 : 1}
-                      >
-                        <Circle
-                          x={0}
-                          y={0}
-                          radius={seatRadius}
-                          fill={getSeatFill(seat.inventoryStatus, isSelected)}
-                          stroke={getSeatStroke(seat.inventoryStatus, isSelected, colorCode)}
-                          strokeWidth={isSelected ? 2 : 1.5}
-                        />
-                        {isSelected && (
-                          <Line
-                            x={0}
-                            y={0}
-                            points={[
-                              -seatRadius * 0.35,
-                              0,
-                              -seatRadius * 0.1,
-                              seatRadius * 0.3,
-                              seatRadius * 0.5,
-                              -seatRadius * 0.35,
-                            ]}
-                            stroke="#ffffff"
-                            strokeWidth={Math.max(1.5, seatRadius * 0.3)}
-                            lineCap="round"
-                            lineJoin="round"
-                            listening={false}
-                          />
-                        )}
-                      </Group>
+                      />
                     );
                   })}
                 </Group>

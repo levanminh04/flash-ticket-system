@@ -3,15 +3,19 @@ package com.flashticket.core.booking.service;
 import com.flashticket.core.booking.dto.*;
 import com.flashticket.core.booking.entity.Order;
 import com.flashticket.core.booking.entity.OrderItem;
+import com.flashticket.core.booking.entity.OrderItemSeat;
 import com.flashticket.core.booking.repository.OrderItemRepository;
+import com.flashticket.core.booking.repository.OrderItemSeatRepository;
 import com.flashticket.core.booking.repository.OrderRepository;
 import com.flashticket.core.common.exception.InsufficientStockException;
 import com.flashticket.core.common.exception.InvalidRequestException;
 import com.flashticket.core.common.exception.ResourceNotFoundException;
 import com.flashticket.core.event.entity.Event;
 import com.flashticket.core.event.entity.TicketType;
+import com.flashticket.core.event.entity.TicketType.InventoryMode;
 import com.flashticket.core.event.repository.EventRepository;
 import com.flashticket.core.event.repository.TicketTypeRepository;
+import com.flashticket.core.event.service.TicketInventoryCounterService;
 import com.flashticket.core.promotion.service.PromotionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,11 +23,9 @@ import org.redisson.api.RBucket;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -33,9 +35,14 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * BookingService — Core booking logic với Zone ticket mode.
@@ -59,9 +66,13 @@ public class BookingService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderItemSeatRepository orderItemSeatRepository;
     private final EventRepository eventRepository;
     private final TicketTypeRepository ticketTypeRepository;
+    private final TicketInventoryCounterService ticketInventoryCounterService;
     private final TicketReservationService ticketReservationService;
+    private final SeatBookingService seatBookingService;
+    private final BookingCompositionPolicy bookingCompositionPolicy;
     private final PromotionService promotionService;
     private final RedissonClient redissonClient;
 
@@ -145,18 +156,27 @@ public class BookingService {
 
         // Load & Validate Ticket Types
         List<BookingItemContext> contexts = buildAndValidateContexts(request, event);
+        bookingCompositionPolicy.validateSingleInventoryMode(
+            contexts.stream().map(ctx -> inventoryMode(ctx.ticketType())).toList());
         // contexts CÓ THỂ ĐÃ CŨ, nên cần có double check, tránh
 
         // ── Step 3: Redis Lock → Stock Check → Atomic Decrement
         // khá giống ReentrantLock nhưng ReentrantLock thuộc phạm vi 1 server, nhiều node là chết ngay
         List<RLock> acquiredLocks = new ArrayList<>();
         try {
-            for (BookingItemContext ctx : contexts) {
-                //  Acquire distributed lock
-                // Single Responsibility - CHỈ GỌI method từ ticketReservationService , KHÔNG CHỨA logic tryLock(), getLock(), releaseLock() InterruptedException...
-                RLock lock = ticketReservationService.acquireZoneLock(ctx.ticketType().getId()); // nếu lock đã bị chiếm thì bên trong sẽ throw new LockAcquisitionException(...) (trước khi throw thì đã retry 1 vài lần (tùy theo cấu hình) rồi)
-                acquiredLocks.add(lock);
+            acquiredLocks = ticketReservationService.acquireGlobalLocks(
+                event.getId(),
+                contexts.stream().map(ctx -> ctx.ticketType().getId()).toList(),
+                contexts.stream().flatMap(ctx -> ctx.seatIds().stream()).toList()
+            );
 
+            for (BookingItemContext ctx : contexts) {
+                if (inventoryMode(ctx.ticketType()) == InventoryMode.ASSIGNED_SEAT) {
+                    seatBookingService.validateSeats(event.getId(), ctx.ticketType().getId(), ctx.seatIds());
+                }
+            }
+
+            for (BookingItemContext ctx : contexts) {
                 // Double-check stock SAU KHI có lock (quan trọng!) để tránh:
                 /**
                  * Khi thread A acquire được lock và thực hiện trừ stock, thread B đến sau sẽ thử lấy lock nhưng thất bại vì A đang giữ nó,
@@ -172,8 +192,8 @@ public class BookingService {
                  * T4: nếu không double-check → bạn vẫn nghĩ còn 10
                  * */
                 // Lock đảm bảo chỉ 1 request chạy đoạn này cùng lúc cho ticket type này
-                int available = ticketTypeRepository
-                    .findAvailableQuantityById(ctx.ticketType().getId())
+                int available = ticketInventoryCounterService
+                    .findAvailableQuantity(ctx.ticketType().getId())
                     .orElse(0);
 
                 if (available < ctx.quantity()) {
@@ -195,7 +215,7 @@ public class BookingService {
                  * */
 
                 //  Atomic decrement trong DB — safety net thứ 2 chống stock âm (WHERE available >= qty)
-                int updated = ticketTypeRepository.decrementAvailableAndIncrementReserved(
+                int updated = ticketInventoryCounterService.reserveQuantity(
                     ctx.ticketType().getId(), ctx.quantity());
 
                 /**
@@ -209,7 +229,7 @@ public class BookingService {
                 }
 
                 // 3d. Đánh dấu SOLD_OUT nếu hết vé (không critical, chỉ để UI hiển thị)
-                ticketTypeRepository.markAsSoldOutIfEmpty(ctx.ticketType().getId());
+                ticketInventoryCounterService.markSoldOutIfEmpty(ctx.ticketType().getId());
             }
 
             // Apply Promotion (nếu có) — RESERVE slot, không record usage
@@ -232,7 +252,23 @@ public class BookingService {
 
             // Create OrderItems
             List<OrderItem> items = buildOrderItems(order, contexts, event);
-            orderItemRepository.saveAll(items);
+            items = orderItemRepository.saveAll(items);
+
+            Map<UUID, OrderItem> itemByTicketType = items.stream()
+                .collect(Collectors.toMap(OrderItem::getTicketTypeId, Function.identity()));
+            for (BookingItemContext ctx : contexts) {
+                if (inventoryMode(ctx.ticketType()) == InventoryMode.ASSIGNED_SEAT) {
+                    OrderItem item = itemByTicketType.get(ctx.ticketType().getId());
+                    seatBookingService.reserveSeats(
+                        event.getId(),
+                        ctx.ticketType().getId(),
+                        order.getId(),
+                        item.getId(),
+                        ctx.seatIds(),
+                        ctx.ticketType().getPrice()
+                    );
+                }
+            }
 
             // NOTE: KHÔNG gọi recordUsage/confirmPromotion ở đây.
             // PaymentService.handleIPN() sẽ gọi promotionService.confirmPromotion() sau khi payment success.
@@ -240,7 +276,7 @@ public class BookingService {
             log.info("Booking created: order={}, user={}, event={}, total={}",
                 order.getOrderNumber(), userId, event.getTitle(), order.getTotalAmount());
 
-            List<OrderItemDTO> itemDTOs = items.stream().map(OrderItemDTO::from).toList();
+            List<OrderItemDTO> itemDTOs = buildOrderItemDtos(order.getId(), items);
             return BookingResponse.from(order, itemDTOs);
 
         } finally {
@@ -270,8 +306,8 @@ public class BookingService {
         Order order = orderRepository.findByIdAndUserIdAndIsDeletedFalse(orderId, userId)
             .orElseThrow(() -> new ResourceNotFoundException("Đơn hàng không tồn tại"));
 
-        List<OrderItemDTO> items = orderItemRepository.findByOrderId(orderId)
-            .stream().map(OrderItemDTO::from).toList();
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
+        List<OrderItemDTO> items = buildOrderItemDtos(orderId, orderItems);
 
         return OrderDetailResponse.from(order, items);
     }
@@ -293,17 +329,17 @@ public class BookingService {
                 + order.getStatus().name());
         }
 
-        // Restore stock
+        int updated = orderRepository.markCancelledIfPending(
+            orderId, userId, Instant.now(), "User cancelled");
+        if (updated == 0) {
+            throw new InvalidRequestException("Đơn hàng không còn ở trạng thái chờ thanh toán");
+        }
+
         restoreStock(orderId);
+        seatBookingService.restoreSeatsForOrder(orderId);
 
         // Release promotion slot nếu order có dùng voucher
         promotionService.releasePromotion(order.getPromotionId());
-
-        order.setStatus(Order.OrderStatus.CANCELLED);
-        order.setCancelledAt(Instant.now());
-        order.setCancelledBy(userId);
-        order.setCancellationReason("User cancelled");
-        orderRepository.save(order);
 
         log.info("Order {} cancelled by user {}", order.getOrderNumber(), userId);
     }
@@ -349,29 +385,27 @@ public class BookingService {
      */
     private List<BookingItemContext> buildAndValidateContexts(BookingRequest request, Event event) {
         List<BookingItemContext> contexts = new ArrayList<>();
+        Set<UUID> requestedTicketTypeIds = new HashSet<>();
+        Set<UUID> requestedSeatIds = new HashSet<>();
 
         for (BookingRequest.BookingItemRequest itemReq : request.items()) {
+            if (!requestedTicketTypeIds.add(itemReq.ticketTypeId())) {
+                throw new InvalidRequestException("Không được gửi trùng ticketTypeId trong cùng một đơn hàng");
+            }
+
             TicketType tt = ticketTypeRepository.findByIdAndIsDeletedFalse(itemReq.ticketTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    "Loại vé không tồn tại: " + itemReq.ticketTypeId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Loại vé không tồn tại: " + itemReq.ticketTypeId()));
 
-            // Verify ticket type belongs to this event
             if (!tt.getEvent().getId().equals(event.getId())) {
-                throw new InvalidRequestException(
-                    "Loại vé '" + tt.getName() + "' không thuộc sự kiện này");
+                throw new InvalidRequestException("Loại vé '" + tt.getName() + "' không thuộc sự kiện này");
             }
-
-            // Status check
             if (tt.getStatus() != TicketType.TicketStatus.ACTIVE) {
-                throw new InvalidRequestException(
-                    "Loại vé '" + tt.getName() + "' hiện không có sẵn");
+                throw new InvalidRequestException("Loại vé '" + tt.getName() + "' hiện không có sẵn");
             }
-
             if (!Boolean.TRUE.equals(tt.getIsVisible())) {
                 throw new InvalidRequestException("Loại vé '" + tt.getName() + "' không khả dụng");
             }
 
-            // Sale window của ticket type
             Instant now = Instant.now();
             if (tt.getSaleStartDatetime() != null && now.isBefore(tt.getSaleStartDatetime())) {
                 throw new InvalidRequestException("Vé '" + tt.getName() + "' chưa đến thời gian bán");
@@ -379,32 +413,40 @@ public class BookingService {
             if (tt.getSaleEndDatetime() != null && now.isAfter(tt.getSaleEndDatetime())) {
                 throw new InvalidRequestException("Vé '" + tt.getName() + "' đã hết thời gian bán");
             }
-
-            // Per-ticket-type quantity limit
             if (tt.getMaxPerOrder() != null && itemReq.quantity() > tt.getMaxPerOrder()) {
                 throw new InvalidRequestException(
                     "Vé '" + tt.getName() + "' tối đa " + tt.getMaxPerOrder() + " vé mỗi đơn");
             }
 
-            // Seated ticket — Phase 2D not yet implemented
-            if (Boolean.TRUE.equals(tt.getSeatSelectionEnabled())) {
-                if (!CollectionUtils.isEmpty(itemReq.seatIds())) {
-                    throw new InvalidRequestException(
-                        "Tính năng chọn ghế cụ thể chưa được hỗ trợ trong phiên bản này");
+            List<UUID> seatIds = itemReq.seatIds() != null ? itemReq.seatIds() : List.of();
+            for (UUID seatId : seatIds) {
+                if (!requestedSeatIds.add(seatId)) {
+                    throw new InvalidRequestException("Không được chọn trùng ghế trong cùng một đơn hàng: " + seatId);
                 }
             }
 
-            // Sơ bộ check stock (non-locked — chống request rõ ràng sai)
-            if (tt.getQuantityAvailable() < itemReq.quantity()) {
-                throw new InsufficientStockException(
-                    tt.getName(), tt.getQuantityAvailable(), itemReq.quantity());
+            InventoryMode mode = inventoryMode(tt);
+            if (mode == InventoryMode.ASSIGNED_SEAT) {
+                if (seatIds.size() != itemReq.quantity()) {
+                    throw new InvalidRequestException("Số ghế đã chọn phải bằng số lượng vé");
+                }
+                if (!Boolean.TRUE.equals(tt.getSeatSelectionEnabled())) {
+                    throw new InvalidRequestException("Loại vé chọn ghế chưa bật seatSelectionEnabled");
+                }
+            } else if (!seatIds.isEmpty()) {
+                throw new InvalidRequestException("Vé số lượng không được gửi seatIds");
             }
 
-            contexts.add(new BookingItemContext(tt, itemReq.quantity()));
+            if (tt.getQuantityAvailable() < itemReq.quantity()) {
+                throw new InsufficientStockException(tt.getName(), tt.getQuantityAvailable(), itemReq.quantity());
+            }
+
+            contexts.add(new BookingItemContext(tt, itemReq.quantity(), seatIds));
         }
 
         return contexts;
     }
+
 
     private Order buildOrder(BookingRequest request, String userId, Event event,
                              BigDecimal subtotal, PromotionService.DiscountResult discount) {
@@ -452,6 +494,21 @@ public class BookingService {
         }).toList();
     }
 
+    private List<OrderItemDTO> buildOrderItemDtos(UUID orderId, List<OrderItem> items) {
+        Map<UUID, List<OrderItemSeatDTO>> seatsByOrderItemId = orderItemSeatRepository.findByOrderId(orderId).stream()
+            .collect(Collectors.groupingBy(
+                OrderItemSeat::getOrderItemId,
+                Collectors.mapping(OrderItemSeatDTO::from, Collectors.toList())
+            ));
+
+        return items.stream()
+            .map(item -> OrderItemDTO.from(
+                item,
+                seatsByOrderItemId.getOrDefault(item.getId(), List.of())
+            ))
+            .toList();
+    }
+
     /**
      * Restore stock về ticket_types khi order expire hoặc cancel.
      * Gọi trong @Transactional.
@@ -459,8 +516,12 @@ public class BookingService {
     void restoreStock(UUID orderId) {
         List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
         items.forEach(item ->
-            ticketTypeRepository.restoreQuantity(item.getTicketTypeId(), item.getQuantity())
+            ticketInventoryCounterService.restoreReserved(item.getTicketTypeId(), item.getQuantity())
         );
+    }
+
+    void restoreSeatsForExpiredOrder(UUID orderId) {
+        seatBookingService.restoreSeatsForOrder(orderId);
     }
 
     /**
@@ -480,7 +541,17 @@ public class BookingService {
     /** Internal value object — context cho 1 booking item */
     private record BookingItemContext(
             TicketType ticketType,
-            int quantity) {
+            int quantity,
+            List<UUID> seatIds) {
 
+        BookingItemContext(TicketType ticketType, int quantity) {
+            this(ticketType, quantity, List.of());
+        }
+    }
+
+    private InventoryMode inventoryMode(TicketType ticketType) {
+        return ticketType.getInventoryMode() != null
+            ? ticketType.getInventoryMode()
+            : InventoryMode.QUANTITY;
     }
 }

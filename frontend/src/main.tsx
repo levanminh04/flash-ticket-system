@@ -9,7 +9,9 @@ import "./assets/css/checkout.css";
 import "./assets/css/payment-result.css";
 import "./assets/css/profile-pages.css";
 import "./assets/css/event-detail.css";
+import "./assets/css/public-organizer.css";
 import "./assets/css/organizer.css";
+import "./assets/css/chatbot-widget.css";
 
 const KC_ORIGIN = import.meta.env.VITE_KEYCLOAK_URL as string;
 

@@ -20,12 +20,14 @@ import java.util.UUID;
 public class EventSeat {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sector_id", nullable = false)
     private EventSector sector;
+
+    @Column(name = "ticket_type_id")
+    private UUID ticketTypeId;
 
     @Column(name = "row_name", nullable = false, length = 10)
     private String rowName;
@@ -49,6 +51,9 @@ public class EventSeat {
     @Column(name = "seat_type", length = 50)
     private String seatType = "REGULAR";
 
+    @Column(name = "color_code", length = 7)
+    private String colorCode;
+
     @Column(name = "is_aisle")
     private Boolean isAisle = false;
 
@@ -60,4 +65,11 @@ public class EventSeat {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+
+    @PrePersist
+    void ensureId() {
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
+    }
 }

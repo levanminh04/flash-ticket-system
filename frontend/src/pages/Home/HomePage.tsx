@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from "react";
-import { Link } from "react-router-dom";
+﻿import { useEffect, useState, useRef } from "react";
+import { useKeycloak } from "@react-keycloak/web";
+import { Link, useLocation } from "react-router-dom";
 import {
   Building2,
   Calendar,
@@ -23,8 +24,65 @@ import Blog from "../../components/common/Blog";
 import Footer from "../../components/common/Footer";
 import { EventSummary } from "../../types/api";
 import { partnerLogos } from "../../constants/partners";
+import { hasAnyRealmRole } from "../../lib/auth";
 
-const fallbackHeroEvents = [
+type EditableHeroEvent = Partial<EventSummary> & {
+  id?: string | number;
+  slug?: string;
+  title?: string;
+  bannerUrl?: string;
+  venueName?: string;
+  city?: string;
+};
+
+type HeroEventOverrides = Record<
+  string,
+  Pick<EditableHeroEvent, "title" | "bannerUrl" | "venueName" | "city">
+>;
+
+type HomeSectionKey =
+  | "trust"
+  | "features"
+  | "upcoming"
+  | "how"
+  | "pricing"
+  | "past";
+
+type HomeContentConfig = {
+  heroTitle: string;
+  trustTitle: string;
+  featuresTitle: string;
+  upcomingTitle: string;
+  howTitle: string;
+  pricingTitle: string;
+  pastTitle: string;
+  sectionOrder: HomeSectionKey[];
+};
+
+const HOME_HERO_OVERRIDES_KEY = "flashTicket.homeHeroOverrides";
+const HOME_CONTENT_CONFIG_KEY = "flashTicket.homeContentConfig";
+
+const homeSectionLabels: Record<HomeSectionKey, string> = {
+  trust: "Trust strip",
+  features: "Our Core Features",
+  upcoming: "Upcoming Events",
+  how: "How it works",
+  pricing: "Transparent Pricing",
+  past: "Past Events",
+};
+
+const defaultHomeContentConfig: HomeContentConfig = {
+  heroTitle: "Easy to Buy &\nSale your Event\nTicket",
+  trustTitle: "More than 100+ businesses owners across the world trust Counter",
+  featuresTitle: "Our Core Features",
+  upcomingTitle: "Upcoming Events",
+  howTitle: "How it works",
+  pricingTitle: "Transparent Pricing",
+  pastTitle: "Some of our Past Events",
+  sectionOrder: ["trust", "features", "upcoming", "how", "pricing", "past"],
+};
+
+const fallbackHeroEvents: EditableHeroEvent[] = [
   {
     id: "hero-1",
     slug: "ravolution-music-festival-2026",
@@ -64,7 +122,6 @@ const fallbackHeroEvents = [
     minPrice: 1500000,
   },
 ];
-
 const featureCards = [
   {
     icon: ShoppingCart,
@@ -204,8 +261,15 @@ function formatDate(value?: string) {
 }
 
 function formatPrice(event?: Partial<EventSummary>) {
-  if (typeof event?.minPrice === "number") {
-    return `Từ ${event.minPrice.toLocaleString("vi-VN")} đ`;
+  const minPrice =
+    typeof event?.minPrice === "number"
+      ? event.minPrice
+      : typeof event?.minPrice === "string"
+        ? Number(event.minPrice)
+        : undefined;
+
+  if (typeof minPrice === "number" && Number.isFinite(minPrice)) {
+    return `Từ ${minPrice.toLocaleString("vi-VN")} đ`;
   }
   return "Đang cập nhật";
 }
@@ -234,11 +298,84 @@ function getEventLocation(event?: Partial<EventSummary>) {
   return Array.from(new Set(parts)).join(", ") || "Đang cập nhật địa điểm";
 }
 
+function getHeroEventKey(event?: EditableHeroEvent) {
+  if (!event) return "";
+  return String(event.id || event.slug || event.title || "");
+}
+
+function readHeroOverrides(): HeroEventOverrides {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(HOME_HERO_OVERRIDES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.warn("Không thể đọc cấu hình hero trang chủ", error);
+    return {};
+  }
+}
+
+function normalizeHomeContentConfig(value: unknown): HomeContentConfig {
+  const source =
+    value && typeof value === "object"
+      ? (value as Partial<HomeContentConfig>)
+      : {};
+  const nextOrder = Array.isArray(source.sectionOrder)
+    ? source.sectionOrder.filter(
+        (key): key is HomeSectionKey =>
+          typeof key === "string" && key in homeSectionLabels,
+      )
+    : [];
+
+  return {
+    ...defaultHomeContentConfig,
+    ...source,
+    sectionOrder: [
+      ...nextOrder,
+      ...defaultHomeContentConfig.sectionOrder.filter(
+        (key) => !nextOrder.includes(key),
+      ),
+    ],
+  };
+}
+
+function readHomeContentConfig(): HomeContentConfig {
+  if (typeof window === "undefined") return defaultHomeContentConfig;
+
+  try {
+    const raw = window.localStorage.getItem(HOME_CONTENT_CONFIG_KEY);
+    return raw
+      ? normalizeHomeContentConfig(JSON.parse(raw))
+      : defaultHomeContentConfig;
+  } catch (error) {
+    console.warn("Không thể đọc cấu hình giao diện trang chủ", error);
+    return defaultHomeContentConfig;
+  }
+}
+
 export default function HomePage() {
+  const { keycloak, initialized } = useKeycloak();
+  const location = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [featuredEvents, setFeaturedEvents] = useState<EventSummary[]>([]);
   const [otherEvents, setOtherEvents] = useState<EventSummary[]>([]);
   const [activeFaq, setActiveFaq] = useState(0);
+  const [heroOverrides, setHeroOverrides] = useState<HeroEventOverrides>({});
+  const [homeContent, setHomeContent] = useState<HomeContentConfig>(
+    defaultHomeContentConfig,
+  );
+  const [contentDraft, setContentDraft] = useState<HomeContentConfig>(
+    defaultHomeContentConfig,
+  );
+  const [isHomeEditorOpen, setIsHomeEditorOpen] = useState(false);
+  const [editorDraft, setEditorDraft] = useState({
+    title: "",
+    bannerUrl: "",
+    venueName: "",
+    city: "",
+  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollUpcoming = (direction: "left" | "right") => {
@@ -269,10 +406,26 @@ export default function HomePage() {
     void loadData();
   }, []);
 
-  const heroEvents =
+  useEffect(() => {
+    setHeroOverrides(readHeroOverrides());
+    const savedContent = readHomeContentConfig();
+    setHomeContent(savedContent);
+    setContentDraft(savedContent);
+  }, []);
+
+  const canEditHomeHero =
+    initialized &&
+    hasAnyRealmRole(keycloak.tokenParsed, ["ADMIN", "ADIM", "ORGANIZER"]);
+
+  const baseHeroEvents: EditableHeroEvent[] =
     featuredEvents.length > 0 ? featuredEvents.slice(0, 5) : fallbackHeroEvents;
+  const heroEvents = baseHeroEvents.map((event) => {
+    const key = getHeroEventKey(event);
+    return key && heroOverrides[key] ? { ...event, ...heroOverrides[key] } : event;
+  });
   const primaryHeroEvent = heroEvents[currentSlide] || heroEvents[0];
   const upcomingEvents = otherEvents.length > 0 ? otherEvents : heroEvents;
+  const primaryHeroKey = getHeroEventKey(primaryHeroEvent);
 
   useEffect(() => {
     if (heroEvents.length <= 1) return undefined;
@@ -290,6 +443,33 @@ export default function HomePage() {
     }
   }, [currentSlide, heroEvents.length]);
 
+  useEffect(() => {
+    setEditorDraft({
+      title: primaryHeroEvent?.title || "",
+      bannerUrl: getEventImage(primaryHeroEvent),
+      venueName: primaryHeroEvent?.venue?.name || primaryHeroEvent?.venueName || "",
+      city: primaryHeroEvent?.venue?.city || primaryHeroEvent?.city || "",
+    });
+  }, [
+    primaryHeroKey,
+    primaryHeroEvent?.title,
+    primaryHeroEvent?.bannerUrl,
+    primaryHeroEvent?.thumbnailUrl,
+    primaryHeroEvent?.venue?.name,
+    primaryHeroEvent?.venue?.city,
+    primaryHeroEvent?.venueName,
+    primaryHeroEvent?.city,
+  ]);
+
+  useEffect(() => {
+    if (!canEditHomeHero) return;
+
+    const params = new URLSearchParams(location.search);
+    if (params.get("editHome") !== "1") return;
+
+    setIsHomeEditorOpen(true);
+  }, [canEditHomeHero, location.key, location.search]);
+
   const moveSlide = (direction: number) => {
     if (!heroEvents.length) return;
     setCurrentSlide((prev) => {
@@ -300,6 +480,90 @@ export default function HomePage() {
     });
   };
 
+  const saveHeroEditor = () => {
+    if (!primaryHeroKey) return;
+
+    const nextOverrides: HeroEventOverrides = {
+      ...heroOverrides,
+      [primaryHeroKey]: {
+        title: editorDraft.title.trim(),
+        bannerUrl: editorDraft.bannerUrl.trim(),
+        venueName: editorDraft.venueName.trim(),
+        city: editorDraft.city.trim(),
+      },
+    };
+
+    window.localStorage.setItem(
+      HOME_HERO_OVERRIDES_KEY,
+      JSON.stringify(nextOverrides),
+    );
+    setHeroOverrides(nextOverrides);
+  };
+
+  const resetHeroEditor = () => {
+    if (!primaryHeroKey) return;
+
+    const nextOverrides = { ...heroOverrides };
+    delete nextOverrides[primaryHeroKey];
+    window.localStorage.setItem(
+      HOME_HERO_OVERRIDES_KEY,
+      JSON.stringify(nextOverrides),
+    );
+    setHeroOverrides(nextOverrides);
+  };
+
+  const getSectionOrder = (key: HomeSectionKey) =>
+    homeContent.sectionOrder.indexOf(key) + 2;
+
+  const moveSectionInDraft = (key: HomeSectionKey, direction: -1 | 1) => {
+    setContentDraft((current) => {
+      const order = [...current.sectionOrder];
+      const index = order.indexOf(key);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= order.length) {
+        return current;
+      }
+
+      [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+      return {
+        ...current,
+        sectionOrder: order,
+      };
+    });
+  };
+
+  const saveHomeEditor = () => {
+    const normalizedContent = normalizeHomeContentConfig(contentDraft);
+    window.localStorage.setItem(
+      HOME_CONTENT_CONFIG_KEY,
+      JSON.stringify(normalizedContent),
+    );
+    setHomeContent(normalizedContent);
+    setContentDraft(normalizedContent);
+    saveHeroEditor();
+    setIsHomeEditorOpen(false);
+  };
+
+  const resetHomeEditor = () => {
+    window.localStorage.removeItem(HOME_CONTENT_CONFIG_KEY);
+    setHomeContent(defaultHomeContentConfig);
+    setContentDraft(defaultHomeContentConfig);
+  };
+
+  const renderHeroTitle = () =>
+    homeContent.heroTitle.split("\n").map((line, index, lines) => {
+      const isLast = index === lines.length - 1;
+      return (
+        <span
+          className={`hero-heading-line${isLast ? " hero-heading-highlight" : ""}`}
+          key={`${line}-${index}`}
+        >
+          {line}
+          {index < lines.length - 1 ? <br /> : null}
+        </span>
+      );
+    });
+
   return (
     <div className="home-page">
       <div className="home-topbar">
@@ -307,20 +571,11 @@ export default function HomePage() {
       </div>
 
       <main className="container home-main-shell">
-        <section className="home-hero" id="home-hero">
+        <section className="home-hero" id="home-hero" style={{ order: 1 }}>
           <div className="home-hero-shell">
             <div className="home-hero-copy">
               <h1>
-                <span className="hero-heading-line">Easy to Buy &amp;</span>
-                <br />
-                <span className="hero-heading-line">
-                  Sale your{" "}
-                  <span className="hero-heading-highlight">Event</span>
-                </span>
-                <br />
-                <span className="hero-heading-line hero-heading-highlight">
-                  Ticket
-                </span>
+                {renderHeroTitle()}
               </h1>
               <p className="home-hero-description">
                 It is a long established fact that a reader content of a page
@@ -397,11 +652,12 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+
         </section>
 
-        <section className="home-trust-strip">
+        <section className="home-trust-strip" style={{ order: getSectionOrder("trust") }}>
           <p className="home-trust-copy">
-            More than 100+ businesses owners across the world trust Counter
+            {homeContent.trustTitle}
           </p>
 
           <div className="partner-grid home-partner-grid">
@@ -417,11 +673,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section" id="home-features">
+        <section className="home-section" id="home-features" style={{ order: getSectionOrder("features") }}>
           <div className="section-heading section-heading-center">
             <h2 className="home-features-title">
-              Our Core{" "}
-              <span className="home-features-title-highlight">Features</span>
+              {homeContent.featuresTitle}
             </h2>
             <p>
               It is a long established fact that a reader content of a page when
@@ -449,14 +704,14 @@ export default function HomePage() {
         <section
           className="home-section home-upcoming-section"
           style={{
+            order: getSectionOrder("upcoming"),
             backgroundImage: `url("https://images.pexels.com/photos/3122799/pexels-photo-3122799.jpeg")`,
           }}
         >
           <div className="section-heading">
             <div>
               <h2 className="home-upcoming-title">
-                Upcoming{" "}
-                <span className="home-upcoming-title-highlight">Events</span>
+                {homeContent.upcomingTitle}
               </h2>
               <p>
                 {" "}
@@ -538,9 +793,9 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section" id="how-it-works-section">
+        <section className="home-section" id="how-it-works-section" style={{ order: getSectionOrder("how") }}>
           <div className="section-heading section-heading-center">
-            <h2 style={{ fontWeight: 600 }}>How it works</h2>
+            <h2 style={{ fontWeight: 600 }}>{homeContent.howTitle}</h2>
             <p>
               It is a long established fact that a reader content of a page when
               Ipsum is that it has a more-or- this is simple less normal
@@ -561,10 +816,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section home-pricing-section">
+        <section className="home-section home-pricing-section" style={{ order: getSectionOrder("pricing") }}>
           <div className="section-heading section-heading-center">
             <h2 className="home-pricing-title">
-              Transparent <span style={{ color: "#cc9900" }}>Pricing</span>
+              {homeContent.pricingTitle}
             </h2>
             <p>
               It is a long established fact that a reader content of a page when
@@ -665,7 +920,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section home-past-events-section">
+        <section className="home-section home-past-events-section" style={{ order: getSectionOrder("past") }}>
           <div className="section-heading section-heading-center">
             <h2
               style={{
@@ -673,7 +928,7 @@ export default function HomePage() {
                 fontWeight: 800,
               }}
             >
-              Some of our <span style={{ color: "#CC9900" }}>Past Events</span>
+              {homeContent.pastTitle}
             </h2>
             <p>
               {" "}
@@ -691,7 +946,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section faq-section" id="home-faq">
+        <section className="home-section faq-section" id="home-faq" style={{ order: 50 }}>
           <div className="faq-layout">
             <div className="faq-copy">
               <h2 className="faq-title">
@@ -740,10 +995,172 @@ export default function HomePage() {
           </div>
         </section>
 
-          <Blog />
+          <div style={{ order: 60 }}>
+            <Blog />
+          </div>
       </main>
+
+      {canEditHomeHero && isHomeEditorOpen ? (
+        <div className="home-editor-backdrop" role="presentation">
+          <section
+            className="home-editor-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="home-editor-title"
+          >
+            <div className="home-editor-header">
+              <div>
+                <h2 id="home-editor-title">Sửa giao diện trang chủ</h2>
+              </div>
+              <button
+                type="button"
+                className="home-editor-close"
+                onClick={() => setIsHomeEditorOpen(false)}
+                aria-label="Đóng"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="home-editor-body">
+              <section className="home-editor-section">
+                <h3>Tiêu đề cố định</h3>
+                <label className="home-editor-field home-editor-field-full">
+                  <span>Hero title</span>
+                  <textarea
+                    value={contentDraft.heroTitle}
+                    rows={3}
+                    onChange={(event) =>
+                      setContentDraft((current) => ({
+                        ...current,
+                        heroTitle: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                {(
+                  [
+                    ["trustTitle", "Trust strip"],
+                    ["featuresTitle", "Our Core Features"],
+                    ["upcomingTitle", "Upcoming Events"],
+                    ["howTitle", "How it works"],
+                    ["pricingTitle", "Transparent Pricing"],
+                    ["pastTitle", "Some of our Past Events"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label className="home-editor-field" key={key}>
+                    <span>{label}</span>
+                    <input
+                      value={contentDraft[key]}
+                      onChange={(event) =>
+                        setContentDraft((current) => ({
+                          ...current,
+                          [key]: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </section>
+
+              <section className="home-editor-section">
+                <h3>Vị trí nội dung</h3>
+                <div className="home-editor-order-list">
+                  {contentDraft.sectionOrder.map((key, index) => (
+                    <div className="home-editor-order-item" key={key}>
+                      <span>{homeSectionLabels[key]}</span>
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => moveSectionInDraft(key, -1)}
+                          disabled={index === 0}
+                        >
+                          Lên
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSectionInDraft(key, 1)}
+                          disabled={index === contentDraft.sectionOrder.length - 1}
+                        >
+                          Xuống
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="home-editor-section">
+                <h3>Banner slide đang chọn</h3>
+                <label className="home-editor-field">
+                  <span>Tiêu đề sự kiện</span>
+                  <input
+                    value={editorDraft.title}
+                    onChange={(event) =>
+                      setEditorDraft((prev) => ({
+                        ...prev,
+                        title: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="home-editor-field home-editor-field-full">
+                  <span>Banner URL</span>
+                  <input
+                    value={editorDraft.bannerUrl}
+                    onChange={(event) =>
+                      setEditorDraft((prev) => ({
+                        ...prev,
+                        bannerUrl: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="home-editor-field">
+                  <span>Địa điểm</span>
+                  <input
+                    value={editorDraft.venueName}
+                    onChange={(event) =>
+                      setEditorDraft((prev) => ({
+                        ...prev,
+                        venueName: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="home-editor-field">
+                  <span>Thành phố</span>
+                  <input
+                    value={editorDraft.city}
+                    onChange={(event) =>
+                      setEditorDraft((prev) => ({
+                        ...prev,
+                        city: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </section>
+            </div>
+
+            <div className="home-editor-actions">
+              <button type="button" onClick={resetHomeEditor}>
+                Khôi phục tiêu đề
+              </button>
+              <button type="button" onClick={resetHeroEditor}>
+                Khôi phục banner
+              </button>
+              <button type="button" onClick={saveHomeEditor}>
+                Lưu thay đổi
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
         <Footer />
     </div>
   );
 }
+

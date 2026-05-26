@@ -18,6 +18,8 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
 
     Optional<TicketType> findByIdAndIsDeletedFalse(UUID id);
 
+    List<TicketType> findByEventIdAndEventSectorIdAndIsDeletedFalse(UUID eventId, UUID eventSectorId);
+
     /**
      * Trả về số vé thực sự còn lại.
      * Dùng PESSIMISTIC_WRITE lock ngầm qua câu query — gọi sau khi có Redis lock.
@@ -98,4 +100,5 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
      */
     @Query("SELECT (t.quantityTotal - t.quantityAvailable - t.quantityReserved) FROM TicketType t WHERE t.id = :id")
     Integer countSoldTickets(@Param("id") UUID id);
+
 }

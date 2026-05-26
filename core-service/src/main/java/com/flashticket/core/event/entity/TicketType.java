@@ -46,6 +46,16 @@ public class TicketType {
     @Column(name = "event_sector_id")
     private UUID eventSectorId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "inventory_mode", nullable = false, length = 50)
+    @Builder.Default
+    private InventoryMode inventoryMode = InventoryMode.QUANTITY;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "access_scope", nullable = false, length = 50)
+    @Builder.Default
+    private AccessScope accessScope = AccessScope.EVENT;
+
     // Basic Information
     @Column(nullable = false, length = 100)
     private String name;
@@ -123,5 +133,13 @@ public class TicketType {
 
     public enum TicketStatus {
         ACTIVE, SOLD_OUT, HIDDEN
+    }
+
+    public enum InventoryMode {
+        QUANTITY, ASSIGNED_SEAT
+    }
+
+    public enum AccessScope {
+        EVENT, SECTOR
     }
 }

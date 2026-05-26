@@ -2,6 +2,7 @@ package com.flashticket.core.payment.service;
 
 import com.flashticket.core.booking.entity.Order;
 import com.flashticket.core.booking.repository.OrderRepository;
+import com.flashticket.core.booking.service.TicketIssuanceService;
 import com.flashticket.core.shared.messaging.RabbitMQConstants;
 import com.flashticket.core.payment.entity.Transaction;
 import com.flashticket.core.payment.gateway.PaymentGateway;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -76,6 +78,7 @@ public class VNPayIPNService {
     private final RedissonClient redissonClient;
     private final RabbitTemplate rabbitTemplate;
     private final ApplicationEventPublisher eventPublisher;
+    private final TicketIssuanceService ticketIssuanceService;
 
     /**
      * Xử lý VNPay IPN callback.
@@ -109,7 +112,7 @@ public class VNPayIPNService {
          * */
         try {
             // Tìm Transaction
-            var transactionOpt = transactionRepository.findByTransactionNumber(txnRef);
+            var transactionOpt = transactionRepository.findByTransactionNumberForUpdate(txnRef);
             if (transactionOpt.isEmpty()) {
                 log.warn("[VNPay IPN] Transaction not found — txnRef={}", txnRef);
                 return VNPayResponseCode.ORDER_NOT_FOUND.toResponse();
@@ -145,7 +148,17 @@ public class VNPayIPNService {
 
             // Update Order (nếu payment thành công)
             if (result.isSuccess()) {
-                confirmOrder(transaction.getOrderId());
+                Order order = orderRepository.findByIdForUpdate(transaction.getOrderId())
+                    .orElseThrow(() -> new IllegalStateException("Order not found: " + transaction.getOrderId()));
+                if (order.getStatus() != Order.OrderStatus.PENDING) {
+                    recordLateSuccessWithoutIssuance(transaction, result, order.getStatus());
+                    log.warn("[VNPay IPN] Payment arrived for non-payable order — txnRef={}, orderId={}, status={}",
+                        txnRef, order.getId(), order.getStatus());
+                    return VNPayResponseCode.ORDER_ALREADY_CONFIRMED.toResponse();
+                }
+
+                confirmLockedOrder(order);
+                ticketIssuanceService.issueTickets(order.getId());
                 // Publish local event -> TransactionalEventListener sẽ bắt và gửi lên RabbitMQ SAU KHI commit DB
                 // ApplicationEventPublisher đẩy event này vào một event bus nội bộ
                 eventPublisher.publishEvent(new PaymentSuccessEvent(transaction.getOrderId()));
@@ -160,6 +173,7 @@ public class VNPayIPNService {
 
         } catch (Exception e) {
             log.error("[VNPay IPN] Processing error — txnRef={}: {}", txnRef, e.getMessage(), e);
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             return VNPayResponseCode.UNKNOWN_ERROR.toResponse();
         } finally {
             // Luôn release lock
@@ -200,6 +214,26 @@ public class VNPayIPNService {
         transactionRepository.save(transaction);
     }
 
+    private void recordLateSuccessWithoutIssuance(
+        Transaction transaction,
+        PaymentGateway.PaymentResult result,
+        Order.OrderStatus orderStatus
+    ) {
+        transaction.setProviderTransactionId(result.providerTransactionId());
+        transaction.setProviderResponseCode(result.responseCode());
+        transaction.setBankCode(result.bankCode());
+        transaction.setCardType(result.cardType());
+        transaction.setCompletedAt(Instant.now());
+        transaction.setProviderRawResponse(
+            result.rawParams().entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
+        );
+        transaction.setStatus(Transaction.TransactionStatus.CANCELLED);
+        transaction.setProviderResponseMessage(
+            "Payment success received after order became " + orderStatus + "; ticket was not issued");
+        transactionRepository.save(transaction);
+    }
+
     /**
      * Confirm order sau khi payment thành công.
      * <p>
@@ -208,6 +242,13 @@ public class VNPayIPNService {
      * Chỉ confirm nếu order vẫn đang PENDING — double safety net
      * (trường hợp edge case: 2 IPN đến gần nhau, cả 2 qua Redis lock).
      */
+    private void confirmLockedOrder(Order order) {
+        order.setStatus(Order.OrderStatus.CONFIRMED);
+        order.setPaidAt(Instant.now());
+        orderRepository.save(order);
+        log.info("[VNPay IPN] Order confirmed â€” orderId={}", order.getId());
+    }
+
     private void confirmOrder(UUID orderId) {
         orderRepository.findById(orderId).ifPresent(order -> {
             if (order.getStatus() == Order.OrderStatus.PENDING) {

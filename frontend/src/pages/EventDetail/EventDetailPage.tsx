@@ -1,8 +1,11 @@
-import { CSSProperties, useEffect, useState } from "react";
+﻿import { CSSProperties, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Calendar, MapPin, Ticket } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
+import { FaCalendarAlt, FaMapMarkedAlt } from "react-icons/fa";
+import { IoTicketSharp } from "react-icons/io5";
 import { categoryService } from "../../services/categoryService";
 import { eventService } from "../../services/eventService";
+import { organizerService } from "../../services/organizerService";
 import { venueService } from "../../services/venueService";
 import Blog from "../../components/common/Blog";
 import Footer from "../../components/common/Footer";
@@ -56,24 +59,111 @@ export default function EventDetailPage() {
       .catch((err) => console.error("Failed to load venue:", err));
   }, [event?.venue?.id]);
 
+  useEffect(() => {
+    const organizer = event?.organizer;
+    const organizerUserId = organizer?.userId || organizer?.id;
+    const needsOrganizerProfile =
+      !organizer?.slug ||
+      !organizer?.logoUrl ||
+      !organizer?.email ||
+      !organizer?.bannerUrl;
+
+    if (!organizerUserId || !needsOrganizerProfile) return;
+
+    organizerService
+      .getOrganizerByUserId(organizerUserId)
+      .then((profile) => {
+        setEvent((current) =>
+          current
+            ? {
+                ...current,
+                organizer: {
+                  ...(current.organizer || {}),
+                  id: profile.id,
+                  userId: profile.userId,
+                  name: profile.name,
+                  slug: profile.slug || undefined,
+                  logoUrl: profile.logoUrl || undefined,
+                  bannerUrl: profile.bannerUrl || undefined,
+                  description: profile.description || undefined,
+                  websiteUrl: profile.websiteUrl || undefined,
+                  isVerified: profile.isVerified ?? undefined,
+                  totalEvents: profile.totalEvents ?? undefined,
+                  totalTicketsSold: profile.totalTicketsSold ?? undefined,
+                  followerCount: profile.followerCount ?? undefined,
+                  averageRating: profile.averageRating ?? undefined,
+                  email: profile.email || undefined,
+                  phone: profile.phone || undefined,
+                },
+              }
+            : current,
+        );
+      })
+      .catch((err) => console.error("Failed to enrich organizer profile:", err));
+  }, [
+    event?.organizer?.bannerUrl,
+    event?.organizer?.email,
+    event?.organizer?.id,
+    event?.organizer?.logoUrl,
+    event?.organizer?.slug,
+    event?.organizer?.userId,
+  ]);
+
+  const categoryNav = (
+    <nav className="category-nav">
+      <div className="container">
+        <ul className="category-list">
+          <li className="category-item">
+            <Link to="/search" className="category-link">
+              Tất cả
+            </Link>
+          </li>
+          {allCategories.length > 0 ? (
+            allCategories.map((category) => (
+              <li className="category-item" key={category.id}>
+                <Link
+                  to={`/search?category=${category.slug || category.id}`}
+                  className="category-link"
+                >
+                  {category.name}
+                </Link>
+              </li>
+            ))
+          ) : (
+            <li className="category-item">
+              <span className="category-link">Đang tải</span>
+            </li>
+          )}
+        </ul>
+      </div>
+    </nav>
+  );
+
   if (isLoading) {
     return (
-      <div style={{ textAlign: "center", padding: "100px" }}>
-        <p>Đang tải thông tin sự kiện</p>
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div className="event-detail-loading" role="status" aria-live="polite">
+          <LoaderCircle className="event-detail-loading-icon" size={24} />
+          <span>Loading</span>
+        </div>
       </div>
     );
   }
 
   if (error || !event) {
     return (
-      <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-        <p>{error || "Không tìm thấy sự kiện"}</p>
-        <Link
-          to="/"
-          style={{ textDecoration: "underline", color: "var(--primary)" }}
-        >
-          Quay về trang chủ
-        </Link>
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
+          <p>{error || "Không tìm thấy sự kiện"}</p>
+          <Link
+            to="/"
+            style={{ textDecoration: "underline", color: "var(--primary)" }}
+          >
+            Quay về trang chủ
+          </Link>
+        </div>
       </div>
     );
   }
@@ -82,14 +172,17 @@ export default function EventDetailPage() {
   const endDatetime = event.schedule?.endDatetime || event.endDatetime;
   if (!startDatetime || !endDatetime) {
     return (
-      <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-        <p>Sự kiện không có thông tin thời gian hợp lệ</p>
-        <Link
-          to="/"
-          style={{ textDecoration: "underline", color: "var(--primary)" }}
-        >
-          Quay về trang chủ
-        </Link>
+      <div className="event-detail-page" style={{ paddingBottom: 0 }}>
+        {categoryNav}
+        <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
+          <p>Sự kiện không có thông tin thời gian hợp lệ</p>
+          <Link
+            to="/"
+            style={{ textDecoration: "underline", color: "var(--primary)" }}
+          >
+            Quay về trang chủ
+          </Link>
+        </div>
       </div>
     );
   }
@@ -176,33 +269,7 @@ export default function EventDetailPage() {
 
   return (
     <div className="event-detail-page" style={{ paddingBottom: 0 }}>
-      <nav className="category-nav">
-        <div className="container">
-          <ul className="category-list">
-            <li className="category-item">
-              <Link to="/search" className="category-link">
-                Tất cả
-              </Link>
-            </li>
-            {allCategories.length > 0 ? (
-              allCategories.map((category) => (
-                <li className="category-item" key={category.id}>
-                  <Link
-                    to={`/search?category=${category.slug || category.id}`}
-                    className="category-link"
-                  >
-                    {category.name}
-                  </Link>
-                </li>
-              ))
-            ) : (
-              <li className="category-item">
-                <span className="category-link">Đang tải</span>
-              </li>
-            )}
-          </ul>
-        </div>
-      </nav>
+      {categoryNav}
 
       <div
         style={{
@@ -273,7 +340,7 @@ export default function EventDetailPage() {
             <h1 className="event-hero-title">{event.title}</h1>
             <div className="event-hero-meta-list">
               <div className="event-hero-meta-item">
-                <Calendar size={20} className="event-hero-meta-icon" />
+                <FaCalendarAlt size={20} className="event-hero-meta-icon" />
                 <div>
                   <p className="event-hero-meta-primary">
                     {startDate.toLocaleDateString("vi-VN", {
@@ -297,7 +364,7 @@ export default function EventDetailPage() {
                 </div>
               </div>
               <div className="event-hero-meta-item">
-                <MapPin size={20} className="event-hero-meta-icon" />
+                <FaMapMarkedAlt size={20} className="event-hero-meta-icon" />
                 <div>
                   <p className="event-hero-meta-primary">
                     {venueName || "Đang cập nhật địa điểm"}
@@ -309,7 +376,7 @@ export default function EventDetailPage() {
               </div>
               {(hasTotalCapacity || hasTicketsSold) && (
                 <div className="event-hero-meta-item">
-                  <Ticket size={20} className="event-hero-meta-icon" />
+                  <IoTicketSharp size={20} className="event-hero-meta-icon" />
                   <div>
                     <p className="event-hero-meta-primary">
                       Số lượng vé:{" "}
@@ -428,6 +495,11 @@ export default function EventDetailPage() {
                 <div className="event-detail-card-header">
                   <h2>Organizer</h2>
                 </div>
+                {organizer?.bannerUrl ? (
+                  <div className="event-organizer-banner">
+                    <img src={organizer.bannerUrl} alt={`${organizer.name} banner`} />
+                  </div>
+                ) : null}
                 <div className="event-organizer-header">
                   {organizer?.logoUrl ? (
                     <img
@@ -451,6 +523,14 @@ export default function EventDetailPage() {
                       {organizer?.description ||
                         "Thông tin nhà tổ chức sẽ được cập nhật sớm."}
                     </p>
+                    {organizer?.slug ? (
+                      <Link
+                        className="event-organizer-profile-link"
+                        to={`/organizers/${organizer.slug}`}
+                      >
+                        Xem hồ sơ nhà tổ chức
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
                 <div className="event-organizer-stats event-organizer-stats--list">
