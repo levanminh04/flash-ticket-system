@@ -1,0 +1,23 @@
+spring:
+  # 1. Ghi đè Database trỏ vào container Postgres nội bộ của EC2
+  datasource:
+    url: jdbc:postgresql://postgres:5432/flash-ticket?currentSchema=discovery_schema,public
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:ticket@7#}
+
+  # 2. Ghi đè RabbitMQ trỏ về container RabbitMQ nội bộ
+  rabbitmq:
+    host: rabbitmq
+
+  # 3. Ghi đè Keycloak Issuer URI để xác thực token (trỏ về IP Public)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://15.134.248.39:9090/realms/flash-ticket
+
+# 4. Lưu vết API Key của Gemini để chạy AI chatbot
+langchain4j:
+  google-ai-gemini:
+    chat-model:
+      api-key: AIzaSyD3ZSe4oZYM6qmEolIJOP-aJMB-RUWJGGQ

@@ -1,0 +1,26 @@
+spring:
+  # 1. Ghi đè Database trỏ vào container Postgres nội bộ của EC2
+  datasource:
+    url: jdbc:postgresql://postgres:5432/flash-ticket
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:ticket@7#}
+
+  # 2. Ghi đè Redis trỏ vào container Redis nội bộ
+  data:
+    redis:
+      host: redis
+
+  # 3. Ghi đè RabbitMQ trỏ vào container RabbitMQ nội bộ
+  rabbitmq:
+    host: rabbitmq
+
+  # 4. Ghi đè Keycloak Issuer URI (IP Public của EC2)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://15.134.248.39:9090/realms/flash-ticket
+
+# 5. Ghi đè VNPay return URL về IP AWS EC2 Public đúng
+vnpay:
+  return-url: http://15.134.248.39/payment/result

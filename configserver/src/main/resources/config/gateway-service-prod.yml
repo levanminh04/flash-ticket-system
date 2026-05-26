@@ -1,0 +1,13 @@
+spring:
+  # 1. Ghi đè Keycloak Issuer và Certs Endpoint (IP Public của EC2)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://15.134.248.39:9090/realms/flash-ticket
+          jwk-set-uri: http://15.134.248.39:9090/realms/flash-ticket/protocol/openid-connect/certs
+
+  # 2. Ghi đè Redis trỏ về container Redis nội bộ
+  data:
+    redis:
+      host: redis
