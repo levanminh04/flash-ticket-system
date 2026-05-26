@@ -6,7 +6,7 @@ import path from 'path'
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '')
 
 export default defineConfig(({ mode }) => {
-    const repoRoot = path.resolve(__dirname, '..')
+    const repoRoot = path.resolve(__dirname, '.')
     const env = loadEnv(mode, repoRoot, '')
 
     const apiGatewayUrl = trimTrailingSlash(env.VITE_API_GATEWAY_URL || 'http://localhost:8080')
@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
     )
 
     return {
-        envDir: '..',
+        envDir: '.',
         plugins: [react()],
         resolve: {
             alias: {

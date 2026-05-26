@@ -17,7 +17,7 @@ services:
     ports:
       - "8888:8888"
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: prod,native
     networks:
       - ec2-db-network
     depends_on:
