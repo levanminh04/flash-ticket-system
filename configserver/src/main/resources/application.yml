@@ -4,25 +4,51 @@ server:
 spring:
   application:
     name: configserver
+  profiles:
+    active: local
+
+---
+# ------------------------------------------------------------------------------
+# PROFILE: LOCAL (Môi trường phát triển của Developer)
+# ------------------------------------------------------------------------------
+spring:
+  config:
+    activate:
+      on-profile: local
   rabbitmq:
-    host: 13.239.118.235  # AWS EC2
+    host: localhost
     port: 5672
     username: guest
     password: guest
-  #  cloud:
-  #    config:
-  #      server:
-  #        git:
-  #          uri: https://github.com/levanminh04/spring-cloud-config.git
-  profiles:
-    active: native
   cloud:
     config:
       server:
         native:
           search-locations: file:/D:/Project/flash-ticket-system/configserver/src/main/resources/config/
-#   test/dev thì dùng native cho tiện
 
+---
+# ------------------------------------------------------------------------------
+# PROFILE: PROD (Môi trường AWS EC2 Production)
+# ------------------------------------------------------------------------------
+spring:
+  config:
+    activate:
+      on-profile: prod
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: classpath:/config/
+
+---
+# ------------------------------------------------------------------------------
+# Cấu hình chung cho Actuator Endpoints (Tất cả môi trường)
+# ------------------------------------------------------------------------------
 management:
   endpoints:
     web:

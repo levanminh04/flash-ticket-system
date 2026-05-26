@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # ── MICROSERVICES BACKEND ──────────────────────────────────────────────────
+  eureka-server:
+    build: ./eureka
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - ec2-db-network
+    restart: unless-stopped
+
+  config-server:
+    build: ./configserver
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    networks:
+      - ec2-db-network
+    depends_on:
+      - eureka-server
+    restart: unless-stopped
+
+  api-gateway:
+    build: ./apigateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      REDIS_HOST: redis_flash_ticket  # Kết nối khớp container DB có sẵn trên EC2 của bạn
+      KEYCLOAK_ISSUER_URI: http://keycloak-flash-ticket:8080/realms/flash-ticket
+      KEYCLOAK_JWK_SET_URI: http://keycloak-flash-ticket:8080/realms/flash-ticket/protocol/openid-connect/certs
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+    networks:
+      - ec2-db-network
+    depends_on:
+      - config-server
+    restart: unless-stopped
+
+  core-service:
+    build: ./core-service
+    container_name: core-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      POSTGRES_URL: jdbc:postgresql://postgres_flash_ticket:5432/flash-ticket
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ticket@7#
+      REDIS_HOST: redis_flash_ticket
+      RABBITMQ_HOST: rabbitmq_flash_ticket
+      KEYCLOAK_ISSUER_URI: http://keycloak-flash-ticket:8080/realms/flash-ticket
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+    networks:
+      - ec2-db-network
+    depends_on:
+      - config-server
+    restart: unless-stopped
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      MONGO_URI: mongodb://mongodb_flash_ticket:27017/ticketbox_users
+      RABBITMQ_HOST: rabbitmq_flash_ticket
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+    networks:
+      - ec2-db-network
+    depends_on:
+      - config-server
+    restart: unless-stopped
+
+  discovery-service:
+    build: ./discovery-service
+    container_name: discovery-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      POSTGRES_URL: jdbc:postgresql://postgres_flash_ticket:5432/flash-ticket?currentSchema=discovery_schema,public
+      RABBITMQ_HOST: rabbitmq_flash_ticket
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+    networks:
+      - ec2-db-network
+    depends_on:
+      - config-server
+    restart: unless-stopped
+
+networks:
+  ec2-db-network:
+    # Liên kết chung vào mạng 'backend' đã được khởi tạo bởi docker-compose chạy database cũ của bạn
+    name: ubuntu_backend # Tên mạng quét được thực tế trên EC2 của bạn
+    external: true
