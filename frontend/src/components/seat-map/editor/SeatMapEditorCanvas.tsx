@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Circle,
   Ellipse,
   Group,
   Image as KonvaImage,
   Layer,
   Line,
+  Path,
   Rect,
   Stage,
   Text,
   Transformer,
 } from "react-konva";
 import { SeatMapEditorDocument, SeatMapEditorViewport } from "./seatMapEditorTypes";
+import { SectorRenderer } from "../shared/SectorRenderer";
+import { SeatRenderer } from "../shared/SeatRenderer";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
 const ZOOM_RATIO = 1.08;
+const DEFAULT_VIEWPORT_WIDTH = 960;
+const DEFAULT_VIEWPORT_HEIGHT = 640;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -51,9 +55,10 @@ export interface SeatMapEditorCanvasProps {
   referenceImageVisible: boolean;
   selectedShapeIds: string[];
   selectedSeatId: string | null;
+  selectedSeatIds: string[];
   onClearSelection: () => void;
   onSelectShape: (shapeId: string | null, additive?: boolean) => void;
-  onSelectSeat: (shapeId: string, seatId: string | null) => void;
+  onSelectSeat: (shapeId: string, seatId: string | null, additive?: boolean) => void;
   onViewportChange: (viewport: SeatMapEditorViewport) => void;
   onResizeShape: (
     shapeId: string,
@@ -69,6 +74,7 @@ export interface SeatMapEditorCanvasProps {
   onTranslateShape: (shapeId: string, deltaX: number, deltaY: number) => void;
   onMoveSeat: (shapeId: string, seatId: string, nextX: number, nextY: number) => void;
   onMoveSeatBlock: (shapeId: string, deltaX: number, deltaY: number) => void;
+  resetViewKey?: number;
   onResizeSeatBlock: (
     shapeId: string,
     previousBounds: { x: number; y: number; width: number; height: number },
@@ -103,6 +109,7 @@ export default function SeatMapEditorCanvas({
   referenceImageVisible,
   selectedShapeIds,
   selectedSeatId,
+  selectedSeatIds,
   onClearSelection,
   onSelectShape,
   onSelectSeat,
@@ -112,6 +119,7 @@ export default function SeatMapEditorCanvas({
   onTranslateShape,
   onMoveSeat,
   onMoveSeatBlock,
+  resetViewKey = 0,
   onResizeSeatBlock,
 }: SeatMapEditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -125,7 +133,6 @@ export default function SeatMapEditorCanvas({
     Record<string, { x: number; y: number; width: number; height: number }>
   >({});
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 640 });
-  const [isPanning, setIsPanning] = useState(false);
   const [seatBlockGuide, setSeatBlockGuide] = useState<{
     shapeId: string;
     showVertical: boolean;
@@ -133,10 +140,15 @@ export default function SeatMapEditorCanvas({
     lineX: number;
     lineY: number;
   } | null>(null);
-  const panOriginRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(
-    null,
-  );
+  const lastFitKeyRef = useRef<string | null>(null);
   const referenceImage = useHtmlImage(document.referenceImageUrl);
+  const stageOffset = useMemo(
+    () => ({
+      x: (viewportSize.width - DEFAULT_VIEWPORT_WIDTH) / 2,
+      y: (viewportSize.height - DEFAULT_VIEWPORT_HEIGHT) / 2,
+    }),
+    [viewportSize.height, viewportSize.width],
+  );
 
   useEffect(() => {
     const element = containerRef.current;
@@ -146,10 +158,10 @@ export default function SeatMapEditorCanvas({
 
     const observer = new ResizeObserver((entries) => {
       const nextWidth = entries[0]?.contentRect.width ?? element.clientWidth;
-      const nextHeight = Math.max(480, Math.min(820, nextWidth * 0.62));
+      const nextHeight = entries[0]?.contentRect.height ?? element.clientHeight;
       setViewportSize({
         width: Math.max(nextWidth, 320),
-        height: nextHeight,
+        height: Math.max(nextHeight, 480),
       });
     });
 
@@ -157,6 +169,42 @@ export default function SeatMapEditorCanvas({
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!document.width || !document.height || !viewportSize.width || !viewportSize.height) {
+      return;
+    }
+
+    const fitKey = `${document.width}x${document.height}:${resetViewKey}`;
+    if (lastFitKeyRef.current === fitKey) {
+      return;
+    }
+    lastFitKeyRef.current = fitKey;
+
+    const horizontalPadding = 56;
+    const topPadding = 96;
+    const availableWidth = Math.max(viewportSize.width - horizontalPadding * 2, 320);
+    const nextScale = clamp(
+      availableWidth / document.width,
+      MIN_SCALE,
+      MAX_SCALE,
+    );
+
+    onViewportChange({
+      scale: nextScale,
+      x: (viewportSize.width - document.width * nextScale) / 2 - stageOffset.x,
+      y: topPadding - stageOffset.y,
+    });
+  }, [
+    document.height,
+    document.width,
+    onViewportChange,
+    resetViewKey,
+    stageOffset.x,
+    stageOffset.y,
+    viewportSize.height,
+    viewportSize.width,
+  ]);
 
   useEffect(() => {
     const transformer = transformerRef.current;
@@ -200,12 +248,12 @@ export default function SeatMapEditorCanvas({
 
   const worldStyle = useMemo(
     () => ({
-      x: viewport.x,
-      y: viewport.y,
+      x: viewport.x + stageOffset.x,
+      y: viewport.y + stageOffset.y,
       scaleX: viewport.scale,
       scaleY: viewport.scale,
     }),
-    [viewport],
+    [stageOffset.x, stageOffset.y, viewport],
   );
 
   const handleWheel = (event: any) => {
@@ -226,25 +274,15 @@ export default function SeatMapEditorCanvas({
     );
 
     const mousePoint = {
-      x: (pointer.x - viewport.x) / oldScale,
-      y: (pointer.y - viewport.y) / oldScale,
+      x: (pointer.x - worldStyle.x) / oldScale,
+      y: (pointer.y - worldStyle.y) / oldScale,
     };
 
     onViewportChange({
       scale: nextScale,
-      x: pointer.x - mousePoint.x * nextScale,
-      y: pointer.y - mousePoint.y * nextScale,
+      x: pointer.x - mousePoint.x * nextScale - stageOffset.x,
+      y: pointer.y - mousePoint.y * nextScale - stageOffset.y,
     });
-  };
-
-  const beginPan = (pointerX: number, pointerY: number) => {
-    panOriginRef.current = {
-      pointerX,
-      pointerY,
-      x: viewport.x,
-      y: viewport.y,
-    };
-    setIsPanning(true);
   };
 
   const handleMouseDown = (event: any) => {
@@ -258,48 +296,37 @@ export default function SeatMapEditorCanvas({
       return;
     }
 
-    beginPan(event.evt.clientX, event.evt.clientY);
     if (targetName === "seat-map-background") {
       onClearSelection();
     }
   };
 
-  const handleMouseMove = (event: any) => {
-    if (!isPanning || !panOriginRef.current) {
-      return;
-    }
-
-    const deltaX = event.evt.clientX - panOriginRef.current.pointerX;
-    const deltaY = event.evt.clientY - panOriginRef.current.pointerY;
-
-    onViewportChange({
-      ...viewport,
-      x: panOriginRef.current.x + deltaX,
-      y: panOriginRef.current.y + deltaY,
-    });
-  };
-
-  const endPan = () => {
-    panOriginRef.current = null;
-    setIsPanning(false);
-  };
-
   const isAdditiveSelection = (nativeEvent: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) =>
     Boolean(nativeEvent.ctrlKey || nativeEvent.metaKey || nativeEvent.shiftKey);
-
+  const stageBlockWidth = Math.min(document.width * 0.76, 620);
+  const stageBlockHeight = 135;
+  const stageBlockX = (document.width - stageBlockWidth) / 2;
+  const stageBlockY = 92;
+  const stageBlockPath = `
+    M ${stageBlockX} ${stageBlockY}
+    Q ${stageBlockX + stageBlockWidth / 2} ${stageBlockY - 34}
+      ${stageBlockX + stageBlockWidth} ${stageBlockY}
+    L ${stageBlockX + stageBlockWidth} ${stageBlockY + 28}
+    C ${stageBlockX + stageBlockWidth * 0.82} ${stageBlockY + stageBlockHeight},
+      ${stageBlockX + stageBlockWidth * 0.18} ${stageBlockY + stageBlockHeight},
+      ${stageBlockX} ${stageBlockY + 28}
+    Z
+  `;
   return (
     <div
       ref={containerRef}
-      className={`organizer-seat-map-canvas-shell ${isPanning ? "is-panning" : ""}`}
+      className="organizer-seat-map-canvas-shell"
     >
       <Stage
         width={viewportSize.width}
         height={viewportSize.height}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={endPan}
-        onMouseLeave={endPan}
       >
         <Layer>
           <Rect
@@ -308,54 +335,46 @@ export default function SeatMapEditorCanvas({
             y={0}
             width={viewportSize.width}
             height={viewportSize.height}
-            fill="#071722"
+            cornerRadius={24}
+            fill="#0f172a"
+            stroke="rgba(148, 163, 184, 0.34)"
+            strokeWidth={1}
+          />
+          <Rect
+            name="seat-map-background"
+            x={0}
+            y={0}
+            width={viewportSize.width}
+            height={viewportSize.height}
+            fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+            fillLinearGradientEndPoint={{ x: viewportSize.width, y: viewportSize.height }}
+            fillLinearGradientColorStops={[0, "#0b1220", 0.5, "#102231", 1, "#0d1d2b"]}
+            cornerRadius={24}
+            opacity={0.98}
           />
         </Layer>
 
         <Layer>
           <Group {...worldStyle}>
-            <Rect
-              name="seat-map-background"
-              x={0}
-              y={0}
-              width={document.width}
-              height={document.height}
-              cornerRadius={24}
-              fill="#0f172a"
-              stroke="rgba(148, 163, 184, 0.34)"
-              strokeWidth={1}
-            />
 
-            <Rect
-              x={0}
-              y={0}
-              width={document.width}
-              height={document.height}
-              fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-              fillLinearGradientEndPoint={{ x: document.width, y: document.height }}
-              fillLinearGradientColorStops={[0, "#0b1220", 0.5, "#102231", 1, "#0d1d2b"]}
-              cornerRadius={24}
-              opacity={0.98}
-            />
-
-            <Rect
-              x={document.width / 2 - Math.min(document.width * 0.4, 250)}
-              y={40}
-              width={Math.min(document.width * 0.8, 500)}
-              height={80}
-              cornerRadius={16}
+            <Path
+              data={stageBlockPath}
               fill="#1e293b"
-              stroke="#334155"
-              strokeWidth={2}
+              stroke="#475569"
+              strokeWidth={2.5}
               listening={false}
+              shadowColor="rgba(0, 0, 0, 0.45)"
+              shadowBlur={10}
+              shadowOffset={{ x: 0, y: 6 }}
+              shadowOpacity={0.65}
             />
             <Text
-              x={document.width / 2 - Math.min(document.width * 0.4, 250)}
-              y={64}
-              width={Math.min(document.width * 0.8, 500)}
+              x={stageBlockX}
+              y={stageBlockY + 28}
+              width={stageBlockWidth}
               align="center"
               text="SÂN KHẤU"
-              fontSize={32}
+              fontSize={34}
               fontStyle="700"
               fill="#94a3b8"
               listening={false}
@@ -387,6 +406,25 @@ export default function SeatMapEditorCanvas({
 
               return (
                 <Group key={shape.id}>
+                  <SectorRenderer
+                    sector={{
+                      id: shape.id,
+                      name: shape.name,
+                      label: shape.label,
+                      sectorType: shape.sectorType,
+                      shapeType: shape.shapeType,
+                      color: shape.color,
+                      bounds: shape.bounds,
+                      points: shape.points,
+                      mapData: shape.mapData,
+                    }}
+                    selected={isSelected}
+                    draggable={false}
+                    pointsAreRelative
+                    showDepth
+                    showLabel={false}
+                    listening={false}
+                  />
                   {shape.shapeType === "polygon" && shape.points.length >= 6 ? (
                     <>
                       <Line
@@ -399,9 +437,9 @@ export default function SeatMapEditorCanvas({
                         points={shape.points}
                         closed
                         draggable={draggable}
-                        fill={`${shape.color}33`}
-                        stroke={isSelected ? "#ffffff" : shape.color}
-                        strokeWidth={isSelected ? 3 : 2}
+                        fill="rgba(0, 0, 0, 0)"
+                        stroke="rgba(0, 0, 0, 0)"
+                        strokeWidth={Math.max(isSelected ? 3 : 2, 12)}
                         onClick={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
                         onTap={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
                         onDragStart={() => {
@@ -572,9 +610,9 @@ export default function SeatMapEditorCanvas({
                         radiusX={shape.bounds.width / 2}
                         radiusY={shape.bounds.height / 2}
                         draggable={draggable}
-                        fill={`${shape.color}30`}
-                        stroke={isSelected ? "#ffffff" : shape.color}
-                        strokeWidth={isSelected ? 3 : 2}
+                        fill="rgba(0, 0, 0, 0)"
+                        stroke="rgba(0, 0, 0, 0)"
+                        strokeWidth={Math.max(isSelected ? 3 : 2, 12)}
                         onClick={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
                         onTap={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
                         onDragStart={() => {
@@ -759,9 +797,9 @@ export default function SeatMapEditorCanvas({
                         height={shape.bounds.height}
                         cornerRadius={20}
                         draggable={draggable}
-                        fill={`${shape.color}30`}
-                        stroke={isSelected ? "#ffffff" : shape.color}
-                        strokeWidth={isSelected ? 3 : 2}
+                        fill="rgba(0, 0, 0, 0)"
+                        stroke="rgba(0, 0, 0, 0)"
+                        strokeWidth={Math.max(isSelected ? 3 : 2, 12)}
                         onClick={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
                         onTap={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
                         onDragStart={() => {
@@ -1188,44 +1226,38 @@ export default function SeatMapEditorCanvas({
                   })() : null}
 
                   {shape.seats.map((seat) => {
-                    const isSeatSelected = selectedSeatId === seat.id;
+                    const isSeatSelected = selectedSeatId === seat.id || selectedSeatIds.includes(seat.id);
                     const isSeatHidden = seat.hidden === true;
                     const seatEditingEnabled = shape.locked;
 
                     return (
                       <Group key={seat.id}>
-                        <Circle
-                          name="seat-node"
+                        <SeatRenderer
+                          id={seat.id}
                           x={seat.x}
                           y={seat.y}
                           radius={shape.seatLayout.seatRadius}
-                          fill={
-                            isSeatSelected
-                              ? "#22c55e"
-                              : isSeatHidden
-                                ? "rgba(148, 163, 184, 0.22)"
-                                : seat.inventoryStatus === "SOLD"
-                                  ? "#ef4444"
-                                  : "#f8fafc"
-                          }
-                          stroke={isSeatSelected ? "#ffffff" : shape.color}
-                          strokeWidth={isSeatSelected ? 2 : 1.5}
-                          opacity={isSeatHidden ? 0.45 : 1}
-                          listening={seatEditingEnabled}
+                          status={seat.inventoryStatus}
+                          selected={isSeatSelected}
+                          hidden={isSeatHidden}
+                          disabled={!seatEditingEnabled}
+                          color={seat.colorCode ?? shape.color}
+                          editable={seatEditingEnabled}
                           draggable={seatEditingEnabled && !isSeatHidden}
+                          memoizeEventHandlers
                           onClick={(event) => {
                             if (!seatEditingEnabled) {
                               return;
                             }
                             event.cancelBubble = true;
-                            onSelectSeat(shape.id, seat.id);
+                            onSelectSeat(shape.id, seat.id, true);
                           }}
                           onTap={(event) => {
                             if (!seatEditingEnabled) {
                               return;
                             }
                             event.cancelBubble = true;
-                            onSelectSeat(shape.id, seat.id);
+                            onSelectSeat(shape.id, seat.id, true);
                           }}
                           onDragStart={() => {
                             seatDragOriginRef.current[seat.id] = {
@@ -1239,22 +1271,6 @@ export default function SeatMapEditorCanvas({
                             onMoveSeat(shape.id, seat.id, nextX, nextY);
                           }}
                         />
-
-                        {isSeatSelected ? (
-                          <Text
-                            x={seat.x - shape.seatLayout.seatRadius}
-                            y={seat.y - shape.seatLayout.seatRadius - 1}
-                            width={shape.seatLayout.seatRadius * 2}
-                            height={shape.seatLayout.seatRadius * 2}
-                            text="✓"
-                            align="center"
-                            verticalAlign="middle"
-                            fill="#ffffff"
-                            fontStyle="700"
-                            fontSize={Math.max(10, shape.seatLayout.seatRadius * 1.35)}
-                            listening={false}
-                          />
-                        ) : null}
                       </Group>
                     );
                   })}
@@ -1484,4 +1500,3 @@ export default function SeatMapEditorCanvas({
     </div>
   );
 }
-

@@ -20,7 +20,6 @@ import java.util.UUID;
 public class EventSeat {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -66,4 +65,11 @@ public class EventSeat {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+
+    @PrePersist
+    void ensureId() {
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
+    }
 }

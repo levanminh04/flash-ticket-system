@@ -25,13 +25,13 @@ export const partnerLogos = [
   {
     id: "mastercard",
     image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1200px-Mastercard-logo.svg.png",
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png",
     name: "Mastercard",
   },
   {
     id: "jcb",
     image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/JCB_logo.svg/1200px-JCB_logo.svg.png",
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/JCB_logo.svg/3840px-JCB_logo.svg.png",
     name: "JCB",
   },
 ];

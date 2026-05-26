@@ -54,39 +54,39 @@ export default function AccountCategoryNav({
     >
       <div className="container account-category-nav-inner">
         <ul className="category-list account-category-list">
-          {shouldUseCustomItems
-            ? items.map((item) => (
-                <li className="category-item" key={`${item.label}-${item.to}`}>
-                  {item.isHash ? (
-                    <a href={item.to} className="category-link">
-                      {item.label}
-                    </a>
-                  ) : (
-                    <Link to={item.to} className="category-link">
-                      {item.label}
-                    </Link>
-                  )}
+          {shouldUseCustomItems ? (
+            items.map((item) => (
+              <li className="category-item" key={`${item.label}-${item.to}`}>
+                {item.isHash ? (
+                  <a href={item.to} className="category-link">
+                    {item.label}
+                  </a>
+                ) : (
+                  <Link to={item.to} className="category-link">
+                    {item.label}
+                  </Link>
+                )}
+              </li>
+            ))
+          ) : (
+            <>
+              <li className="category-item">
+                <Link to="/search" className="category-link">
+                  Tất cả
+                </Link>
+              </li>
+              {categories.map((category) => (
+                <li className="category-item" key={category.id}>
+                  <Link
+                    to={`/search?category=${category.slug || category.id}`}
+                    className="category-link"
+                  >
+                    {category.name}
+                  </Link>
                 </li>
-              ))
-            : (
-                <>
-                  <li className="category-item">
-                    <Link to="/search" className="category-link">
-                      Tất cả
-                    </Link>
-                  </li>
-                  {categories.map((category) => (
-                    <li className="category-item" key={category.id}>
-                      <Link
-                        to={`/search?category=${category.slug || category.id}`}
-                        className="category-link"
-                      >
-                        {category.name}
-                      </Link>
-                    </li>
-                  ))}
-                </>
-              )}
+              ))}
+            </>
+          )}
         </ul>
       </div>
     </nav>

@@ -79,21 +79,13 @@ export default function OrganizerCheckInPage() {
   return (
     <OrganizerLayout
       title="Check-in vé"
-      description="Dành cho quầy soát vé hoặc máy quét QR. Chỉ cần quét hoặc dán mã QR theo định dạng hệ thống yêu cầu"
+      description="Quét mã QR soát vé."
     >
       <section className="organizer-grid organizer-grid-checkin">
         <form
           className="organizer-panel organizer-checkin-form"
           onSubmit={handleSubmit}
         >
-          <div className="organizer-panel-heading">
-            <p className="organizer-panel-title-pill">Máy quét</p>
-            <p>
-              Nếu bạn dùng máy quét 2D kiểu bàn phím, hãy đặt con trỏ vào ô QR
-              data rồi quét trực tiếp.
-            </p>
-          </div>
-
           <label className="organizer-field">
             <span>QR data</span>
             <textarea

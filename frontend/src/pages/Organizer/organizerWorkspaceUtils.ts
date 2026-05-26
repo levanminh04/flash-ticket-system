@@ -1,4 +1,5 @@
 import {
+  OrganizerEventDetail,
   OrganizerEventStatus,
   OrganizerSeatMap,
   OrganizerTicketStatus,
@@ -63,6 +64,41 @@ export function toIsoString(value?: string | null) {
   return date.toISOString();
 }
 
+export function getEventTicketsSold(event: OrganizerEventDetail): number {
+  if (typeof event.statistics?.ticketsSold === "number") {
+    return event.statistics.ticketsSold;
+  }
+
+  return (event.ticketTypes ?? []).reduce((sum, ticketType) => {
+    const total = Number(ticketType.quantityTotal ?? 0);
+    const available = Number(ticketType.quantityAvailable ?? total);
+    const reserved = Number(ticketType.quantityReserved ?? 0);
+    const sold = Math.max(total - available - reserved, 0);
+    return sum + sold;
+  }, 0);
+}
+
+export function getEventTicketCapacity(event: OrganizerEventDetail): number {
+  if (typeof event.statistics?.totalCapacity === "number") {
+    return event.statistics.totalCapacity;
+  }
+
+  return (event.ticketTypes ?? []).reduce(
+    (sum, ticketType) => sum + Math.max(Number(ticketType.quantityTotal ?? 0), 0),
+    0,
+  );
+}
+
+export function getEventEstimatedRevenue(event: OrganizerEventDetail): number {
+  return (event.ticketTypes ?? []).reduce((sum, ticketType) => {
+    const total = Number(ticketType.quantityTotal ?? 0);
+    const available = Number(ticketType.quantityAvailable ?? total);
+    const reserved = Number(ticketType.quantityReserved ?? 0);
+    const sold = Math.max(total - available - reserved, 0);
+    return sum + sold * Number(ticketType.price ?? 0);
+  }, 0);
+}
+
 export function getEventStatusMeta(status?: OrganizerEventStatus | string | null): StatusMeta {
   return EVENT_STATUS_META[status ?? ""] ?? {
     label: status || "Không rõ",
@@ -81,12 +117,13 @@ export function getTicketTypeStatusMeta(
 
 export function summarizeSeatMap(seatMap?: OrganizerSeatMap | null) {
   const sectors = seatMap?.sectors ?? [];
-  const seats = sectors.flatMap((sector) => sector.seatsData ?? []);
+  const activeSectors = sectors.filter((sector) => sector.isActive !== false);
+  const seats = activeSectors.flatMap((sector) => sector.seatsData ?? []);
 
   return {
-    sectorCount: sectors.length,
+    sectorCount: activeSectors.length,
     seatCount: seats.length,
-    activeSeatCount: seats.filter((seat) => seat.isActive).length,
+    activeSeatCount: seats.filter((seat) => seat.isActive !== false).length,
     soldSeatCount: seats.filter((seat) => seat.inventoryStatus === "SOLD").length,
     lockedSeatCount: seats.filter((seat) => seat.inventoryStatus === "LOCKED").length,
     reservedSeatCount: seats.filter((seat) => seat.inventoryStatus === "RESERVED").length,

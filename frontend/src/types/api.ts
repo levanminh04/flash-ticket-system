@@ -107,6 +107,8 @@ export interface EventSummary {
   }[];
 }
 
+export type TicketInventoryMode = "QUANTITY" | "ASSIGNED_SEAT";
+
 // Spring Data Page Response Format
 export interface SpringPage<T> {
   content: T[];
@@ -129,6 +131,7 @@ export interface TicketType {
   eventId: string;
   sectorId?: string;
   eventSectorId?: string;
+  inventoryMode?: TicketInventoryMode | string;
   name: string;
   description?: string;
   price: number;
@@ -167,6 +170,9 @@ export interface PublicSeatSector {
 
 export interface PublicSeat {
   id: string;
+  ticketTypeId?: string;
+  price?: number;
+  colorCode?: string;
   rowName?: string;
   seatNumber?: string;
   seatLabel?: string;

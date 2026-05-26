@@ -18,6 +18,7 @@ import com.flashticket.core.event.repository.EventSeatInventoryRepository;
 import com.flashticket.core.event.repository.EventSeatRepository;
 import com.flashticket.core.event.repository.EventSectorRepository;
 import com.flashticket.core.event.repository.TicketTypeRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -61,6 +62,7 @@ public class SeatMapSyncService {
     private final TicketTypeRepository ticketTypeRepository;
     private final RedissonClient redissonClient;
     private final ApplicationEventPublisher eventPublisher;
+    private final EntityManager entityManager;
 
     /**
      * Organizer/editor view: includes inactive sectors and seats.
@@ -93,7 +95,7 @@ public class SeatMapSyncService {
 
         Event event = eventRepository.findByIdAndOrganizerIdAndIsDeletedFalse(eventId, organizerId)
             .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
-        EventLayout layout = eventLayoutRepository.findByEventId(eventId)
+        EventLayout layout = eventLayoutRepository.findByEventIdForUpdate(eventId)
             .orElseThrow(() -> new ResourceNotFoundException("Event layout not found: " + eventId));
 
         List<EventSector> dbSectors = eventSectorRepository.findAllByLayoutId(layout.getId());
@@ -134,6 +136,7 @@ public class SeatMapSyncService {
             .collect(Collectors.toMap(SeatMapPublishRequest.SectorPayload::id, Function.identity()));
 
         List<EventSector> sectorsToSave = new ArrayList<>();
+        Set<UUID> newSectorIds = new HashSet<>();
         for (SeatMapPublishRequest.SectorPayload sectorPayload : sectorPayloads) {
             boolean sectorActive = isSectorActive(sectorPayload);
             String sectorType = normalizeSectorType(sectorPayload.sectorType());
@@ -142,6 +145,7 @@ public class SeatMapSyncService {
                 sector = new EventSector();
                 sector.setId(sectorPayload.id());
                 sector.setLayout(layout);
+                newSectorIds.add(sectorPayload.id());
             }
 
             sector.setLayout(layout);
@@ -165,14 +169,19 @@ public class SeatMapSyncService {
             }
         }
 
-        List<EventSector> savedSectors = eventSectorRepository.saveAll(sectorsToSave);
-        eventSectorRepository.flush();
-        Map<UUID, EventSector> savedSectorMap = savedSectors.stream()
+        for (EventSector sector : sectorsToSave) {
+            if (newSectorIds.contains(sector.getId())) {
+                entityManager.persist(sector);
+            }
+        }
+        entityManager.flush();
+        Map<UUID, EventSector> savedSectorMap = sectorsToSave.stream()
             .collect(Collectors.toMap(EventSector::getId, Function.identity(), (left, right) -> left));
 
         List<EventSeat> seatsToSave = new ArrayList<>();
         Set<UUID> handledSeatIds = new HashSet<>();
         Set<UUID> activeSeatedSectorIds = new HashSet<>();
+        Set<UUID> newSeatIds = new HashSet<>();
         for (SeatMapPublishRequest.SectorPayload sectorPayload : sectorPayloads) {
             EventSector sector = savedSectorMap.get(sectorPayload.id());
             boolean sectorActive = isSectorActive(sectorPayload);
@@ -188,6 +197,7 @@ public class SeatMapSyncService {
                 if (seat == null) {
                     seat = new EventSeat();
                     seat.setId(seatPayload.id());
+                    newSeatIds.add(seatPayload.id());
                 }
 
                 boolean seatActive = sectorActive && isSeatActive(seatPayload);
@@ -218,8 +228,12 @@ public class SeatMapSyncService {
             }
         }
 
-        eventSeatRepository.saveAll(seatsToSave);
-        eventSeatRepository.flush();
+        for (EventSeat seat : seatsToSave) {
+            if (newSeatIds.contains(seat.getId())) {
+                entityManager.persist(seat);
+            }
+        }
+        entityManager.flush();
 
         for (UUID sectorId : activeSeatedSectorIds) {
             eventSeatInventoryRepository.bulkInsertInventoryForSector(eventId, sectorId);
@@ -247,6 +261,9 @@ public class SeatMapSyncService {
         List<EventSector> sectors = includeInactive
             ? eventSectorRepository.findAllByLayoutId(layout.getId())
             : eventSectorRepository.findByLayoutIdAndIsActiveTrue(layout.getId());
+        sectors = sectors.stream()
+            .filter(sector -> !isDeletedMapData(sector.getMapData()))
+            .toList();
 
         Set<UUID> seatedSectorIds = sectors.stream()
             .filter(sector -> SEATED.equals(normalizeSectorType(sector.getSectorType())))
@@ -257,6 +274,7 @@ public class SeatMapSyncService {
             ? Map.of()
             : eventSeatRepository.findAllBySectorIdIn(seatedSectorIds).stream()
                 .filter(seat -> includeInactive || Boolean.TRUE.equals(seat.getIsActive()))
+                .filter(seat -> !isDeletedMapData(seat.getCoordMetadata()))
                 .collect(Collectors.groupingBy(seat -> seat.getSector().getId())); // cẩn thận, Nếu có một sector SEATED nhưng chưa có ghế nào, thì seatsBySectorId sẽ không có key của sector đó.
 
         Map<UUID, String> inventoryStatusMap = readSeatStatus(event.getId(), includeInactive, seatedSectorIds);
@@ -596,6 +614,10 @@ public class SeatMapSyncService {
         if (payload.backgroundWidth() != null) layout.setBackgroundWidth(payload.backgroundWidth());
         if (payload.backgroundHeight() != null) layout.setBackgroundHeight(payload.backgroundHeight());
         if (payload.mapConfig() != null) layout.setMapConfig(payload.mapConfig());
+    }
+
+    private boolean isDeletedMapData(Map<String, Object> mapData) {
+        return mapData != null && Boolean.TRUE.equals(mapData.get("deleted"));
     }
 
     private int resolveSectorCapacity(

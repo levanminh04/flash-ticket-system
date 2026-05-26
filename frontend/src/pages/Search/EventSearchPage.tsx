@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import AppPagination from "../../components/common/AppPagination";
+import Blog from "../../components/common/Blog";
 import Footer from "../../components/common/Footer";
 import { eventService } from "../../services/eventService";
 import { categoryService } from "../../services/categoryService";
 import { EventSummary, SpringPage, Category } from "../../types/api";
-import { Search, MapPin, X, ChevronDown } from "lucide-react";
+import { Search, MapPin, X, ChevronDown, LoaderCircle } from "lucide-react";
 
 const monthShortNames = [
   "Jan",
@@ -44,8 +45,15 @@ function getEventLocation(event: EventSummary) {
 }
 
 function formatEventPrice(event: EventSummary) {
-  if (typeof event.minPrice === "number") {
-    return `Từ ${event.minPrice.toLocaleString("vi-VN")} đ`;
+  const minPrice =
+    typeof event.minPrice === "number"
+      ? event.minPrice
+      : typeof event.minPrice === "string"
+        ? Number(event.minPrice)
+        : undefined;
+
+  if (typeof minPrice === "number" && Number.isFinite(minPrice)) {
+    return `Từ ${minPrice.toLocaleString("vi-VN")} đ`;
   }
   return "Đang cập nhật";
 }
@@ -210,7 +218,7 @@ export default function EventSearchPage() {
                   border: "none",
                   cursor: "pointer",
                   fontFamily: "inherit",
-                  color: !queryCategory ? "#CC9900" : "inherit",
+                  color: !queryCategory ? "#CC9900" : "rgba(255, 255, 255, 0.72)",
                   fontWeight: "600",
                 }}
               >
@@ -228,7 +236,10 @@ export default function EventSearchPage() {
                       border: "none",
                       cursor: "pointer",
                       fontFamily: "inherit",
-                      color: queryCategory === cat.slug ? "#CC9900" : "inherit",
+                      color:
+                        queryCategory === cat.slug
+                          ? "#CC9900"
+                          : "rgba(255, 255, 255, 0.72)",
                       fontWeight: "600",
                     }}
                   >
@@ -818,14 +829,9 @@ export default function EventSearchPage() {
 
             {/* EVENTS LIST */}
             {isLoading ? (
-              <div style={{ textAlign: "center", padding: "50px" }}>
-                <div className="spinner"></div>{" "}
-                {/* Assume there's CSS for this */}
-                <p
-                  style={{ marginTop: "16px", color: "var(--text-secondary)" }}
-                >
-                  Đang tải dữ liệu...
-                </p>
+              <div className="event-search-loading">
+                <LoaderCircle className="event-search-loading-icon" size={22} />
+                <span>Loading</span>
               </div>
             ) : isError ? (
               <div
@@ -948,6 +954,10 @@ export default function EventSearchPage() {
             )}
           </main>
         </div>
+      </div>
+
+      <div className="container search-blog-section">
+        <Blog />
       </div>
 
       <Footer />

@@ -1,9 +1,15 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
 import { confirmDestructiveAction } from "../../lib/swal";
+import {
+  organizerService,
+  OrganizerEventImage,
+} from "../../services/organizerService";
 import {
   LayoutSourceType,
   organizerWorkspaceService,
@@ -54,6 +60,37 @@ function buildFormState(layout: OrganizerEventLayout): LayoutFormState {
   };
 }
 
+function buildFormStateFromSeatMapImage(image: OrganizerEventImage): LayoutFormState {
+  return {
+    ...defaultFormState,
+    name: "Sơ đồ ghế",
+    backgroundImageUrl: image.imageUrl || "",
+    backgroundPublicId: image.publicId || "",
+    backgroundWidth: String(image.width ?? ""),
+    backgroundHeight: String(image.height ?? ""),
+  };
+}
+
+function getRequestErrorMessage(error: unknown) {
+  const response = (error as { response?: { data?: unknown; status?: number } })?.response;
+  const data = response?.data;
+
+  if (data && typeof data === "object") {
+    const message =
+      (data as { message?: unknown; error?: unknown }).message ??
+      (data as { message?: unknown; error?: unknown }).error;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  if (typeof data === "string" && data.trim()) {
+    return data;
+  }
+
+  return response?.status ? `Request failed with status ${response.status}.` : "Request failed.";
+}
+
 function toPayload(formState: LayoutFormState): OrganizerLayoutPayload | null {
   try {
     const trimmedSourceId = formState.sourceId.trim();
@@ -93,6 +130,20 @@ export default function OrganizerLayoutPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [backgroundLightboxOpen, setBackgroundLightboxOpen] = useState(false);
+
+  const backgroundLightboxSlides = useMemo(
+    () =>
+      formState.backgroundImageUrl.trim()
+        ? [
+            {
+              src: formState.backgroundImageUrl.trim(),
+              alt: formState.name || "Layout background",
+            },
+          ]
+        : [],
+    [formState.backgroundImageUrl, formState.name],
+  );
 
   useEffect(() => {
     if (!ready) return;
@@ -104,15 +155,23 @@ export default function OrganizerLayoutPage() {
 
       setLoading(true);
       try {
-        const [nextEvent, nextLayout] = await Promise.all([
+        const [nextEvent, nextLayout, nextImages] = await Promise.all([
           organizerWorkspaceService.getMyEvent(eventId),
           organizerWorkspaceService.getLayout(eventId),
+          organizerService.getEventImages(eventId).catch(() => []),
         ]);
 
         if (!cancelled) {
+          const seatMapImage = nextImages.find((image) => image.imageType === "SEAT_MAP");
           setEventDetail(nextEvent);
           setLayout(nextLayout);
-          setFormState(nextLayout ? buildFormState(nextLayout) : defaultFormState);
+          setFormState(
+            nextLayout
+              ? buildFormState(nextLayout)
+              : seatMapImage
+                ? buildFormStateFromSeatMapImage(seatMapImage)
+                : defaultFormState,
+          );
         }
       } catch {
         if (!cancelled) {
@@ -161,8 +220,13 @@ export default function OrganizerLayoutPage() {
       setLayout(nextLayout);
       setFormState(buildFormState(nextLayout));
       toast.success(layout ? "Cập nhật layout thành công." : "Tạo layout thành công.");
-    } catch {
-      toast.error(layout ? "Không thể cập nhật layout." : "Không thể tạo layout.");
+    } catch (error) {
+      const message = getRequestErrorMessage(error);
+      toast.error(
+        layout
+          ? `Không thể cập nhật layout. ${message}`
+          : `Không thể tạo layout. ${message}`,
+      );
     } finally {
       setSaving(false);
     }
@@ -196,21 +260,21 @@ export default function OrganizerLayoutPage() {
   return (
     <OrganizerLayout
       title="Quản lý layout"
-      description="Tạo hoặc cập nhật layout cho event, gồm ảnh nền và mapConfig JSON"
+      description="Thiết lập sơ đồ và ảnh nền."
       actions={null}
+      hideTopBar
     >
       {eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
 
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải layout sự kiện</p>
+          <p>Đang tải layout sự kiện...</p>
         </section>
       ) : (
-        <section className="organizer-grid organizer-grid-wide">
+        <section className="organizer-grid organizer-layout-editor-single">
           <form className="organizer-panel organizer-event-form" onSubmit={handleSubmit}>
             <div className="organizer-panel-heading">
-              <p className="organizer-panel-title-pill">Layout editor</p>
               <h2 style={{ marginBottom: "4px" }}><strong>Tên sự kiện: </strong>{eventDetail?.title || "Sự kiện chưa xác định"}</h2>
               <h2 style={{ marginTop: 0 }}><strong>Slug: </strong>{eventDetail?.slug || "Sự kiện chưa xác định"}</h2>
               <p>
@@ -233,12 +297,30 @@ export default function OrganizerLayoutPage() {
 
               <label className="organizer-field organizer-form-span-2">
                 <span>Background image URL</span>
-                <input
-                  className="organizer-input"
-                  value={formState.backgroundImageUrl}
-                  onChange={(event) => handleChange("backgroundImageUrl", event.target.value)}
-                  placeholder="Dán URL ảnh seat map hoặc nền sơ đồ"
-                />
+                <div className="organizer-layout-url-field">
+                  {formState.backgroundImageUrl.trim() ? (
+                    <button
+                      type="button"
+                      className="organizer-layout-url-preview-button"
+                      onClick={() => setBackgroundLightboxOpen(true)}
+                      aria-label="Xem ảnh nền ở kích thước lớn"
+                      title="Xem ảnh nền"
+                    >
+                      <img
+                        src={formState.backgroundImageUrl}
+                        alt={formState.name || "Layout thumbnail"}
+                      />
+                    </button>
+                  ) : (
+                    <div className="organizer-layout-url-thumbnail-placeholder" />
+                  )}
+                  <input
+                    className="organizer-input"
+                    value={formState.backgroundImageUrl}
+                    onChange={(event) => handleChange("backgroundImageUrl", event.target.value)}
+                    placeholder="Dán URL ảnh seat map hoặc nền sơ đồ"
+                  />
+                </div>
               </label>
 
               <label className="organizer-field">
@@ -325,29 +407,14 @@ export default function OrganizerLayoutPage() {
             </div>
           </form>
 
-          <section className="organizer-panel">
-            <div className="organizer-panel-heading">
-              <h2>Xem trước layout</h2>
-            </div>
-
-            {formState.backgroundImageUrl ? (
-              <div className="organizer-layout-preview">
-                <img src={formState.backgroundImageUrl} alt={formState.name || "Layout preview"} />
-              </div>
-            ) : (
-              <div className="organizer-empty-state compact">
-                <p>Chưa có ảnh nền để preview.</p>
-              </div>
-            )}
-
-            <div className="organizer-card-metadata">
-              <span>Source type: {formState.sourceType}</span>
-              <span>Width: {formState.backgroundWidth || "-"}</span>
-              <span>Height: {formState.backgroundHeight || "-"}</span>
-            </div>
-          </section>
         </section>
       )}
+      <Lightbox
+        open={backgroundLightboxOpen && backgroundLightboxSlides.length > 0}
+        close={() => setBackgroundLightboxOpen(false)}
+        slides={backgroundLightboxSlides}
+        index={0}
+      />
     </OrganizerLayout>
   );
 }

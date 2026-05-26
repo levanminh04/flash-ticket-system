@@ -1,17 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { Search, ShoppingBag, X } from "lucide-react";
 import AccountSidebar from "../../components/account/AccountSidebar";
 import AppPagination from "../../components/common/AppPagination";
 import { confirmDestructiveAction } from "../../lib/swal";
-import {
-  orderService,
-  OrderSummary,
-  OrderDetail,
-} from "../../services/orderService";
-import { ShoppingBag, X } from "lucide-react";
+import { orderService, OrderDetail, OrderSummary } from "../../services/orderService";
 import AccountCategoryNav from "../../components/common/AccountCategoryNav";
+
+type OrderStatusFilter = "ALL" | "PENDING" | "CONFIRMED" | "CANCELLED" | "REFUNDED" | "EXPIRED";
 
 function formatDate(iso: string | null | undefined): string {
   if (iso == null || iso === "") return "-";
@@ -49,7 +47,6 @@ function statusLabel(status: string) {
 
 export default function MyOrdersPage() {
   const { keycloak, initialized } = useKeycloak();
-  const navigate = useNavigate();
   const [content, setContent] = useState<OrderSummary[]>([]);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -57,13 +54,17 @@ export default function MyOrdersPage() {
   const [page, setPage] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>("ALL");
+  const [searchValue, setSearchValue] = useState("");
 
   useEffect(() => {
     if (!initialized) return;
     if (!keycloak.authenticated) {
-      navigate("/", { replace: true });
+      void keycloak.login({
+        redirectUri: `${window.location.origin}/my-orders`,
+      });
     }
-  }, [initialized, keycloak.authenticated, navigate]);
+  }, [initialized, keycloak, keycloak.authenticated]);
 
   useEffect(() => {
     if (!keycloak.authenticated) return;
@@ -77,7 +78,7 @@ export default function MyOrdersPage() {
           setContent(res.content);
           setTotalPages(res.totalPages);
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           setError("Không thể tải danh sách đơn hàng.");
           toast.error("Không thể tải danh sách đơn hàng.");
@@ -86,8 +87,10 @@ export default function MyOrdersPage() {
         if (!cancelled) setLoading(false);
       }
     };
-    load();
-    return () => { cancelled = true; };
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [keycloak.authenticated, page]);
 
   const openDetail = async (orderId: string) => {
@@ -124,6 +127,23 @@ export default function MyOrdersPage() {
     }
   };
 
+  const keyword = searchValue.trim().toLowerCase();
+  const filteredOrders = useMemo(() => {
+    return content.filter((order) => {
+      if (statusFilter !== "ALL" && order.status !== statusFilter) return false;
+      if (!keyword) return true;
+      return (
+        order.eventTitle.toLowerCase().includes(keyword) ||
+        order.orderNumber.toLowerCase().includes(keyword)
+      );
+    });
+  }, [content, keyword, statusFilter]);
+
+  const pendingCount = content.filter((order) => order.status === "PENDING").length;
+  const confirmedCount = content.filter((order) => order.status === "CONFIRMED").length;
+  const refundedCount = content.filter((order) => order.status === "REFUNDED").length;
+  const isFiltering = statusFilter !== "ALL" || keyword.length > 0;
+
   if (!initialized || !keycloak.authenticated) return null;
 
   return (
@@ -151,82 +171,82 @@ export default function MyOrdersPage() {
             </div>
           ) : (
             <>
-              <div className="order-list">
-                {content.map((o) => {
-                  const sl = statusLabel(o.status);
-                  return (
-                    <div key={o.id} className="order-card">
-                      <div className="order-card-main">
-                        <h3 className="order-event-title">{o.eventTitle}</h3>
-                        <p className="order-meta">
-                          {formatDate(o.eventStartDatetime)} • {" "}
-                          {o.orderNumber}
-                        </p>
-                        <div className="order-card-footer">
-                          <span className={`order-status ${sl.cls}`}>
-                            {sl.text}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="order-card-actions">
-                        <button
-                          className="btn btn-outline btn-sm"
-                          onClick={() => openDetail(o.id)}
-                        >
-                          Chi tiết
-                        </button>
-                        <span className="order-amount">
-                          {Number(o.totalAmount).toLocaleString("vi-VN")} đ
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="ticket-summary-strip">
+                <div className="ticket-summary-pill"><span>Tổng đơn trang này</span><strong>{content.length}</strong></div>
+                <div className="ticket-summary-pill"><span>Chờ thanh toán</span><strong>{pendingCount}</strong></div>
+                <div className="ticket-summary-pill"><span>Đã xác nhận</span><strong>{confirmedCount}</strong></div>
+                <div className="ticket-summary-pill"><span>Đã hoàn tiền</span><strong>{refundedCount}</strong></div>
               </div>
 
-              <AppPagination
-                currentPage={page}
-                pageCount={totalPages}
-                onPageChange={setPage}
-              />
+              <div className="ticket-tools">
+                <div className="ticket-search-field">
+                  <Search size={16} />
+                  <input type="text" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} placeholder="Tìm theo tên sự kiện hoặc mã đơn" />
+                </div>
+                <select className="ticket-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as OrderStatusFilter)}>
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="PENDING">Chờ thanh toán</option>
+                  <option value="CONFIRMED">Đã xác nhận</option>
+                  <option value="CANCELLED">Đã hủy</option>
+                  <option value="EXPIRED">Hết hạn</option>
+                  <option value="REFUNDED">Đã hoàn tiền</option>
+                </select>
+                {isFiltering ? (
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => { setStatusFilter("ALL"); setSearchValue(""); }}>
+                    Xóa lọc
+                  </button>
+                ) : null}
+              </div>
+
+              {filteredOrders.length === 0 ? (
+                <div className="list-empty ticket-filter-empty">
+                  <ShoppingBag size={36} />
+                  <p>Không có đơn hàng phù hợp với bộ lọc hiện tại.</p>
+                </div>
+              ) : (
+                <div className="order-list">
+                  {filteredOrders.map((order) => {
+                    const sl = statusLabel(order.status);
+                    return (
+                      <div key={order.id} className="order-card">
+                        <div className="order-card-main">
+                          <h3 className="order-event-title">{order.eventTitle}</h3>
+                          <p className="order-meta">Ngày đặt: {formatDate(order.createdAt)} • Mã đơn: {order.orderNumber}</p>
+                          <div className="order-card-footer"><span className={`order-status ${sl.cls}`}>{sl.text}</span></div>
+                        </div>
+                        <div className="order-card-actions">
+                          <button className="btn btn-outline btn-sm" onClick={() => void openDetail(order.id)}>Chi tiết</button>
+                          <span className="order-amount">{Number(order.totalAmount).toLocaleString("vi-VN")} đ</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <AppPagination currentPage={page} pageCount={totalPages} onPageChange={setPage} />
             </>
           )}
         </div>
       </div>
 
       {selectedOrder && (
-        <div
-          className="modal-overlay"
-          onClick={() => setSelectedOrder(null)}
-        >
-          <div
-            className="modal-content order-detail-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="modal-close"
-              onClick={() => setSelectedOrder(null)}
-            >
-              <X size={24} />
-            </button>
+        <div className="modal-overlay" onClick={() => setSelectedOrder(null)}>
+          <div className="modal-content order-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setSelectedOrder(null)}><X size={24} /></button>
             <h2>{selectedOrder.eventTitle}</h2>
             <p className="modal-meta">
+              <span style={{ opacity: 0.8 }}>Thời gian sự kiện: </span>
               {formatDate(selectedOrder.eventStartDatetime)}
               {selectedOrder.eventVenueName && ` • ${selectedOrder.eventVenueName}`}
             </p>
             <div className="order-detail-info">
-              <div className="info-row">
-                <span className="label">Mã đơn</span>
-                <span className="value">{selectedOrder.orderNumber}</span>
-              </div>
-              <div className="info-row">
-                <span className="label">Trạng thái</span>
-                <span
-                  className={`value order-detail-status ${statusLabel(selectedOrder.status).cls}`}
-                >
-                  {statusLabel(selectedOrder.status).text}
-                </span>
-              </div>
+              <div className="info-row"><span className="label">Mã đơn</span><span className="value">{selectedOrder.orderNumber}</span></div>
+              <div className="info-row"><span className="label">Thời gian đặt</span><span className="value">{formatDate(selectedOrder.createdAt)}</span></div>
+              {selectedOrder.paidAt ? (
+                <div className="info-row"><span className="label">Thời gian thanh toán</span><span className="value">{formatDate(selectedOrder.paidAt)}</span></div>
+              ) : null}
+              <div className="info-row"><span className="label">Trạng thái</span><span className={`value order-detail-status ${statusLabel(selectedOrder.status).cls}`}>{statusLabel(selectedOrder.status).text}</span></div>
               {selectedOrder.items && selectedOrder.items.length > 0 && (
                 <div className="order-items">
                   <p className="items-label">Chi tiết vé</p>
@@ -234,26 +254,15 @@ export default function MyOrdersPage() {
                     <div key={item.id} className="order-item-row">
                       <span className="order-item-name">{item.ticketTypeName}</span>
                       <span className="order-item-qty">x{item.quantity}</span>
-                      <span className="order-item-subtotal">
-                        {Number(item.subtotal).toLocaleString("vi-VN")} đ
-                      </span>
+                      <span className="order-item-subtotal">{Number(item.subtotal).toLocaleString("vi-VN")} đ</span>
                     </div>
                   ))}
                 </div>
               )}
-              <div className="info-row total">
-                <span className="label">Tổng cộng</span>
-                <span className="value">
-                  {Number(selectedOrder.totalAmount).toLocaleString("vi-VN")} đ
-                </span>
-              </div>
+              <div className="info-row total"><span className="label">Tổng cộng</span><span className="value">{Number(selectedOrder.totalAmount).toLocaleString("vi-VN")} đ</span></div>
             </div>
             {selectedOrder.status === "PENDING" && (
-              <button
-                className="btn btn-outline btn-danger"
-                onClick={() => void handleCancel(selectedOrder.id)}
-                disabled={cancelling === selectedOrder.id}
-              >
+              <button className="btn btn-outline btn-danger" onClick={() => void handleCancel(selectedOrder.id)} disabled={cancelling === selectedOrder.id}>
                 {cancelling === selectedOrder.id ? "Đang hủy" : "Hủy đơn hàng"}
               </button>
             )}

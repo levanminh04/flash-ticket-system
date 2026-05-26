@@ -1,15 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import {
-  Calendar,
   Eye,
   ImagePlus,
   LoaderCircle,
   Edit,
-  MapPin,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
+import { FaEdit } from "react-icons/fa";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import { useDropzone } from "react-dropzone";
@@ -34,7 +34,16 @@ const imageTypes: OrganizerImageType[] = [
   "GALLERY",
   "SEAT_MAP",
 ];
+const ORGANIZER_EVENTS_FETCH_SIZE = 50;
 const IMAGES_PER_PAGE = 6;
+const EVENTS_PER_PAGE = 10;
+type MediaEventFilter = "all" | "active" | "draft";
+const mediaEventFilters: Array<{ value: MediaEventFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "draft", label: "Draft" },
+];
+const numberFormat = new Intl.NumberFormat("vi-VN");
 
 function formatBytes(bytes?: number | null) {
   if (!bytes || bytes <= 0) return "-";
@@ -55,6 +64,21 @@ function formatDateTime(dateTime?: string | null) {
   const parsedDate = new Date(dateTime);
   if (Number.isNaN(parsedDate.getTime())) return dateTime;
   return parsedDate.toLocaleString("vi-VN", { hour12: false });
+}
+
+function formatEventTableDateTime(dateTime?: string | null) {
+  if (!dateTime) return "-";
+  const parsedDate = new Date(dateTime);
+  if (Number.isNaN(parsedDate.getTime())) return dateTime;
+
+  return parsedDate.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function escapeHtml(value: string) {
@@ -88,12 +112,38 @@ function formatEventLocation(event: OrganizerEventDetail) {
   return Array.from(new Set(parts)).join(", ") || "Chưa cập nhật địa điểm";
 }
 
-function formatEventDate(event: OrganizerEventDetail) {
-  const start = event.schedule?.startDatetime;
-  if (!start) return "Chưa cập nhật lịch diễn";
-  const parsed = new Date(start);
-  if (Number.isNaN(parsed.getTime())) return start;
-  return parsed.toLocaleDateString("vi-VN");
+function formatEventTicketTypes(event: OrganizerEventDetail) {
+  if (!event.ticketTypes || event.ticketTypes.length === 0) {
+    return "Chưa có loại vé";
+  }
+
+  return event.ticketTypes.map((ticketType) => ticketType.name).join(", ");
+}
+
+async function getAllOrganizerEvents(): Promise<OrganizerEventDetail[]> {
+  const firstPage = await organizerWorkspaceService.getMyEvents(
+    0,
+    ORGANIZER_EVENTS_FETCH_SIZE,
+  );
+  const firstPageEvents = firstPage.content ?? [];
+
+  if (firstPage.totalPages <= 1) {
+    return firstPageEvents;
+  }
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+      organizerWorkspaceService.getMyEvents(
+        index + 1,
+        ORGANIZER_EVENTS_FETCH_SIZE,
+      ),
+    ),
+  );
+
+  return [
+    ...firstPageEvents,
+    ...remainingPages.flatMap((page) => page.content ?? []),
+  ];
 }
 
 export default function OrganizerMediaPage() {
@@ -115,6 +165,9 @@ export default function OrganizerMediaPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [currentPage, setCurrentPage] = useState(0);
+  const [eventPage, setEventPage] = useState(0);
+  const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+  const [eventFilter, setEventFilter] = useState<MediaEventFilter>("all");
 
   const setFileWithPreview = (file: File | null) => {
     setSelectedFile(file);
@@ -150,14 +203,37 @@ export default function OrganizerMediaPage() {
 
   const filteredEvents = useMemo(() => {
     const keyword = eventSearch.trim().toLowerCase();
-    if (!keyword) return events;
+    const filteredByStatus =
+      eventFilter === "all"
+        ? events
+        : events.filter((event) =>
+            eventFilter === "active"
+              ? event.status === "PUBLISHED"
+              : event.status === "DRAFT",
+          );
+    if (!keyword) return filteredByStatus;
 
-    return events.filter((event) =>
+    return filteredByStatus.filter((event) =>
       [event.title, event.slug, event.venue?.name, event.venue?.city]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword)),
     );
-  }, [eventSearch, events]);
+  }, [eventFilter, eventSearch, events]);
+
+  const eventFilterCounts = useMemo(
+    () => ({
+      all: events.length,
+      active: events.filter((event) => event.status === "PUBLISHED").length,
+      draft: events.filter((event) => event.status === "DRAFT").length,
+    }),
+    [events],
+  );
+
+  const eventPageCount = Math.ceil(filteredEvents.length / EVENTS_PER_PAGE);
+  const paginatedEvents = filteredEvents.slice(
+    eventPage * EVENTS_PER_PAGE,
+    (eventPage + 1) * EVENTS_PER_PAGE,
+  );
 
   const loadImages = async (eventId: string) => {
     setImagesLoading(true);
@@ -180,22 +256,27 @@ export default function OrganizerMediaPage() {
     await loadImages(event.id);
   };
 
+  const handleOpenEventMedia = async (event: OrganizerEventDetail) => {
+    setIsMediaModalOpen(true);
+    await handleSelectEvent(event);
+  };
+
+  const handleCloseEventMedia = () => {
+    setIsMediaModalOpen(false);
+    setLightboxIndex(-1);
+  };
+
   useEffect(() => {
     let cancelled = false;
 
     const loadEvents = async () => {
       setEventsLoading(true);
       try {
-        const page = await organizerWorkspaceService.getMyEvents(0, 100);
+        const allEvents = await getAllOrganizerEvents();
         if (cancelled) return;
-        setEvents(page.content);
-        if (page.content.length > 0) {
-          setResolvedEvent(page.content[0]);
-          await loadImages(page.content[0].id);
-        } else {
-          setResolvedEvent(null);
-          setImages([]);
-        }
+        setEvents(allEvents);
+        setResolvedEvent(null);
+        setImages([]);
       } catch {
         if (!cancelled) {
           setEvents([]);
@@ -301,6 +382,9 @@ export default function OrganizerMediaPage() {
       title: "Chi tiết ảnh",
       html: `<div class="organizer-image-details-scroll">${detailsHtml}</div>`,
       width: 700,
+      customClass: {
+        container: "organizer-media-swal-container",
+      },
       showConfirmButton: false,
       showCloseButton: true,
       closeButtonAriaLabel: "Đóng",
@@ -312,8 +396,11 @@ export default function OrganizerMediaPage() {
     if (!resolvedEvent) return;
 
     const result = await Swal.fire({
-      title: "Chỉnh sửa metadata ảnh",
+      title: "Chỉnh sửa ảnh",
       width: 640,
+      customClass: {
+        container: "organizer-media-swal-container",
+      },
       html: `
         <div class="organizer-media-editor-popup">
           <label class="organizer-media-editor-field">
@@ -400,130 +487,221 @@ export default function OrganizerMediaPage() {
     }
   }, [currentPage, pageCount]);
 
+  useEffect(() => {
+    setEventPage(0);
+  }, [eventFilter, eventSearch]);
+
+  useEffect(() => {
+    if (eventPage > 0 && eventPage >= eventPageCount) {
+      setEventPage(Math.max(eventPageCount - 1, 0));
+    }
+  }, [eventPage, eventPageCount]);
+
   return (
     <OrganizerLayout
       title="Thư viện ảnh sự kiện"
-      description="Chọn một sự kiện từ workspace organizer rồi quản lý banner, poster, thumbnail, gallery và seat map ngay trên cùng màn hình."
+      description="Thực hi quản lý ảnh cho các sự kiện của bạn."
     >
       <section className="organizer-panel organizer-lookup-panel">
         <div className="organizer-panel-heading">
-          <div className="organizer-panel-heading-row">
-            <h2 className="organizer-panel-title-pill">Chọn sự kiện</h2>
-          </div>
-          <p>
-            Danh sách bên dưới lấy trực tiếp từ workspace organizer. Chọn một sự
-            kiện để xem và quản lý thư viện ảnh của sự kiện đó.
-          </p>
-        </div>
-
-        <div className="organizer-search-row">
-          <div className="organizer-search-input organizer-media-filter">
-            <Search size={16} />
-            <input
-              value={eventSearch}
-              onChange={(event) => setEventSearch(event.target.value)}
-              className="organizer-media-filter-input"
-              placeholder="Tìm theo tên sự kiện, slug hoặc địa điểm"
-            />
+          <div className="organizer-panel-heading-row organizer-media-event-heading">
+            <div className="organizer-events-list-filter-row">
+              {mediaEventFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={`organizer-events-filter-pill ${
+                    eventFilter === filter.value ? "is-active" : ""
+                  }`}
+                  onClick={() => setEventFilter(filter.value)}
+                >
+                  {filter.label} {numberFormat.format(eventFilterCounts[filter.value])}
+                </button>
+              ))}
+            </div>
+            <label className="organizer-events-list-search organizer-media-event-search">
+              <input
+                value={eventSearch}
+                onChange={(event) => setEventSearch(event.target.value)}
+                className="organizer-events-list-search-input"
+                placeholder="Search.."
+              />
+              <span
+                className="organizer-events-list-search-button"
+                aria-hidden="true"
+              >
+                <Search size={14} />
+              </span>
+            </label>
           </div>
         </div>
 
         {eventsLoading ? (
-          <div className="organizer-empty-state">
+          <div className="organizer-empty-state organizer-media-events-empty">
             <div className="loading-spinner" />
             <p>Đang tải danh sách sự kiện của organizer...</p>
           </div>
         ) : filteredEvents.length === 0 ? (
-          <div className="organizer-empty-state">
+          <div className="organizer-empty-state organizer-media-events-empty">
             <ImagePlus size={32} />
             <p>Không có sự kiện nào phù hợp để quản lý ảnh.</p>
           </div>
         ) : (
-          <div className="organizer-media-event-grid">
-            {filteredEvents.map((event) => {
-              const isActive = resolvedEvent?.id === event.id;
+          <div className="organizer-media-table-wrap organizer-event-table-wrap">
+            <table className="organizer-event-table organizer-media-event-table organizer-events-page-table">
+              <thead>
+                <tr>
+                  <th>STT</th>
+                  <th>Banner</th>
+                  <th>Tên sự kiện</th>
+                  <th>Bắt đầu</th>
+                  <th>Kết thúc</th>
+                  <th>Địa điểm</th>
+                  <th>Loại vé</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedEvents.map((event, index) => {
+                  const coverUrl = resolveBannerUrl(event);
 
-              return (
-                <button
-                  key={event.id}
-                  type="button"
-                  className={`organizer-media-event-card${isActive ? " is-active" : ""}`}
-                  onClick={() => void handleSelectEvent(event)}
-                >
-                  <div className="organizer-media-event-card__thumb">
-                    {resolveBannerUrl(event) ? (
-                      <img
-                        src={resolveBannerUrl(event)}
-                        alt={event.title}
-                      />
-                    ) : (
-                      <div className="organizer-event-art-placeholder">
-                        <ImagePlus size={24} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="organizer-media-event-card__body">
-                    <strong>{event.title}</strong>
-                    <span>{event.slug}</span>
-                    <span>
-                      <Calendar size={14} /> {formatEventDate(event)}
-                    </span>
-                    <span>
-                      <MapPin size={14} /> {formatEventLocation(event)}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+                  return (
+                    <tr key={event.id} className="organizer-media-event-row">
+                      <td>{eventPage * EVENTS_PER_PAGE + index + 1}</td>
+                      <td>
+                        {coverUrl ? (
+                          <button
+                            type="button"
+                            className="organizer-media-thumb organizer-media-thumb-trigger"
+                            onClick={() => void handleOpenEventMedia(event)}
+                            aria-label={`Chọn ${event.title}`}
+                            title="Chọn sự kiện"
+                          >
+                            <img src={coverUrl} alt={event.title} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="organizer-media-thumb organizer-event-thumb-placeholder"
+                            onClick={() => void handleOpenEventMedia(event)}
+                            aria-label={`Chọn ${event.title}`}
+                            title="Chọn sự kiện"
+                          >
+                            <span>Không có</span>
+                          </button>
+                        )}
+                      </td>
+                      <td
+                        className="organizer-event-title-cell"
+                        title={event.title}
+                      >
+                        {event.title}
+                      </td>
+                      <td>{formatEventTableDateTime(event.schedule?.startDatetime)}</td>
+                      <td>{formatEventTableDateTime(event.schedule?.endDatetime)}</td>
+                      <td
+                        className="organizer-event-location-cell"
+                        title={formatEventLocation(event)}
+                      >
+                        {formatEventLocation(event)}
+                      </td>
+                      <td
+                        className="organizer-event-ticket-types-cell"
+                        title={formatEventTicketTypes(event)}
+                      >
+                        {formatEventTicketTypes(event)}
+                      </td>
+                      <td className="organizer-media-action-cell">
+                        <div className="organizer-media-actions">
+                          <button
+                            type="button"
+                            className="organizer-icon-action organizer-icon-action-edit"
+                            onClick={() => void handleOpenEventMedia(event)}
+                            aria-label={`Quản lý ảnh của ${event.title}`}
+                            title="Quản lý ảnh"
+                          >
+                            <FaEdit size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <AppPagination
+              currentPage={eventPage}
+              pageCount={eventPageCount}
+              onPageChange={setEventPage}
+              pageRangeDisplayed={4}
+              marginPagesDisplayed={1}
+              showPageInfo={false}
+            />
           </div>
         )}
       </section>
 
-      {resolvedEvent ? (
-        <>
-          <section className="organizer-event-banner">
-            <div className="organizer-event-copy">
-              <span className="organizer-badge">Event đã chọn</span>
-              <h2>
-                <strong>Tên sự kiện: </strong>
-                {resolvedEvent.title}
-              </h2>
-              <p>
-                <strong>Event ID: </strong>
-                {resolvedEvent.id}
-              </p>
-              <p>
-                <strong>Slug: </strong>
-                {resolvedEvent.slug}
-              </p>
-              <p>
-                <strong>BTC: </strong>
-                {resolvedEvent.organizer?.name || "Chưa cập nhật"}
-              </p>
+      {resolvedEvent && isMediaModalOpen ? (
+        <div className="organizer-media-modal-backdrop" role="presentation">
+          <div
+            className="organizer-media-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="organizer-media-modal-title"
+          >
+            <div className="organizer-media-modal-header">
+              <h2 id="organizer-media-modal-title">Quản lý ảnh sự kiện</h2>
+              <button
+                type="button"
+                className="organizer-media-modal-close"
+                onClick={handleCloseEventMedia}
+                aria-label="Đóng popup quản lý ảnh"
+                title="Đóng"
+              >
+                <X size={18} />
+              </button>
             </div>
-            <div className="organizer-event-art">
-              {resolveBannerUrl(resolvedEvent) ? (
-                <img
-                  src={resolveBannerUrl(resolvedEvent)}
-                  alt={resolvedEvent.title}
-                />
-              ) : (
-                <div className="organizer-event-art-placeholder">
-                  <ImagePlus size={32} />
-                </div>
-              )}
-            </div>
-          </section>
 
-          <div className="organizer-media-stack">
+            <div className="organizer-media-modal-body">
+              <section className="organizer-event-banner">
+                <div className="organizer-event-copy">
+                  <span className="organizer-badge">Event đã chọn</span>
+                  <h2>
+                    <strong>Tên sự kiện: </strong>
+                    {resolvedEvent.title}
+                  </h2>
+                  <p>
+                    <strong>Event ID: </strong>
+                    {resolvedEvent.id}
+                  </p>
+                  <p>
+                    <strong>Slug: </strong>
+                    {resolvedEvent.slug}
+                  </p>
+                  <p>
+                    <strong>BTC: </strong>
+                    {resolvedEvent.organizer?.name || "Chưa cập nhật"}
+                  </p>
+                </div>
+                <div className="organizer-event-art">
+                  {resolveBannerUrl(resolvedEvent) ? (
+                    <img
+                      src={resolveBannerUrl(resolvedEvent)}
+                      alt={resolvedEvent.title}
+                    />
+                  ) : (
+                    <div className="organizer-event-art-placeholder">
+                      <ImagePlus size={32} />
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <div className="organizer-media-stack">
             <form
               className="organizer-panel organizer-upload-form organizer-upload-form-horizontal"
               onSubmit={handleUpload}
             >
-              <div className="organizer-panel-heading">
-                <h2 className="organizer-panel-title-pill">Upload ảnh mới</h2>
-              </div>
-
               <div className="organizer-upload-row">
                 <label className="organizer-field">
                   <span>Loại ảnh</span>
@@ -600,12 +778,6 @@ export default function OrganizerMediaPage() {
             </form>
 
             <section className="organizer-panel">
-              <div className="organizer-panel-heading">
-                <h2 className="organizer-panel-title-pill">
-                  Thư viện hiện tại
-                </h2>
-              </div>
-
               {imagesLoading ? (
                 <div className="organizer-empty-state">
                   <div className="loading-spinner" />
@@ -619,7 +791,7 @@ export default function OrganizerMediaPage() {
               ) : (
                 <>
                   <div className="organizer-media-table-wrap">
-                    <table className="organizer-media-table">
+                    <table className="organizer-media-table organizer-events-page-table">
                       <thead>
                         <tr>
                           <th>Ảnh</th>
@@ -691,8 +863,8 @@ export default function OrganizerMediaPage() {
                                     className="organizer-icon-action organizer-icon-action-edit"
                                     onClick={() => void handleEditMetadata(image)}
                                     type="button"
-                                    aria-label="Chỉnh sửa metadata ảnh"
-                                    title="Chỉnh sửa metadata ảnh"
+                                    aria-label="Chỉnh sửa ảnh"
+                                    title="Chỉnh sửa ảnh"
                                   >
                                     <Edit size={16} />
                                   </button>
@@ -728,15 +900,17 @@ export default function OrganizerMediaPage() {
                 </>
               )}
             </section>
-          </div>
+              </div>
+            </div>
 
-          <Lightbox
-            open={lightboxIndex >= 0}
-            close={() => setLightboxIndex(-1)}
-            index={lightboxIndex >= 0 ? lightboxIndex : 0}
-            slides={lightboxSlides}
-          />
-        </>
+            <Lightbox
+              open={lightboxIndex >= 0}
+              close={() => setLightboxIndex(-1)}
+              index={lightboxIndex >= 0 ? lightboxIndex : 0}
+              slides={lightboxSlides}
+            />
+          </div>
+        </div>
       ) : null}
     </OrganizerLayout>
   );
