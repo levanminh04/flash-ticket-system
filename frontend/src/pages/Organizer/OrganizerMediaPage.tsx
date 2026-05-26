@@ -37,6 +37,13 @@ const imageTypes: OrganizerImageType[] = [
 const ORGANIZER_EVENTS_FETCH_SIZE = 50;
 const IMAGES_PER_PAGE = 6;
 const EVENTS_PER_PAGE = 10;
+type MediaEventFilter = "all" | "active" | "draft";
+const mediaEventFilters: Array<{ value: MediaEventFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "draft", label: "Draft" },
+];
+const numberFormat = new Intl.NumberFormat("vi-VN");
 
 function formatBytes(bytes?: number | null) {
   if (!bytes || bytes <= 0) return "-";
@@ -160,6 +167,7 @@ export default function OrganizerMediaPage() {
   const [currentPage, setCurrentPage] = useState(0);
   const [eventPage, setEventPage] = useState(0);
   const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+  const [eventFilter, setEventFilter] = useState<MediaEventFilter>("all");
 
   const setFileWithPreview = (file: File | null) => {
     setSelectedFile(file);
@@ -195,14 +203,31 @@ export default function OrganizerMediaPage() {
 
   const filteredEvents = useMemo(() => {
     const keyword = eventSearch.trim().toLowerCase();
-    if (!keyword) return events;
+    const filteredByStatus =
+      eventFilter === "all"
+        ? events
+        : events.filter((event) =>
+            eventFilter === "active"
+              ? event.status === "PUBLISHED"
+              : event.status === "DRAFT",
+          );
+    if (!keyword) return filteredByStatus;
 
-    return events.filter((event) =>
+    return filteredByStatus.filter((event) =>
       [event.title, event.slug, event.venue?.name, event.venue?.city]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword)),
     );
-  }, [eventSearch, events]);
+  }, [eventFilter, eventSearch, events]);
+
+  const eventFilterCounts = useMemo(
+    () => ({
+      all: events.length,
+      active: events.filter((event) => event.status === "PUBLISHED").length,
+      draft: events.filter((event) => event.status === "DRAFT").length,
+    }),
+    [events],
+  );
 
   const eventPageCount = Math.ceil(filteredEvents.length / EVENTS_PER_PAGE);
   const paginatedEvents = filteredEvents.slice(
@@ -464,7 +489,7 @@ export default function OrganizerMediaPage() {
 
   useEffect(() => {
     setEventPage(0);
-  }, [eventSearch]);
+  }, [eventFilter, eventSearch]);
 
   useEffect(() => {
     if (eventPage > 0 && eventPage >= eventPageCount) {
@@ -480,33 +505,50 @@ export default function OrganizerMediaPage() {
       <section className="organizer-panel organizer-lookup-panel">
         <div className="organizer-panel-heading">
           <div className="organizer-panel-heading-row organizer-media-event-heading">
-            <h2 className="organizer-panel-title-pill">Chọn sự kiện</h2>
-            <label className="organizer-media-event-search">
+            <div className="organizer-events-list-filter-row">
+              {mediaEventFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={`organizer-events-filter-pill ${
+                    eventFilter === filter.value ? "is-active" : ""
+                  }`}
+                  onClick={() => setEventFilter(filter.value)}
+                >
+                  {filter.label} {numberFormat.format(eventFilterCounts[filter.value])}
+                </button>
+              ))}
+            </div>
+            <label className="organizer-events-list-search organizer-media-event-search">
               <input
                 value={eventSearch}
                 onChange={(event) => setEventSearch(event.target.value)}
-                placeholder="Tìm theo tên sự kiện, slug hoặc địa điểm"
+                className="organizer-events-list-search-input"
+                placeholder="Search.."
               />
-              <span>
-                <Search size={16} />
+              <span
+                className="organizer-events-list-search-button"
+                aria-hidden="true"
+              >
+                <Search size={14} />
               </span>
             </label>
           </div>
         </div>
 
         {eventsLoading ? (
-          <div className="organizer-empty-state">
+          <div className="organizer-empty-state organizer-media-events-empty">
             <div className="loading-spinner" />
             <p>Đang tải danh sách sự kiện của organizer...</p>
           </div>
         ) : filteredEvents.length === 0 ? (
-          <div className="organizer-empty-state">
+          <div className="organizer-empty-state organizer-media-events-empty">
             <ImagePlus size={32} />
             <p>Không có sự kiện nào phù hợp để quản lý ảnh.</p>
           </div>
         ) : (
           <div className="organizer-media-table-wrap organizer-event-table-wrap">
-            <table className="organizer-event-table organizer-media-event-table">
+            <table className="organizer-event-table organizer-media-event-table organizer-events-page-table">
               <thead>
                 <tr>
                   <th>STT</th>
@@ -660,10 +702,6 @@ export default function OrganizerMediaPage() {
               className="organizer-panel organizer-upload-form organizer-upload-form-horizontal"
               onSubmit={handleUpload}
             >
-              <div className="organizer-panel-heading">
-                <h2 className="organizer-panel-title-pill">Upload ảnh mới</h2>
-              </div>
-
               <div className="organizer-upload-row">
                 <label className="organizer-field">
                   <span>Loại ảnh</span>
@@ -740,12 +778,6 @@ export default function OrganizerMediaPage() {
             </form>
 
             <section className="organizer-panel">
-              <div className="organizer-panel-heading">
-                <h2 className="organizer-panel-title-pill">
-                  Thư viện hiện tại
-                </h2>
-              </div>
-
               {imagesLoading ? (
                 <div className="organizer-empty-state">
                   <div className="loading-spinner" />
@@ -759,7 +791,7 @@ export default function OrganizerMediaPage() {
               ) : (
                 <>
                   <div className="organizer-media-table-wrap">
-                    <table className="organizer-media-table">
+                    <table className="organizer-media-table organizer-events-page-table">
                       <thead>
                         <tr>
                           <th>Ảnh</th>

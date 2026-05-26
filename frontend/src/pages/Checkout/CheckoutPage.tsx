@@ -3,22 +3,19 @@ import {
   useState,
   useRef,
   useCallback,
-  useMemo,
   type MouseEvent,
 } from "react";
 import {
   Link,
   useNavigate,
+  useSearchParams,
 } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
-import {
-  bookingService,
-  CreateBookingRequest,
-  BookingItemRequest,
-} from "../../services/bookingService";
+import { orderService, OrderDetail } from "../../services/orderService";
 import { paymentService } from "../../services/paymentService";
-import { EventSummary, TicketType } from "../../types/api";
+import { eventService } from "../../services/eventService";
+import { EventSummary } from "../../types/api";
 import BookingStepIndicator from "../../components/common/BookingStepIndicator";
 import {
   User,
@@ -38,49 +35,30 @@ function formatTimer(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
-function normalizeSeatLabel(value: string): string {
-  return value.trim();
-}
-
 function truncateBreadcrumbLabel(value: string, maxLength = 70): string {
   if (value.length <= maxLength) {
     return value;
   }
-
   return `${value.slice(0, maxLength)}...`;
-}
-
-function getSeatLabelsFromSeatIds(_seatIds?: string[]): string[] {
-  return [];
-}
-
-function getSeatLabelsFromLabels(labels?: string[]): string[] {
-  if (!labels || labels.length === 0) return [];
-  return labels.map(normalizeSeatLabel);
-}
-
-interface CheckoutSelectedSeat {
-  seatId: string;
-  ticketTypeId: string;
-  seatLabel?: string;
 }
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { keycloak, initialized } = useKeycloak();
 
-  const [bookingItems, setBookingItems] = useState<BookingItemRequest[]>([]);
-  const [selectedSeats, setSelectedSeats] = useState<CheckoutSelectedSeat[]>([]);
+  const orderId = searchParams.get("orderId") || sessionStorage.getItem("lastOrderId") || "";
+
+  const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(true);
   const [event, setEvent] = useState<EventSummary | null>(null);
-  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
 
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const [voucherCode, setVoucherCode] = useState("");
   const [timeLeft, setTimeLeft] = useState<number>(15 * 60);
+  const [selectedBankCode, setSelectedBankCode] = useState<string>(""); // bankCode: "", "VNPAYQR", "VNBANK", "INTCARD"
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
@@ -88,30 +66,95 @@ export default function CheckoutPage() {
   const allowNavigationRef = useRef(false);
   const popStateReadyRef = useRef(false);
 
-  const shouldBlockNavigation =
-    Boolean(event) && bookingItems.length > 0 && !allowNavigationRef.current;
+  const clearCheckoutSession = useCallback(() => {
+    sessionStorage.removeItem("bookingItems");
+    sessionStorage.removeItem("bookingEvent");
+    sessionStorage.removeItem("bookingTicketTypes");
+    sessionStorage.removeItem("bookingSelectedSeats");
+    sessionStorage.removeItem("bookingHold");
+    sessionStorage.removeItem("lastOrderId");
+    sessionStorage.removeItem("lastOrderNumber");
+  }, []);
 
+  // Fetch Order and Event details
   useEffect(() => {
-    if (!shouldBlockNavigation) return;
+    if (!initialized) return;
 
+    if (!orderId) {
+      toast.error("Không tìm thấy thông tin đơn hàng.");
+      allowNavigationRef.current = true;
+      navigate("/");
+      return;
+    }
+
+    const fetchOrderAndEvent = async () => {
+      setIsLoadingOrder(true);
+      try {
+        const order = await orderService.getOrderDetail(orderId);
+        if (!order) {
+          toast.error("Đơn hàng không tồn tại.");
+          allowNavigationRef.current = true;
+          navigate("/");
+          return;
+        }
+
+        if (order.status !== "PENDING") {
+          toast.info(`Đơn hàng ở trạng thái: ${order.status}`);
+          allowNavigationRef.current = true;
+          if (order.status === "CONFIRMED") {
+            navigate("/payment-result", { state: { fromCheckout: true } });
+          } else {
+            navigate("/");
+          }
+          return;
+        }
+
+        setOrderDetail(order);
+        setCustomerName(order.customerName || "");
+        setCustomerEmail(order.customerEmail || "");
+        setCustomerPhone(order.customerPhone || "");
+
+        // Fetch event slug and basic details
+        const eventData = await eventService.getEventDetails(order.eventId);
+        setEvent(eventData);
+      } catch (err) {
+        console.error("Error loading order or event details:", err);
+        toast.error("Không thể tải thông tin đơn hàng.");
+        allowNavigationRef.current = true;
+        navigate("/");
+      } finally {
+        setIsLoadingOrder(false);
+      }
+    };
+
+    void fetchOrderAndEvent();
+  }, [orderId, initialized, navigate]);
+
+  // Page unload guard
+  useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (allowNavigationRef.current || !orderDetail || orderDetail.status !== "PENDING") {
+        return;
+      }
       e.preventDefault();
       e.returnValue = "";
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [shouldBlockNavigation]);
+  }, [orderDetail]);
 
+  // Popstate navigation guard
   useEffect(() => {
-    if (!shouldBlockNavigation) return;
+    if (!orderDetail || orderDetail.status !== "PENDING") return;
 
     const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     window.history.pushState({ checkoutGuard: true }, "", currentPath);
     popStateReadyRef.current = true;
 
     const handlePopState = () => {
-      if (!popStateReadyRef.current || allowNavigationRef.current) return;
+      if (allowNavigationRef.current) return;
+      if (!popStateReadyRef.current) return;
       const nowPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       window.history.pushState({ checkoutGuard: true }, "", nowPath);
       setShowLeaveModal(true);
@@ -122,10 +165,11 @@ export default function CheckoutPage() {
       popStateReadyRef.current = false;
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [shouldBlockNavigation]);
+  }, [orderDetail]);
 
+  // Link click guard
   useEffect(() => {
-    if (!shouldBlockNavigation) return;
+    if (!orderDetail || orderDetail.status !== "PENDING") return;
 
     const handleDocumentClick = (event: globalThis.MouseEvent) => {
       if (allowNavigationRef.current) return;
@@ -157,160 +201,70 @@ export default function CheckoutPage() {
 
     document.addEventListener("click", handleDocumentClick, true);
     return () => document.removeEventListener("click", handleDocumentClick, true);
-  }, [shouldBlockNavigation]);
+  }, [orderDetail]);
 
+  // Countdown timer based on expiresAt
   useEffect(() => {
-    const itemsData = sessionStorage.getItem("bookingItems");
-    const eventData = sessionStorage.getItem("bookingEvent");
-    const typesData = sessionStorage.getItem("bookingTicketTypes");
-    const selectedSeatsData = sessionStorage.getItem("bookingSelectedSeats");
-
-    if (!itemsData || !eventData) {
-      allowNavigationRef.current = true;
-      navigate("/");
+    if (!orderDetail?.expiresAt) {
       return;
     }
 
-    const items = JSON.parse(itemsData) as BookingItemRequest[];
-    const selectedEvent = JSON.parse(eventData) as EventSummary;
-    const types = typesData ? (JSON.parse(typesData) as TicketType[]) : [];
-    const parsedSelectedSeats = selectedSeatsData
-      ? (JSON.parse(selectedSeatsData) as CheckoutSelectedSeat[])
-      : [];
+    clearInterval(timerRef.current);
+    const expiresAt = new Date(orderDetail.expiresAt).getTime();
 
-    setBookingItems(items);
-    setSelectedSeats(parsedSelectedSeats);
-    setEvent(selectedEvent);
-    setTicketTypes(types);
+    const handleTimeout = async () => {
+      clearInterval(timerRef.current);
+      clearCheckoutSession();
+      toast.error("Hết thời gian giữ vé. Đơn hàng của bạn đã bị hủy.");
+      allowNavigationRef.current = true;
+      if (orderId) {
+        try {
+          await orderService.cancelOrder(orderId);
+        } catch (err) {
+          console.error("Failed to cancel order on timeout:", err);
+        }
+      }
+      const fallbackPath = event?.slug ? `/events/${event.slug}/book` : "/search";
+      navigate(fallbackPath, { replace: true });
+    };
 
-    const expiresAt = Date.now() + 15 * 60 * 1000;
     const updateTimer = () => {
       const diff = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
       setTimeLeft(diff);
 
       if (diff <= 0) {
-        clearInterval(timerRef.current);
-        sessionStorage.removeItem("bookingItems");
-        sessionStorage.removeItem("bookingSelectedSeats");
-        const fallbackPath = selectedEvent?.slug
-          ? `/events/${selectedEvent.slug}/book`
-          : "/search";
-        toast.error("Hết thời gian giữ vé. Bạn sẽ được chuyển lại trang chọn vé.");
-        allowNavigationRef.current = true;
-        navigate(fallbackPath, { replace: true });
+        void handleTimeout();
       }
     };
 
     updateTimer();
     timerRef.current = setInterval(updateTimer, 1000);
     return () => clearInterval(timerRef.current);
-  }, [navigate, keycloak]);
-
-  useEffect(() => {
-    if (!initialized || !keycloak?.authenticated || !keycloak?.tokenParsed) {
-      return;
-    }
-
-    const parsed = keycloak.tokenParsed as Record<string, any>;
-    const fullName =
-      parsed.name ||
-      `${parsed.given_name || ""} ${parsed.family_name || ""}`.trim();
-    const email = parsed.email || "";
-    const phone = parsed.phone_number || parsed.phone || "";
-
-    if (fullName) {
-      setCustomerName((prev) => prev.trim() || fullName);
-    }
-    if (email) {
-      setCustomerEmail((prev) => prev.trim() || email);
-    }
-    if (phone) {
-      setCustomerPhone((prev) => prev.trim() || phone);
-    }
-  }, [initialized, keycloak?.authenticated, keycloak?.token]);
+  }, [orderDetail?.expiresAt, event, orderId, navigate, clearCheckoutSession]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const isLowTime = timeLeft <= 120;
 
-  const subtotal = bookingItems.reduce((sum, item) => {
-    const ticketType = ticketTypes.find((t) => t.id === item.ticketTypeId);
-    return sum + (ticketType?.price || 0) * item.quantity;
-  }, 0);
-
-  const selectedSeatLabelsByType = useMemo(() => {
-    return selectedSeats.reduce<Record<string, string[]>>((acc, seat) => {
-      if (!seat.ticketTypeId) return acc;
-      const normalizedLabel = normalizeSeatLabel(
-        seat.seatLabel?.trim() || seat.seatId,
-      );
-      if (!acc[seat.ticketTypeId]) {
-        acc[seat.ticketTypeId] = [];
-      }
-      acc[seat.ticketTypeId].push(normalizedLabel);
-      return acc;
-    }, {});
-  }, [selectedSeats]);
-
-  const breadcrumbEventName = truncateBreadcrumbLabel(event?.title || "", 20);
+  const breadcrumbEventName = truncateBreadcrumbLabel(event?.title || orderDetail?.eventTitle || "", 20);
   const selectTicketPath = event?.slug ? `/events/${event.slug}/book` : "/search";
-
-  const validateForm = useCallback((): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (!customerName.trim()) errors.customerName = "Vui lòng nhập họ tên";
-
-    if (!customerEmail.trim()) {
-      errors.customerEmail = "Vui lòng nhập email";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-      errors.customerEmail = "Email không hợp lệ";
-    }
-
-    const rawPhone = customerPhone.replace(/\s/g, "");
-    if (!rawPhone) {
-      errors.customerPhone = "Vui lòng nhập số điện thoại";
-    } else if (!/^(?:\+84|0)[0-9]{8,10}$/.test(rawPhone)) {
-      errors.customerPhone =
-        "Số điện thoại không hợp lệ (bắt đầu bằng 0 hoặc +84)";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [customerName, customerEmail, customerPhone]);
 
   const handlePayment = async (e?: MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
     e?.stopPropagation();
 
-    if (!validateForm()) {
-      toast.warning("Vui lòng kiểm tra lại thông tin người mua.");
-      return;
-    }
-    if (!event || bookingItems.length === 0) return;
+    if (!orderDetail) return;
     if (timeLeft <= 0) return;
 
     setIsSubmitting(true);
 
     try {
-      const bookingRequest: CreateBookingRequest = {
-        eventId: event.id,
-        items: bookingItems,
-        customerName: customerName.trim(),
-        customerEmail: customerEmail.trim(),
-        customerPhone: customerPhone.replace(/\s/g, ""),
-        promotionCode: voucherCode.trim() || undefined,
-      };
-
-      const booking = await bookingService.createBooking(bookingRequest);
-      const payment = await paymentService.initiatePayment(booking.orderId);
+      const payment = await paymentService.initiatePayment(orderDetail.id, selectedBankCode || undefined);
       const paymentUrl = payment.paymentUrl?.trim() || "";
 
-      sessionStorage.removeItem("bookingItems");
-      sessionStorage.removeItem("bookingEvent");
-      sessionStorage.removeItem("bookingTicketTypes");
-      sessionStorage.removeItem("bookingSelectedSeats");
-      sessionStorage.setItem("lastOrderId", booking.orderId);
-      sessionStorage.setItem("lastOrderNumber", booking.orderNumber);
+      clearCheckoutSession();
+      sessionStorage.setItem("lastOrderId", orderDetail.id);
+      sessionStorage.setItem("lastOrderNumber", orderDetail.orderNumber);
       allowNavigationRef.current = true;
 
       if (paymentUrl) {
@@ -348,21 +302,38 @@ export default function CheckoutPage() {
     setShowLeaveModal(false);
   };
 
-  const handleConfirmLeaveCheckout = () => {
+  const handleConfirmLeaveCheckout = async () => {
     setShowLeaveModal(false);
     allowNavigationRef.current = true;
-    sessionStorage.removeItem("bookingItems");
-    sessionStorage.removeItem("bookingSelectedSeats");
+    clearCheckoutSession();
+
+    if (orderId) {
+      try {
+        await orderService.cancelOrder(orderId);
+      } catch (err) {
+        console.error("Failed to cancel order:", err);
+      }
+    }
 
     if (event?.slug) {
       navigate(`/events/${event.slug}/book`);
       return;
     }
-
     navigate("/search");
   };
 
-  const handleReselectTickets = () => {
+  const handleReselectTickets = async () => {
+    allowNavigationRef.current = true;
+    clearCheckoutSession();
+
+    if (orderId) {
+      try {
+        await orderService.cancelOrder(orderId);
+      } catch (err) {
+        console.error("Failed to cancel order:", err);
+      }
+    }
+
     if (event?.slug) {
       navigate(`/events/${event.slug}/book`);
       return;
@@ -370,19 +341,11 @@ export default function CheckoutPage() {
     navigate(-1);
   };
 
-  if (!event || bookingItems.length === 0) {
-    return (
-      <div style={{ textAlign: "center", padding: "100px" }}>
-        <p>Đang tải</p>
-      </div>
-    );
-  }
-
-  if (!initialized) {
+  if (!initialized || isLoadingOrder) {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
         <div className="loading-spinner" style={{ margin: "0 auto 16px" }} />
-        <p>Đang xác thực đăng nhập</p>
+        <p>Đang tải thông tin đơn hàng...</p>
       </div>
     );
   }
@@ -396,11 +359,22 @@ export default function CheckoutPage() {
           className="btn btn-primary"
           onClick={() => {
             allowNavigationRef.current = true;
-            keycloak.login({ redirectUri: `${window.location.origin}/checkout` });
+            keycloak.login({ redirectUri: window.location.href });
           }}
         >
           Đăng nhập
         </button>
+      </div>
+    );
+  }
+
+  if (!orderDetail) {
+    return (
+      <div style={{ textAlign: "center", padding: "100px" }}>
+        <p>Không tìm thấy thông tin đơn hàng.</p>
+        <Link to="/" className="btn btn-outline" style={{ marginTop: 16 }}>
+          Quay lại trang chủ
+        </Link>
       </div>
     );
   }
@@ -432,8 +406,8 @@ export default function CheckoutPage() {
                 <Link
                   to={selectTicketPath}
                   className="breadcrumb-event-name"
-                  title={event.title}
-                  aria-label={event.title}
+                  title={event?.title || orderDetail.eventTitle}
+                  aria-label={event?.title || orderDetail.eventTitle}
                 >
                   {breadcrumbEventName}
                 </Link>
@@ -459,88 +433,164 @@ export default function CheckoutPage() {
             <div className="checkout-form-section">
               <h2 className="buyer-info-title">
                 <User size={20} />
-                <span>Thông tin người mua</span>
+                <span>Thông tin người nhận vé</span>
               </h2>
 
               <div className="form-group">
-                <label>
-                  Họ và tên <span className="required">*</span>
-                </label>
+                <label>Họ và tên</label>
                 <input
                   type="text"
-                  className={`form-input ${formErrors.customerName ? "error" : ""}`}
-                  placeholder="Nhập họ và tên"
+                  className="form-input"
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
+                  readOnly
+                  disabled
+                  style={{ background: "#f1f5f9", cursor: "not-allowed" }}
                 />
-                {formErrors.customerName && (
-                  <div className="form-error">{formErrors.customerName}</div>
-                )}
               </div>
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>
-                    Email <span className="required">*</span>
-                  </label>
+                  <label>Email</label>
                   <input
                     type="email"
-                    className={`form-input ${formErrors.customerEmail ? "error" : ""}`}
-                    placeholder="example@email.com"
+                    className="form-input"
                     value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    readOnly
+                    disabled
+                    style={{ background: "#f1f5f9", cursor: "not-allowed" }}
                   />
-                  {formErrors.customerEmail && (
-                    <div className="form-error">{formErrors.customerEmail}</div>
-                  )}
                 </div>
 
                 <div className="form-group">
-                  <label>
-                    Số điện thoại <span className="required">*</span>
-                  </label>
+                  <label>Số điện thoại</label>
                   <input
                     type="tel"
-                    className={`form-input ${formErrors.customerPhone ? "error" : ""}`}
-                    placeholder="09xx xxx xxx"
+                    className="form-input"
                     value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    readOnly
+                    disabled
+                    style={{ background: "#f1f5f9", cursor: "not-allowed" }}
                   />
-                  {formErrors.customerPhone && (
-                    <div className="form-error">{formErrors.customerPhone}</div>
-                  )}
                 </div>
               </div>
+
+              {orderDetail.customerNote && (
+                <div className="form-group" style={{ marginTop: 16 }}>
+                  <label>Ghi chú</label>
+                  <textarea
+                    className="form-input"
+                    value={orderDetail.customerNote}
+                    readOnly
+                    disabled
+                    style={{ background: "#f1f5f9", cursor: "not-allowed", minHeight: "60px", resize: "none" }}
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="checkout-info-card">
-              <div className="checkout-info-header">
-                <ShieldCheck size={18} />
-                <h3>Lưu ý trước khi thanh toán</h3>
+            <div className="checkout-form-section" style={{ marginTop: "24px" }}>
+              <h2 className="buyer-info-title">
+                <ShieldCheck size={20} />
+                <span>Phương thức thanh toán</span>
+              </h2>
+              
+              <div className="payment-strategies-list" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <label className={`payment-strategy-item ${selectedBankCode === "" ? "active" : ""}`} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "16px",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border)",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}>
+                  <input
+                    type="radio"
+                    name="payment_strategy"
+                    value=""
+                    checked={selectedBankCode === ""}
+                    onChange={() => setSelectedBankCode("")}
+                    style={{ width: "18px", height: "18px", accentColor: "var(--primary)" }}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Cổng thanh toán VNPay (Mặc định)</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Tự chọn ngân hàng/ví điện tử trên cổng VNPay</span>
+                  </div>
+                </label>
+
+                <label className={`payment-strategy-item ${selectedBankCode === "VNPAYQR" ? "active" : ""}`} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "16px",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border)",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}>
+                  <input
+                    type="radio"
+                    name="payment_strategy"
+                    value="VNPAYQR"
+                    checked={selectedBankCode === "VNPAYQR"}
+                    onChange={() => setSelectedBankCode("VNPAYQR")}
+                    style={{ width: "18px", height: "18px", accentColor: "var(--primary)" }}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Thanh toán quét mã VNPay-QR</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Sử dụng Mobile Banking quét mã QR</span>
+                  </div>
+                </label>
+
+                <label className={`payment-strategy-item ${selectedBankCode === "VNBANK" ? "active" : ""}`} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "16px",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border)",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}>
+                  <input
+                    type="radio"
+                    name="payment_strategy"
+                    value="VNBANK"
+                    checked={selectedBankCode === "VNBANK"}
+                    onChange={() => setSelectedBankCode("VNBANK")}
+                    style={{ width: "18px", height: "18px", accentColor: "var(--primary)" }}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Thẻ ATM / Tài khoản ngân hàng nội địa</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Thanh toán qua thẻ ATM của các ngân hàng Việt Nam</span>
+                  </div>
+                </label>
+
+                <label className={`payment-strategy-item ${selectedBankCode === "INTCARD" ? "active" : ""}`} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "16px",
+                  borderRadius: "12px",
+                  border: "1px solid var(--border)",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}>
+                  <input
+                    type="radio"
+                    name="payment_strategy"
+                    value="INTCARD"
+                    checked={selectedBankCode === "INTCARD"}
+                    onChange={() => setSelectedBankCode("INTCARD")}
+                    style={{ width: "18px", height: "18px", accentColor: "var(--primary)" }}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Thẻ quốc tế (Visa, Mastercard, JCB...)</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Hỗ trợ thẻ tín dụng, thẻ ghi nợ quốc tế</span>
+                  </div>
+                </label>
               </div>
-
-              <ul className="checkout-info-list">
-                <li className="checkout-info-item">
-                  <strong>Giữ vé trong 15 phút</strong>
-                  <p>
-                    Vé đang được giữ tạm thời cho bạn. Nếu hết thời gian, hệ thống sẽ trả lại ghế.
-                  </p>
-                </li>
-
-                <li className="checkout-info-item">
-                  <strong>Nhận vé qua email</strong>
-                  <p>
-                    Hãy nhập email chính xác để nhận xác nhận đơn hàng và vé điện tử sau khi thanh toán.
-                  </p>
-                </li>
-
-                <li className="checkout-info-item">
-                  <strong>Kiểm tra thông tin thật kỹ</strong>
-                  <p>
-                    Tên, email và số điện thoại sẽ được dùng cho xác nhận thanh toán và hỗ trợ sau này.
-                  </p>
-                </li>
-              </ul>
             </div>
           </div>
 
@@ -571,30 +621,17 @@ export default function CheckoutPage() {
               </div>
 
               <div className="ticket-summary-list">
-                {bookingItems.map((item, idx) => {
-                  const ticketType = ticketTypes.find(
-                    (t) => t.id === item.ticketTypeId,
-                  );
-                  const unitPrice = ticketType?.price || 0;
-                  const lineTotal = unitPrice * item.quantity;
-                  const labelsFromSelection = getSeatLabelsFromLabels(
-                    selectedSeatLabelsByType[item.ticketTypeId],
-                  );
-                  const rawSeatLabels =
-                    labelsFromSelection.length > 0
-                      ? labelsFromSelection
-                      : getSeatLabelsFromSeatIds(item.seatIds);
-                  const seatLabels = Array.from(new Set(rawSeatLabels));
-                  const zoneTag = ticketType?.sectorId
-                    ? `Zone ${ticketType.sectorId.slice(0, 6)}`
-                    : null;
+                {orderDetail.items?.map((item, idx) => {
+                  const lineTotal = item.subtotal;
+                  const seatLabels = item.seats ? (item.seats.map(s => s.seatLabel).filter(Boolean) as string[]) : [];
+                  const zoneTag = item.sectorName ? `Khu ${item.sectorName}` : null;
 
                   return (
                     <div className="ticket-summary-item" key={`${item.ticketTypeId}-${idx}`}>
                       <div className="ticket-item-left">
-                        <p className="ticket-name">{ticketType?.name || "Vé sự kiện"}</p>
+                        <p className="ticket-name">{item.ticketTypeName || "Vé sự kiện"}</p>
                         <p className="ticket-description">
-                          {ticketType?.description || "Vé điện tử tham dự sự kiện"}
+                          Vé điện tử tham dự sự kiện
                         </p>
                         {zoneTag && (
                           <div className="ticket-tags">
@@ -635,28 +672,29 @@ export default function CheckoutPage() {
                 </h3>
               </div>
 
-              <div className="sidebar-voucher">
-                <label className="voucher-label">
-                  Mã giảm giá
-                </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Nhập mã voucher"
-                  value={voucherCode}
-                  onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-                />
-              </div>
+              {orderDetail.promotionCode && (
+                <div className="sidebar-voucher">
+                  <div className="ticket-tag" style={{ width: "100%", justifyContent: "center", padding: "8px", fontWeight: "600" }}>
+                    Đã áp dụng mã: {orderDetail.promotionCode}
+                  </div>
+                </div>
+              )}
 
               <div className="order-pricing">
                 <div className="pricing-row">
                   <span>Tạm tính</span>
-                  <span>{formatCurrency(subtotal)}</span>
+                  <span>{formatCurrency(orderDetail.subtotal || 0)}</span>
                 </div>
+                {orderDetail.discountAmount !== undefined && orderDetail.discountAmount > 0 && (
+                  <div className="pricing-row" style={{ color: "var(--error)", marginTop: "8px" }}>
+                    <span>Giảm giá</span>
+                    <span>-{formatCurrency(orderDetail.discountAmount)}</span>
+                  </div>
+                )}
                 <div className="pricing-divider" />
                 <div className="pricing-row total">
                   <span>Tổng tiền</span>
-                  <span>{formatCurrency(subtotal)}</span>
+                  <span>{formatCurrency(orderDetail.totalAmount || 0)}</span>
                 </div>
               </div>
 
@@ -680,7 +718,7 @@ export default function CheckoutPage() {
                     Đang xử lý
                   </>
                 ) : (
-                  <> 
+                  <>
                     Thanh toán
                   </>
                 )}
@@ -701,17 +739,17 @@ export default function CheckoutPage() {
         <div className="checkout-leave-modal-overlay" role="dialog" aria-modal="true">
           <div className="checkout-leave-modal">
             <div className="checkout-leave-modal-header">
-              <h3>Hủy đơn hàng ?</h3>
+              <h3>Hủy đơn hàng?</h3>
             </div>
 
             <p className="checkout-leave-modal-subtitle">
-              Bạn có chắc chắn muốn tiếp tục ?
+              Bạn có chắc chắn muốn tiếp tục?
             </p>
 
             <ul className="checkout-leave-modal-list">
               <li>Bạn sẽ mất vị trí mình đã lựa chọn.</li>
               <li>
-                Đơn hàng đang trong quá trình thanh toán hoặc đã thanh toán thành công cũng có thể bị hủy.
+                Đơn hàng chưa thanh toán sẽ bị hủy ngay lập tức trên hệ thống để trả lại ghế trống.
               </li>
             </ul>
 

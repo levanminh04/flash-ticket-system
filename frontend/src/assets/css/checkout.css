@@ -786,3 +786,19 @@
     font-size: 22px;
   }
 }
+
+.payment-strategy-item {
+  background: var(--bg-card);
+  transition: all 0.25s ease;
+}
+
+.payment-strategy-item:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1 !important;
+}
+
+.payment-strategy-item.active {
+  border-color: var(--primary) !important;
+  background: rgba(45, 194, 117, 0.04) !important;
+}
+

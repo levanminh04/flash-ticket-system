@@ -22,6 +22,14 @@ export interface OrderItemDetail {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  seats?: {
+    seatId: string;
+    seatLabel?: string | null;
+    rowName?: string | null;
+    seatNumber?: string | null;
+    price?: number | null;
+    status?: string | null;
+  }[];
 }
 
 export interface OrderDetail extends OrderSummary {

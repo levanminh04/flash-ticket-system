@@ -5,14 +5,25 @@ import { Bot, LoaderCircle, SendHorizontal, Sparkles, User } from "lucide-react"
 import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 import AccountSidebar from "../../components/account/AccountSidebar";
 import { chatService } from "../../services/chatService";
+import {
+  discoveryService,
+  type DiscoverySearchResponse,
+} from "../../services/discoveryService";
 
 type ChatRole = "assistant" | "user";
-type ChatMessage = { id: string; role: ChatRole; text: string; mood?: string | null };
+type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  text: string;
+  mood?: string | null;
+  discovery?: DiscoverySearchResponse | null;
+};
 
 const starterPrompts = [
   "Gợi ý sự kiện nhạc rock cuối tuần tại TP.HCM",
   "Tư vấn chọn vé phù hợp cho nhóm 4 người",
   "Cho mình biết cách hoàn vé khi không tham gia được",
+  "Concert ngoài trời ở HCM cuối tuần",
 ];
 
 function generateSessionId() {
@@ -20,6 +31,18 @@ function generateSessionId() {
     return crypto.randomUUID();
   }
   return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function buildDiscoverySummary(discovery: DiscoverySearchResponse | null) {
+  if (!discovery) {
+    return "";
+  }
+
+  if (discovery.resultCount <= 0) {
+    return "Discovery không tìm thấy sự kiện phù hợp với yêu cầu này.";
+  }
+
+  return `Discovery tìm thấy ${discovery.resultCount} kết quả liên quan.`;
 }
 
 export default function ChatbotPage() {
@@ -52,17 +75,36 @@ export default function ChatbotPage() {
     setSending(true);
 
     try {
-      const response = await chatService.sendMessage({ sessionId, message: trimmed });
+      const [discoveryResult, chatResult] = await Promise.allSettled([
+        discoveryService.search(trimmed),
+        chatService.sendMessage({ sessionId, message: trimmed }),
+      ]);
+
+      const discovery =
+        discoveryResult.status === "fulfilled" ? discoveryResult.value : null;
+
+      if (chatResult.status === "rejected" && !discovery) {
+        throw chatResult.reason;
+      }
+
+      const chatResponse =
+        chatResult.status === "fulfilled" ? chatResult.value : null;
+      const discoverySummary = buildDiscoverySummary(discovery);
+
       setMessages((current) => [
         ...current,
         {
           id: `a-${Date.now()}`,
           role: "assistant",
-          text: response.message || "Mình chưa có phản hồi phù hợp.",
-          mood: response.mood,
+          text:
+            chatResponse?.message ||
+            discoverySummary ||
+            "Mình chưa có phản hồi phù hợp.",
+          mood: chatResponse?.mood,
+          discovery,
         },
       ]);
-      setLastStrategy(response.ragStrategy ?? null);
+      setLastStrategy(chatResponse?.ragStrategy ?? discovery?.strategy ?? null);
     } catch {
       setMessages((current) => [
         ...current,
@@ -131,6 +173,22 @@ export default function ChatbotPage() {
                   </div>
                   <div className="chat-msg-bubble">
                     <p>{message.text}</p>
+                    {message.discovery && message.discovery.resultCount > 0 ? (
+                      <div className="chat-msg-meta">
+                        <span>
+                          Discovery: {message.discovery.resultCount} kết quả
+                          {message.discovery.strategy ? ` - ${message.discovery.strategy}` : ""}
+                        </span>
+                        {message.discovery.results.slice(0, 3).map((result, index) => (
+                          <Link
+                            key={`${result.eventId || index}-${index}`}
+                            to={result.eventId ? `/event/${result.eventId}` : "/search"}
+                          >
+                            {result.text || `Kết quả ${index + 1}`}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
                     {message.mood && message.role === "assistant" ? (
                       <span className="chat-msg-meta">Mood: {message.mood}</span>
                     ) : null}

@@ -211,7 +211,7 @@ export default function MyOrdersPage() {
                       <div key={order.id} className="order-card">
                         <div className="order-card-main">
                           <h3 className="order-event-title">{order.eventTitle}</h3>
-                          <p className="order-meta">{formatDate(order.eventStartDatetime)} • {order.orderNumber}</p>
+                          <p className="order-meta">Ngày đặt: {formatDate(order.createdAt)} • Mã đơn: {order.orderNumber}</p>
                           <div className="order-card-footer"><span className={`order-status ${sl.cls}`}>{sl.text}</span></div>
                         </div>
                         <div className="order-card-actions">
@@ -235,9 +235,17 @@ export default function MyOrdersPage() {
           <div className="modal-content order-detail-modal" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setSelectedOrder(null)}><X size={24} /></button>
             <h2>{selectedOrder.eventTitle}</h2>
-            <p className="modal-meta">{formatDate(selectedOrder.eventStartDatetime)}{selectedOrder.eventVenueName && ` • ${selectedOrder.eventVenueName}`}</p>
+            <p className="modal-meta">
+              <span style={{ opacity: 0.8 }}>Thời gian sự kiện: </span>
+              {formatDate(selectedOrder.eventStartDatetime)}
+              {selectedOrder.eventVenueName && ` • ${selectedOrder.eventVenueName}`}
+            </p>
             <div className="order-detail-info">
               <div className="info-row"><span className="label">Mã đơn</span><span className="value">{selectedOrder.orderNumber}</span></div>
+              <div className="info-row"><span className="label">Thời gian đặt</span><span className="value">{formatDate(selectedOrder.createdAt)}</span></div>
+              {selectedOrder.paidAt ? (
+                <div className="info-row"><span className="label">Thời gian thanh toán</span><span className="value">{formatDate(selectedOrder.paidAt)}</span></div>
+              ) : null}
               <div className="info-row"><span className="label">Trạng thái</span><span className={`value order-detail-status ${statusLabel(selectedOrder.status).cls}`}>{statusLabel(selectedOrder.status).text}</span></div>
               {selectedOrder.items && selectedOrder.items.length > 0 && (
                 <div className="order-items">

@@ -7,6 +7,10 @@ import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
 import { confirmDestructiveAction } from "../../lib/swal";
 import {
+  organizerService,
+  OrganizerEventImage,
+} from "../../services/organizerService";
+import {
   LayoutSourceType,
   organizerWorkspaceService,
   OrganizerEventDetail,
@@ -54,6 +58,37 @@ function buildFormState(layout: OrganizerEventLayout): LayoutFormState {
     sourceType: (layout.sourceType as LayoutSourceType) || "CUSTOM",
     sourceId: layout.sourceId || "",
   };
+}
+
+function buildFormStateFromSeatMapImage(image: OrganizerEventImage): LayoutFormState {
+  return {
+    ...defaultFormState,
+    name: "Sơ đồ ghế",
+    backgroundImageUrl: image.imageUrl || "",
+    backgroundPublicId: image.publicId || "",
+    backgroundWidth: String(image.width ?? ""),
+    backgroundHeight: String(image.height ?? ""),
+  };
+}
+
+function getRequestErrorMessage(error: unknown) {
+  const response = (error as { response?: { data?: unknown; status?: number } })?.response;
+  const data = response?.data;
+
+  if (data && typeof data === "object") {
+    const message =
+      (data as { message?: unknown; error?: unknown }).message ??
+      (data as { message?: unknown; error?: unknown }).error;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  if (typeof data === "string" && data.trim()) {
+    return data;
+  }
+
+  return response?.status ? `Request failed with status ${response.status}.` : "Request failed.";
 }
 
 function toPayload(formState: LayoutFormState): OrganizerLayoutPayload | null {
@@ -120,15 +155,23 @@ export default function OrganizerLayoutPage() {
 
       setLoading(true);
       try {
-        const [nextEvent, nextLayout] = await Promise.all([
+        const [nextEvent, nextLayout, nextImages] = await Promise.all([
           organizerWorkspaceService.getMyEvent(eventId),
           organizerWorkspaceService.getLayout(eventId),
+          organizerService.getEventImages(eventId).catch(() => []),
         ]);
 
         if (!cancelled) {
+          const seatMapImage = nextImages.find((image) => image.imageType === "SEAT_MAP");
           setEventDetail(nextEvent);
           setLayout(nextLayout);
-          setFormState(nextLayout ? buildFormState(nextLayout) : defaultFormState);
+          setFormState(
+            nextLayout
+              ? buildFormState(nextLayout)
+              : seatMapImage
+                ? buildFormStateFromSeatMapImage(seatMapImage)
+                : defaultFormState,
+          );
         }
       } catch {
         if (!cancelled) {
@@ -177,8 +220,13 @@ export default function OrganizerLayoutPage() {
       setLayout(nextLayout);
       setFormState(buildFormState(nextLayout));
       toast.success(layout ? "Cập nhật layout thành công." : "Tạo layout thành công.");
-    } catch {
-      toast.error(layout ? "Không thể cập nhật layout." : "Không thể tạo layout.");
+    } catch (error) {
+      const message = getRequestErrorMessage(error);
+      toast.error(
+        layout
+          ? `Không thể cập nhật layout. ${message}`
+          : `Không thể tạo layout. ${message}`,
+      );
     } finally {
       setSaving(false);
     }
@@ -212,21 +260,21 @@ export default function OrganizerLayoutPage() {
   return (
     <OrganizerLayout
       title="Quản lý layout"
-      description="Tạo hoặc cập nhật layout cho event, gồm ảnh nền và mapConfig JSON"
+      description="Thiết lập sơ đồ và ảnh nền."
       actions={null}
+      hideTopBar
     >
       {eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
 
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải layout sự kiện</p>
+          <p>Đang tải layout sự kiện...</p>
         </section>
       ) : (
         <section className="organizer-grid organizer-layout-editor-single">
           <form className="organizer-panel organizer-event-form" onSubmit={handleSubmit}>
             <div className="organizer-panel-heading">
-              <p className="organizer-panel-title-pill">Layout editor</p>
               <h2 style={{ marginBottom: "4px" }}><strong>Tên sự kiện: </strong>{eventDetail?.title || "Sự kiện chưa xác định"}</h2>
               <h2 style={{ marginTop: 0 }}><strong>Slug: </strong>{eventDetail?.slug || "Sự kiện chưa xác định"}</h2>
               <p>

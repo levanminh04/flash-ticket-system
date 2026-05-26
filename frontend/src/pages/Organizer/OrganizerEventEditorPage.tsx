@@ -125,6 +125,32 @@ function toPayload(formState: EventFormState): OrganizerEventPayload | null {
   };
 }
 
+function buildUpdatePayload(
+  formState: EventFormState,
+  currentEvent: OrganizerEventDetail | null,
+): Partial<OrganizerEventPayload> | null {
+  const payload = toPayload(formState);
+  if (!payload) {
+    return null;
+  }
+  if (!currentEvent) {
+    return payload;
+  }
+
+  const currentStart = toDateTimeLocal(currentEvent.schedule?.startDatetime);
+  const currentEnd = toDateTimeLocal(currentEvent.schedule?.endDatetime);
+  const nextPayload: Partial<OrganizerEventPayload> = { ...payload };
+
+  if (formState.startDatetime === currentStart) {
+    delete nextPayload.startDatetime;
+  }
+  if (formState.endDatetime === currentEnd) {
+    delete nextPayload.endDatetime;
+  }
+
+  return nextPayload;
+}
+
 export default function OrganizerEventEditorPage() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
@@ -226,43 +252,49 @@ export default function OrganizerEventEditorPage() {
       return;
     }
 
-    const payload = toPayload(formState);
-    if (!payload) {
+    const fullPayload = toPayload(formState);
+    if (!fullPayload) {
       toast.error("Thời gian bắt đầu và kết thúc chưa hợp lệ.");
       return;
     }
 
-    if (new Date(payload.endDatetime) <= new Date(payload.startDatetime)) {
+    if (new Date(fullPayload.endDatetime) <= new Date(fullPayload.startDatetime)) {
       toast.error("Thời gian kết thúc phải lớn hơn thời gian bắt đầu.");
       return;
     }
 
-    if (!formState.isOnline && !payload.venueId) {
+    if (!formState.isOnline && !fullPayload.venueId) {
       toast.error("Sự kiện offline cần chọn venue");
       return;
     }
 
     if (
-      payload.saleStartDatetime &&
-      payload.saleEndDatetime &&
-      new Date(payload.saleEndDatetime) <= new Date(payload.saleStartDatetime)
+      fullPayload.saleStartDatetime &&
+      fullPayload.saleEndDatetime &&
+      new Date(fullPayload.saleEndDatetime) <= new Date(fullPayload.saleStartDatetime)
     ) {
       toast.error("Thời gian mở bán phải nhỏ hơn thời gian kết thúc bán.");
       return;
     }
 
-    if (payload.minTicketsPerOrder && payload.maxTicketsPerOrder) {
-      if (payload.minTicketsPerOrder > payload.maxTicketsPerOrder) {
+    if (fullPayload.minTicketsPerOrder && fullPayload.maxTicketsPerOrder) {
+      if (fullPayload.minTicketsPerOrder > fullPayload.maxTicketsPerOrder) {
         toast.error("Giới hạn mua vé tối thiểu không được lớn hơn tối đa.");
         return;
       }
     }
 
+    const updatePayload = buildUpdatePayload(formState, currentEvent);
+    if (!isCreateMode && !updatePayload) {
+      toast.error("Thời gian bắt đầu và kết thúc chưa hợp lệ.");
+      return;
+    }
+
     setSaving(true);
     try {
       const nextEvent = isCreateMode
-        ? await organizerWorkspaceService.createEvent(payload)
-        : await organizerWorkspaceService.updateEvent(eventId, payload);
+        ? await organizerWorkspaceService.createEvent(fullPayload)
+        : await organizerWorkspaceService.updateEvent(eventId, updatePayload ?? {});
 
       setCurrentEvent(nextEvent);
       setFormState(buildFormState(nextEvent));
@@ -282,7 +314,7 @@ export default function OrganizerEventEditorPage() {
   };
 
   const handlePublish = async () => {
-    if (!eventId) return;
+    if (!eventId || currentEvent?.status !== "DRAFT") return;
     setPublishing(true);
     try {
       const nextEvent = await organizerWorkspaceService.publishEvent(eventId);
@@ -297,7 +329,11 @@ export default function OrganizerEventEditorPage() {
   };
 
   const handleCancel = async () => {
-    if (!eventId) return;
+    if (
+      !eventId ||
+      currentEvent?.status === "CANCELLED" ||
+      currentEvent?.status === "COMPLETED"
+    ) return;
 
     const confirmed = await confirmDestructiveAction({
       title: "Hủy sự kiện này?",
@@ -330,6 +366,7 @@ export default function OrganizerEventEditorPage() {
       title={isCreateMode ? "Tạo sự kiện mới" : currentEvent?.title || ""}
       description={pageDescription}
       actions={null}
+      hideTopBar
     >
       {!isCreateMode && eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
 
@@ -341,9 +378,6 @@ export default function OrganizerEventEditorPage() {
       ) : (
         <>
           <form className="organizer-panel organizer-event-form" onSubmit={handleSubmit}>
-            <div className="organizer-panel-heading">
-              <p className="organizer-panel-title-pill">Event editor</p>
-            </div>
             <div className="organizer-form-grid">
               <label className="organizer-field organizer-form-span-2">
                 <span>Tên sự kiện</span>
@@ -528,7 +562,6 @@ export default function OrganizerEventEditorPage() {
                       />
                       <div>
                         <strong>{category.name}</strong>
-                        <p>{category.slug}</p>
                       </div>
                     </label>
                   ))}
@@ -576,7 +609,11 @@ export default function OrganizerEventEditorPage() {
                 type="button"
                 className="btn btn-secondary organizer-editor-secondary-button"
                 onClick={handleCancel}
-                disabled={cancelling}
+                disabled={
+                  cancelling ||
+                  currentEvent?.status === "CANCELLED" ||
+                  currentEvent?.status === "COMPLETED"
+                }
               >
                 {cancelling ? "Đang hủy" : "Hủy sự kiện"}
               </button>
@@ -584,7 +621,7 @@ export default function OrganizerEventEditorPage() {
                 type="button"
                 className="btn btn-primary organizer-editor-secondary-button"
                 onClick={handlePublish}
-                disabled={publishing}
+                disabled={publishing || currentEvent?.status !== "DRAFT"}
               >
                 {publishing ? "Đang publish" : "Publish"}
               </button>

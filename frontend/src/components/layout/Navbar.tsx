@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import {
   ChevronDown,
+  Clock3,
+  Home,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -117,7 +119,20 @@ const Navbar = () => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState<EventSummary[]>([]);
   const isAuthenticated = initialized && !!keycloak?.authenticated;
-  const isOrganizer = hasRealmRole(keycloak?.tokenParsed, "ORGANIZER");
+  const hasOrganizerTokenRole = hasRealmRole(keycloak?.tokenParsed, "ORGANIZER");
+  const hasOrganizerProfileRole = Boolean(
+    profile?.roles?.some((role) => role.toUpperCase() === "ORGANIZER"),
+  );
+  const isOrganizer = hasOrganizerTokenRole || hasOrganizerProfileRole;
+  const isAdmin = hasRealmRole(keycloak?.tokenParsed, "ADMIN");
+  const hasOrganizerApplication = Boolean(profile?.organizerProfileId);
+  const canEditHomePage =
+    isOrganizer ||
+    isAdmin ||
+    hasRealmRole(keycloak?.tokenParsed, "admin") ||
+    hasRealmRole(keycloak?.tokenParsed, "ADIM") ||
+    hasRealmRole(keycloak?.tokenParsed, "adim") ||
+    hasRealmRole(keycloak?.tokenParsed, "organizer");
   const isOrganizerWorkspace = isOrganizer && location.pathname.startsWith("/organizer");
 
   const accountName = (
@@ -440,6 +455,28 @@ const Navbar = () => {
                   <Link to="/organizer" className="dropdown-item">
                     <LayoutDashboard size={17} />
                     Quản lý sự kiện
+                  </Link>
+                ) : hasOrganizerApplication ? (
+                  <div className="dropdown-item dropdown-item-muted">
+                    <Clock3 size={17} />
+                    Hồ sơ organizer đang chờ duyệt
+                  </div>
+                ) : (
+                  <Link to="/organizers/apply" className="dropdown-item">
+                    <UserPlus size={17} />
+                    Đăng ký nhà tổ chức
+                  </Link>
+                )}
+                {isAdmin ? (
+                  <Link to="/admin/organizers" className="dropdown-item">
+                    <LayoutDashboard size={17} />
+                    Duyệt hồ sơ organizer
+                  </Link>
+                ) : null}
+                {canEditHomePage ? (
+                  <Link to="/?editHome=1" className="dropdown-item">
+                    <Home size={17} />
+                    Sửa giao diện trang chủ
                   </Link>
                 ) : null}
                 <hr />

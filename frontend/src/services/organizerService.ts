@@ -1,5 +1,6 @@
 import axiosClient from "../lib/axiosClient";
 import { gatewayFallbackClient, userDirectClient } from "../lib/internalServiceClients";
+import { SpringPage } from "../types/api";
 
 export type OrganizerImageType =
   | "BANNER"
@@ -52,10 +53,69 @@ export interface OrganizerProfile {
   phone?: string | null;
 }
 
+export interface ApplyOrganizerPayload {
+  organizerName: string;
+  organizerType: "INDIVIDUAL" | "COMPANY" | "NONPROFIT" | "GOVERNMENT";
+  description?: string | null;
+  websiteUrl?: string | null;
+  contactEmail: string;
+  contactPhone: string;
+  taxCode?: string | null;
+  representativeName?: string | null;
+}
+
+export interface FollowResponse {
+  organizerProfileId: string;
+  organizerName: string;
+  isFollowing: boolean;
+  followerCount: number;
+}
+
+export interface VerifyOrganizerPayload {
+  approved: boolean;
+  rejectionReason?: string | null;
+}
+
 export interface OrganizerEventImageUpdatePayload {
   altText?: string | null;
   displayOrder?: number | null;
   imageType?: OrganizerImageType | null;
+}
+
+async function userServicePost<TResponse, TPayload>(
+  path: string,
+  payload?: TPayload,
+): Promise<TResponse> {
+  try {
+    const response = await gatewayFallbackClient.post<TResponse>(path, payload);
+    return response.data;
+  } catch {
+    const response = await userDirectClient.post<TResponse>(path, payload);
+    return response.data;
+  }
+}
+
+async function userServiceDelete<TResponse>(path: string): Promise<TResponse> {
+  try {
+    const response = await gatewayFallbackClient.delete<TResponse>(path);
+    return response.data;
+  } catch {
+    const response = await userDirectClient.delete<TResponse>(path);
+    return response.data;
+  }
+}
+
+async function userServicePut<TResponse, TPayload>(
+  path: string,
+  payload: TPayload,
+): Promise<TResponse> {
+  try {
+    const response = await gatewayFallbackClient.put<TResponse>(path, payload);
+    return response.data;
+  } catch {
+    const response = await userDirectClient.put<TResponse>(path, payload);
+    return response.data;
+  }
 }
 
 async function uploadOrganizerProfileImage(
@@ -91,6 +151,83 @@ async function uploadOrganizerProfileImage(
 }
 
 export const organizerService = {
+  applyForOrganizer: async (
+    payload: ApplyOrganizerPayload,
+  ): Promise<OrganizerProfile> =>
+    userServicePost<OrganizerProfile, ApplyOrganizerPayload>(
+      "/api/organizers/apply",
+      payload,
+    ),
+
+  followOrganizer: async (organizerProfileId: string): Promise<FollowResponse> =>
+    userServicePost<FollowResponse, undefined>(
+      `/api/organizers/${encodeURIComponent(organizerProfileId)}/follow`,
+    ),
+
+  unfollowOrganizer: async (
+    organizerProfileId: string,
+  ): Promise<FollowResponse> =>
+    userServiceDelete<FollowResponse>(
+      `/api/organizers/${encodeURIComponent(organizerProfileId)}/follow`,
+    ),
+
+  isFollowingOrganizer: async (
+    organizerProfileId: string,
+  ): Promise<boolean> => {
+    const path = `/api/organizers/${encodeURIComponent(organizerProfileId)}/is-following`;
+
+    try {
+      const response = await gatewayFallbackClient.get<{ isFollowing: boolean }>(path);
+      return response.data.isFollowing;
+    } catch {
+      const response = await userDirectClient.get<{ isFollowing: boolean }>(path);
+      return response.data.isFollowing;
+    }
+  },
+
+  getAdminOrganizers: async (
+    status = "PENDING",
+    page = 0,
+    size = 20,
+  ): Promise<SpringPage<OrganizerProfile>> => {
+    const params = { status, page, size };
+
+    try {
+      const response = await gatewayFallbackClient.get<SpringPage<OrganizerProfile>>(
+        "/api/admin/organizers",
+        { params },
+      );
+      return response.data;
+    } catch {
+      const response = await userDirectClient.get<SpringPage<OrganizerProfile>>(
+        "/api/admin/organizers",
+        { params },
+      );
+      return response.data;
+    }
+  },
+
+  verifyOrganizer: async (
+    organizerProfileId: string,
+    payload: VerifyOrganizerPayload,
+  ): Promise<OrganizerProfile> =>
+    userServicePut<OrganizerProfile, VerifyOrganizerPayload>(
+      `/api/admin/organizers/${encodeURIComponent(organizerProfileId)}/verify`,
+      payload,
+    ),
+
+  getPublicOrganizerBySlug: async (slug: string): Promise<OrganizerProfile> => {
+    const path = `/api/organizers/public/${encodeURIComponent(slug)}`;
+
+    try {
+      const response = await gatewayFallbackClient.get<OrganizerProfile>(path);
+      return response.data;
+    } catch {
+      const response = await userDirectClient.get<OrganizerProfile>(path);
+      return response.data;
+    }
+  },
+
   getMyOrganizerProfile: async (): Promise<OrganizerProfile> => {
     try {
       const response = await gatewayFallbackClient.get<OrganizerProfile>(
@@ -106,10 +243,15 @@ export const organizerService = {
   },
 
   getOrganizerByUserId: async (userId: string): Promise<OrganizerProfile> => {
-    const response = await axiosClient.get<OrganizerProfile>(
-      `/api/organizers/by-user/${userId}`,
-    );
-    return response.data;
+    const path = `/api/internal/organizers/by-user/${encodeURIComponent(userId)}`;
+
+    try {
+      const response = await gatewayFallbackClient.get<OrganizerProfile>(path);
+      return response.data;
+    } catch {
+      const response = await userDirectClient.get<OrganizerProfile>(path);
+      return response.data;
+    }
   },
 
   uploadLogo: async (file: File): Promise<OrganizerProfile> =>

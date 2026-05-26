@@ -8,9 +8,11 @@ import {
   SeatMapEditorDocument,
   SeatMapEditorSeat,
   SeatMapEditorSeatLayoutConfig,
+  SeatMapEditorSectorType,
   SeatMapEditorShape,
   SeatMapEditorShapeType,
 } from "./seatMapEditorTypes";
+import { generateRingSeats } from "../shared/seatGenerationUtils";
 
 const DEFAULT_CANVAS_WIDTH = 1280;
 const DEFAULT_CANVAS_HEIGHT = 720;
@@ -25,6 +27,8 @@ const DEFAULT_SECTOR_COLORS = [
 const DEFAULT_SEAT_RADIUS = 6;
 const DEFAULT_ROW_START_CHAR_CODE = "A".charCodeAt(0);
 const DRAFT_VERSION = 1;
+const SECTOR_TYPES: SeatMapEditorSectorType[] = ["SEATED", "STANDING"];
+const GENERATED_SEAT_SECTOR_TYPE: SeatMapEditorSectorType = "SEATED";
 
 export function createEditorDraftKey(eventId: string) {
   return `seat-map-editor-draft:${eventId}`;
@@ -136,8 +140,21 @@ function inferShapeType(
   points?: number[],
 ): SeatMapEditorShapeType {
   const rawShapeType = typeof mapData?.shapeType === "string" ? mapData.shapeType : "";
-  if (rawShapeType === "polygon" || rawShapeType === "path") {
+  if (
+    rawShapeType === "path" ||
+    rawShapeType === "ringSection" ||
+    rawShapeType === "fan" ||
+    rawShapeType === "roundedRect" ||
+    rawShapeType === "stage" ||
+    rawShapeType === "foh"
+  ) {
+    return rawShapeType;
+  }
+  if (rawShapeType === "polygon") {
     return "polygon";
+  }
+  if (rawShapeType === "rect") {
+    return "rectangle";
   }
   if (rawShapeType === "circle") {
     return "circle";
@@ -147,6 +164,14 @@ function inferShapeType(
   }
 
   return points && points.length >= 6 ? "polygon" : "rectangle";
+}
+
+function normalizeSectorType(value: unknown, seatCount = 0): SeatMapEditorSectorType {
+  return typeof value === "string" && SECTOR_TYPES.includes(value as SeatMapEditorSectorType)
+    ? (value as SeatMapEditorSectorType)
+    : seatCount > 0
+      ? "SEATED"
+      : "STANDING";
 }
 
 function buildFallbackBounds(
@@ -187,6 +212,7 @@ export function buildDefaultSeatLayoutConfig(
     paddingY: Math.max(24, Math.round(bounds.height * 0.14)),
     offsetX: 0,
     offsetY: 0,
+    mode: "grid",
     seatRadius: DEFAULT_SEAT_RADIUS,
     rowStartCharCode: DEFAULT_ROW_START_CHAR_CODE,
     seatStartNumber: 1,
@@ -202,6 +228,7 @@ function normalizeSeatLayoutConfig(
   const layout = rawLayout && typeof rawLayout === "object" ? (rawLayout as Record<string, unknown>) : {};
 
   return {
+    mode: layout.mode === "arc" || layout.mode === "fan" ? layout.mode : fallback.mode,
     rows: Math.max(1, Math.round(asNumber(layout.rows) ?? fallback.rows)),
     seatsPerRow: Math.max(1, Math.round(asNumber(layout.seatsPerRow) ?? fallback.seatsPerRow)),
     gapX: Math.max(8, asNumber(layout.gapX) ?? fallback.gapX),
@@ -230,6 +257,59 @@ function formatRowName(rowIndex: number, rowStartCharCode: number) {
 
 function buildSeatLabel(rowName: string, seatNumber: string) {
   return `${rowName}${seatNumber}`;
+}
+
+function translatePathData(pathData: string, deltaX: number, deltaY: number) {
+  let coordinateIndex = 0;
+  return pathData.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, (match) => {
+    const value = Number(match);
+    if (!Number.isFinite(value)) {
+      return match;
+    }
+    const translated = value + (coordinateIndex % 2 === 0 ? deltaX : deltaY);
+    coordinateIndex += 1;
+    return Number(translated.toFixed(3)).toString();
+  });
+}
+
+function translateMapData(mapData: Record<string, unknown> | undefined, deltaX: number, deltaY: number) {
+  if (!mapData) {
+    return mapData;
+  }
+
+  const nextMapData: Record<string, unknown> = { ...mapData };
+  const cx = asNumber(nextMapData.cx);
+  const cy = asNumber(nextMapData.cy);
+  if (cx !== null) nextMapData.cx = cx + deltaX;
+  if (cy !== null) nextMapData.cy = cy + deltaY;
+
+  if (typeof nextMapData.pathData === "string") {
+    nextMapData.pathData = translatePathData(nextMapData.pathData, deltaX, deltaY);
+  }
+
+  if (nextMapData.labelPosition && typeof nextMapData.labelPosition === "object") {
+    const labelPosition = nextMapData.labelPosition as Record<string, unknown>;
+    const x = asNumber(labelPosition.x);
+    const y = asNumber(labelPosition.y);
+    nextMapData.labelPosition = {
+      ...labelPosition,
+      x: x !== null ? x + deltaX : labelPosition.x,
+      y: y !== null ? y + deltaY : labelPosition.y,
+    };
+  }
+
+  if (nextMapData.bounds && typeof nextMapData.bounds === "object") {
+    const bounds = nextMapData.bounds as Record<string, unknown>;
+    const x = asNumber(bounds.x);
+    const y = asNumber(bounds.y);
+    nextMapData.bounds = {
+      ...bounds,
+      x: x !== null ? x + deltaX : bounds.x,
+      y: y !== null ? y + deltaY : bounds.y,
+    };
+  }
+
+  return nextMapData;
 }
 
 function buildRelativePolygonPoints(shape: SeatMapEditorShape) {
@@ -316,6 +396,8 @@ function normalizeSeats(
         label: seat.seatLabel || seat.seatNumber || seat.id,
         rowName: seat.rowName,
         seatNumber: seat.seatNumber,
+        ticketTypeId: seat.ticketTypeId ?? undefined,
+        colorCode: seat.colorCode ?? undefined,
         x,
         y,
         inventoryStatus: seat.inventoryStatus,
@@ -346,9 +428,10 @@ function buildShape(
     inferredShapeType === "polygon" ? normalizePolygonPoints(rawPoints, fallbackBounds) : [];
   const color = sector.colorCode || DEFAULT_SECTOR_COLORS[sectorIndex % DEFAULT_SECTOR_COLORS.length];
   const seats = normalizeSeats(sector, fallbackBounds);
-  const visible = mapData.visible !== false;
+  const visible = sector.isActive !== false && mapData.visible !== false;
   const locked = mapData.locked === true;
   const zIndex = asNumber(mapData.zIndex) ?? sectorIndex;
+  const totalCapacity = asNumber(sector.totalCapacity ?? mapData.totalCapacity) ?? undefined;
 
   return {
     id: sector.id,
@@ -357,7 +440,10 @@ function buildShape(
     code: typeof mapData.code === "string" ? mapData.code : undefined,
     ticketTypeId: typeof mapData.ticketTypeId === "string" ? mapData.ticketTypeId : undefined,
     ticketTypeName: typeof mapData.ticketTypeName === "string" ? mapData.ticketTypeName : undefined,
+    sectorType: normalizeSectorType(sector.sectorType ?? mapData.sectorType, seats.length),
+    totalCapacity,
     shapeType: inferredShapeType,
+    mapData,
     color,
     bounds: fallbackBounds,
     points,
@@ -375,6 +461,10 @@ export function sortShapesByZIndex(shapes: SeatMapEditorShape[]) {
   return [...shapes].sort((left, right) => left.zIndex - right.zIndex);
 }
 
+function isDeletedMapData(mapData?: Record<string, unknown>) {
+  return mapData?.deleted === true;
+}
+
 export function buildSeatMapEditorDocument(seatMap: OrganizerSeatMap | null): SeatMapEditorDocument | null {
   if (!seatMap) {
     return null;
@@ -383,7 +473,9 @@ export function buildSeatMapEditorDocument(seatMap: OrganizerSeatMap | null): Se
   const width = Math.max(asNumber(seatMap.backgroundWidth) ?? DEFAULT_CANVAS_WIDTH, 640);
   const height = Math.max(asNumber(seatMap.backgroundHeight) ?? DEFAULT_CANVAS_HEIGHT, 420);
   const shapes = sortShapesByZIndex(
-    (seatMap.sectors ?? []).map((sector, index) => buildShape(sector, index, width, height)),
+    (seatMap.sectors ?? [])
+      .filter((sector) => !isDeletedMapData(sector.mapData))
+      .map((sector, index) => buildShape(sector, index, width, height)),
   );
 
   return {
@@ -401,6 +493,7 @@ export function getVisibleSeatCount(seats: SeatMapEditorSeat[]) {
 export function translateShape(shape: SeatMapEditorShape, deltaX: number, deltaY: number): SeatMapEditorShape {
   return {
     ...shape,
+    mapData: translateMapData(shape.mapData, deltaX, deltaY),
     bounds: {
       ...shape.bounds,
       x: shape.bounds.x + deltaX,
@@ -456,6 +549,7 @@ export function generateSeatsForShape(
     paddingY: Math.max(4, layoutOverrides?.paddingY ?? shape.seatLayout.paddingY),
     offsetX: layoutOverrides?.offsetX ?? shape.seatLayout.offsetX,
     offsetY: layoutOverrides?.offsetY ?? shape.seatLayout.offsetY,
+    mode: layoutOverrides?.mode ?? shape.seatLayout.mode ?? "grid",
     seatRadius: Math.max(4, layoutOverrides?.seatRadius ?? shape.seatLayout.seatRadius),
     rowStartCharCode: Math.round(
       layoutOverrides?.rowStartCharCode ?? shape.seatLayout.rowStartCharCode,
@@ -472,6 +566,56 @@ export function generateSeatsForShape(
     shape.seats.map((seat) => [`${seat.rowName ?? ""}::${seat.seatNumber ?? ""}`, seat] as const),
   );
   const nextSeats: SeatMapEditorSeat[] = [];
+
+  if (seatLayout.mode === "arc" || seatLayout.mode === "fan") {
+    const mapData = shape.mapData ?? {};
+    const cx = asNumber(mapData.cx) ?? shape.bounds.x + shape.bounds.width / 2;
+    const cy = asNumber(mapData.cy) ?? shape.bounds.y + shape.bounds.height / 2;
+    const startAngle = asNumber(mapData.startAngle) ?? -50;
+    const endAngle = asNumber(mapData.endAngle) ?? 50;
+    const startRadius =
+      seatLayout.mode === "fan"
+        ? Math.max(asNumber(mapData.innerRadius) ?? 42, 24)
+        : Math.max(asNumber(mapData.innerRadius) ?? Math.min(shape.bounds.width, shape.bounds.height) * 0.35, 24);
+
+    generateRingSeats({
+      cx,
+      cy,
+      startRadius,
+      rowSpacing: seatLayout.gapY,
+      rows: seatLayout.rows,
+      startAngle,
+      endAngle,
+      seatsPerRow: seatLayout.seatsPerRow,
+    }).forEach((point) => {
+      const rowName = formatRowName(point.rowIndex, seatLayout.rowStartCharCode);
+      const seatNumber = String(seatLayout.seatStartNumber + point.seatIndex);
+      const seatKey = `${rowName}::${seatNumber}`;
+      const existingSeat = existingSeatMap.get(seatKey);
+      nextSeats.push({
+        id: existingSeat?.id ?? crypto.randomUUID(),
+        label: buildSeatLabel(rowName, seatNumber),
+        rowName,
+        seatNumber,
+        ticketTypeId: existingSeat?.ticketTypeId,
+        colorCode: existingSeat?.colorCode,
+        seatType: existingSeat?.seatType,
+        x: point.x + seatLayout.offsetX,
+        y: point.y + seatLayout.offsetY,
+        inventoryStatus: existingSeat?.inventoryStatus,
+        hidden: false,
+        manualAdjusted: false,
+      });
+    });
+
+    return {
+      ...shape,
+      sectorType: GENERATED_SEAT_SECTOR_TYPE,
+      seatLayout,
+      seats: nextSeats,
+      seatCount: getVisibleSeatCount(nextSeats),
+    };
+  }
 
   for (let rowIndex = 0; rowIndex < seatLayout.rows; rowIndex += 1) {
     const rowName = formatRowName(rowIndex, seatLayout.rowStartCharCode);
@@ -519,6 +663,9 @@ export function generateSeatsForShape(
         label: buildSeatLabel(rowName, seatNumber),
         rowName,
         seatNumber,
+        ticketTypeId: existingSeat?.ticketTypeId,
+        colorCode: existingSeat?.colorCode,
+        seatType: existingSeat?.seatType,
         x: shape.bounds.x + localX,
         y: shape.bounds.y + localY,
         inventoryStatus: existingSeat?.inventoryStatus,
@@ -530,6 +677,7 @@ export function generateSeatsForShape(
 
   return {
     ...shape,
+    sectorType: GENERATED_SEAT_SECTOR_TYPE,
     seatLayout,
     seats: nextSeats,
     seatCount: getVisibleSeatCount(nextSeats),
@@ -611,7 +759,10 @@ export function createRectangleShape(
     id: crypto.randomUUID(),
     sectorId: crypto.randomUUID(),
     name: `Sector ${index + 1}`,
+    sectorType: "STANDING",
+    totalCapacity: 0,
     shapeType: "rectangle",
+    mapData: { shapeType: "rectangle", bounds },
     color: DEFAULT_SECTOR_COLORS[index % DEFAULT_SECTOR_COLORS.length],
     bounds,
     points: [],
@@ -648,7 +799,10 @@ function createPolygonPresetShape(
     id: crypto.randomUUID(),
     sectorId: crypto.randomUUID(),
     name: `${namePrefix} ${index + 1}`,
+    sectorType: "STANDING",
+    totalCapacity: 0,
     shapeType: "polygon",
+    mapData: { shapeType: "polygon", bounds },
     color: DEFAULT_SECTOR_COLORS[index % DEFAULT_SECTOR_COLORS.length],
     bounds,
     points: pointsFactory(width, height),
@@ -696,7 +850,10 @@ export function createCircleShape(
     id: crypto.randomUUID(),
     sectorId: crypto.randomUUID(),
     name: `Circle ${index + 1}`,
+    sectorType: "STANDING",
+    totalCapacity: 0,
     shapeType: "circle",
+    mapData: { shapeType: "circle", bounds },
     color: DEFAULT_SECTOR_COLORS[index % DEFAULT_SECTOR_COLORS.length],
     bounds,
     points: [],
@@ -725,7 +882,10 @@ export function createEllipseShape(
     id: crypto.randomUUID(),
     sectorId: crypto.randomUUID(),
     name: `Ellipse ${index + 1}`,
+    sectorType: "STANDING",
+    totalCapacity: 0,
     shapeType: "ellipse",
+    mapData: { shapeType: "ellipse", bounds },
     color: DEFAULT_SECTOR_COLORS[index % DEFAULT_SECTOR_COLORS.length],
     bounds,
     points: [],
@@ -838,6 +998,9 @@ function normalizeParsedEditorDocument(parsed: unknown): SeatMapEditorDocument |
 
           return {
             ...shape,
+            sectorType: normalizeSectorType(shape.sectorType, seats.length),
+            totalCapacity: asNumber(shape.totalCapacity ?? shape.mapData?.totalCapacity) ?? undefined,
+            mapData: shape.mapData,
             visible: shape.visible !== false,
             locked: shape.locked === true,
             zIndex: asNumber(shape.zIndex) ?? index,
@@ -907,15 +1070,24 @@ export function buildSeatMapPublishPayload(
         backgroundVisible: false,
       },
     },
-    sectors: sortShapesByZIndex(document.shapes).map((shape, index) => ({
+    sectors: sortShapesByZIndex(document.shapes).map((shape, index) => {
+      const sectorType = normalizeSectorType(shape.sectorType, shape.seats.length);
+      const publishedSeats = sectorType === "SEATED" ? shape.seats : [];
+
+      return {
       id: shape.id,
       name: shape.name,
       code: shape.code,
-      sectorType: "SEATED",
+      sectorType,
+      totalCapacity:
+        sectorType === "STANDING"
+          ? Math.max(0, Math.round(asNumber(shape.totalCapacity) ?? 0))
+          : getVisibleSeatCount(shape.seats),
       colorCode: shape.color,
       visible: shape.visible,
       displayOrder: index,
       mapData: {
+        ...(shape.mapData ?? {}),
         shapeType: shape.shapeType,
         bounds: shape.bounds,
         points:
@@ -925,21 +1097,25 @@ export function buildSeatMapPublishPayload(
               )
             : [],
         label: shape.label,
-        ticketTypeId: shape.ticketTypeId,
-        ticketTypeName: shape.ticketTypeName,
+        sectorType,
+        totalCapacity:
+          sectorType === "STANDING"
+            ? Math.max(0, Math.round(asNumber(shape.totalCapacity) ?? 0))
+            : getVisibleSeatCount(shape.seats),
         zIndex: shape.zIndex,
         visible: shape.visible,
         locked: shape.locked,
         seatLayout: shape.seatLayout,
       },
-      seats: shape.seats.map((seat) => ({
+      seats: publishedSeats.map((seat) => ({
         id: seat.id,
         rowName: seat.rowName,
         seatNumber: seat.seatNumber,
         seatLabel: seat.label,
         coordX: Number(seat.x.toFixed(2)),
         coordY: Number(seat.y.toFixed(2)),
-        seatType: "REGULAR",
+        ticketTypeId: sectorType === "SEATED" ? seat.ticketTypeId : undefined,
+        colorCode: sectorType === "SEATED" ? (seat.colorCode ?? undefined) : undefined,
         isActive: seat.hidden !== true,
         coordMetadata: {
           shapeId: shape.id,
@@ -950,6 +1126,7 @@ export function buildSeatMapPublishPayload(
           seatRadius: shape.seatLayout.seatRadius,
         },
       })),
-    })),
+      };
+    }),
   };
 }

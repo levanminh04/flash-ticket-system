@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -14,6 +14,9 @@ import MyTicketsPage from "./pages/MyTickets/MyTicketsPage";
 import MyOrdersPage from "./pages/MyOrders/MyOrdersPage";
 import ChatbotPage from "./pages/Chatbot/ChatbotPage";
 import VenuesPage from "./pages/Venues/VenuesPage";
+import AdminOrganizerReviewPage from "./pages/Admin/AdminOrganizerReviewPage";
+import OrganizerApplyPage from "./pages/Organizer/OrganizerApplyPage";
+import PublicOrganizerPage from "./pages/Organizer/PublicOrganizerPage";
 import OrganizerHubPage from "./pages/Organizer/OrganizerHubPage";
 import OrganizerMediaPage from "./pages/Organizer/OrganizerMediaPage";
 import OrganizerCheckInPage from "./pages/Organizer/OrganizerCheckInPage";
@@ -38,6 +41,91 @@ const queryClient = new QueryClient({
   },
 });
 
+const standaloneShellPaths = [
+  "/organizer",
+  "/organizer/events",
+  "/organizer/profile",
+  "/organizer/media",
+  "/organizer/check-in",
+  "/venues",
+];
+
+function AppRoutes() {
+  const location = useLocation();
+  const usesStandaloneShell = standaloneShellPaths.some(
+    (path) =>
+      location.pathname === path ||
+      (path !== "/venues" && location.pathname.startsWith(`${path}/`)),
+  );
+
+  return (
+    <>
+      {!usesStandaloneShell ? <Navbar /> : null}
+      <ToastContainer
+        position="top-right"
+        autoClose={3500}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnHover
+        draggable
+        theme="light"
+      />
+      <div>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/search" element={<EventSearchPage />} />
+          <Route path="/venues" element={<VenuesPage />} />
+          <Route path="/event/:slug" element={<EventDetailPage />} />
+          <Route path="/organizers/apply" element={<OrganizerApplyPage />} />
+          <Route path="/organizers/:slug" element={<PublicOrganizerPage />} />
+          <Route path="/admin/organizers" element={<AdminOrganizerReviewPage />} />
+          <Route path="/events/:slug/book" element={<SelectTicketPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/payment-result" element={<PaymentResultPage />} />
+          <Route path="/payment/result" element={<PaymentResultPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/my-tickets" element={<MyTicketsPage />} />
+          <Route path="/my-orders" element={<MyOrdersPage />} />
+          <Route path="/chatbot" element={<ChatbotPage />} />
+          <Route path="/organizer" element={<OrganizerHubPage />} />
+          <Route path="/organizer/events" element={<OrganizerEventsPage />} />
+          <Route
+            path="/organizer/events/new"
+            element={<OrganizerEventEditorPage />}
+          />
+          <Route
+            path="/organizer/events/:eventId/edit"
+            element={<OrganizerEventEditorPage />}
+          />
+          <Route
+            path="/organizer/events/:eventId/ticket-types"
+            element={<OrganizerTicketTypesPage />}
+          />
+          <Route
+            path="/organizer/events/:eventId/layout"
+            element={<OrganizerLayoutPage />}
+          />
+          <Route
+            path="/organizer/events/:eventId/seat-map"
+            element={<OrganizerSeatMapPage />}
+          />
+          <Route
+            path="/organizer/profile"
+            element={<OrganizerProfilePage />}
+          />
+          <Route path="/organizer/media" element={<OrganizerMediaPage />} />
+          <Route
+            path="/organizer/check-in"
+            element={<OrganizerCheckInPage />}
+          />
+        </Routes>
+      </div>
+      {!usesStandaloneShell ? <FloatingChatbot /> : null}
+    </>
+  );
+}
+
 function App() {
   return (
     <ReactKeycloakProvider
@@ -52,65 +140,7 @@ function App() {
         <Router
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
-          <Navbar />
-          <ToastContainer
-            position="top-right"
-            autoClose={3500}
-            hideProgressBar={false}
-            newestOnTop
-            closeOnClick
-            pauseOnHover
-            draggable
-            theme="light"
-          />
-          <div>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/search" element={<EventSearchPage />} />
-              <Route path="/venues" element={<VenuesPage />} />
-              <Route path="/event/:slug" element={<EventDetailPage />} />
-              <Route path="/events/:slug/book" element={<SelectTicketPage />} />
-              <Route path="/checkout" element={<CheckoutPage />} />
-              <Route path="/payment-result" element={<PaymentResultPage />} />
-              <Route path="/payment/result" element={<PaymentResultPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/my-tickets" element={<MyTicketsPage />} />
-              <Route path="/my-orders" element={<MyOrdersPage />} />
-              <Route path="/chatbot" element={<ChatbotPage />} />
-              <Route path="/organizer" element={<OrganizerHubPage />} />
-              <Route path="/organizer/events" element={<OrganizerEventsPage />} />
-              <Route
-                path="/organizer/events/new"
-                element={<OrganizerEventEditorPage />}
-              />
-              <Route
-                path="/organizer/events/:eventId/edit"
-                element={<OrganizerEventEditorPage />}
-              />
-              <Route
-                path="/organizer/events/:eventId/ticket-types"
-                element={<OrganizerTicketTypesPage />}
-              />
-              <Route
-                path="/organizer/events/:eventId/layout"
-                element={<OrganizerLayoutPage />}
-              />
-              <Route
-                path="/organizer/events/:eventId/seat-map"
-                element={<OrganizerSeatMapPage />}
-              />
-              <Route
-                path="/organizer/profile"
-                element={<OrganizerProfilePage />}
-              />
-              <Route path="/organizer/media" element={<OrganizerMediaPage />} />
-              <Route
-                path="/organizer/check-in"
-                element={<OrganizerCheckInPage />}
-              />
-            </Routes>
-          </div>
-          <FloatingChatbot />
+          <AppRoutes />
         </Router>
       </QueryClientProvider>
     </ReactKeycloakProvider>

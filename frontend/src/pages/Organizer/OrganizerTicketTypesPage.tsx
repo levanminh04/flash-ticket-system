@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Edit, Search, Trash2 } from "lucide-react";
+import { Edit, Search, Trash2, X } from "lucide-react";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
 import { confirmDestructiveAction } from "../../lib/swal";
 import {
   organizerWorkspaceService,
+  OrganizerSeatMap,
   OrganizerTicketType,
   OrganizerTicketTypePayload,
 } from "../../services/organizerWorkspaceService";
@@ -71,9 +72,12 @@ function buildFormState(ticketType: OrganizerTicketType): TicketTypeFormState {
 
 function toPayload(
   formState: TicketTypeFormState,
+  quantityTotalOverride?: number,
+  forceSeatSelectionEnabled?: boolean,
+  useSeatMap?: boolean,
 ): OrganizerTicketTypePayload | null {
   const price = Number(formState.price);
-  const quantityTotal = Number(formState.quantityTotal);
+  const quantityTotal = quantityTotalOverride ?? Number(formState.quantityTotal);
 
   if (
     !formState.name.trim() ||
@@ -96,20 +100,23 @@ function toPayload(
       : undefined,
     saleStartDatetime: toIsoString(formState.saleStartDatetime),
     saleEndDatetime: toIsoString(formState.saleEndDatetime),
-    seatSelectionEnabled: formState.seatSelectionEnabled,
+    seatSelectionEnabled: forceSeatSelectionEnabled ?? formState.seatSelectionEnabled,
     colorCode: formState.colorCode || undefined,
     displayOrder: formState.displayOrder
       ? Number(formState.displayOrder)
       : undefined,
-    eventSectorId: formState.eventSectorId.trim() || undefined,
+    eventSectorId: useSeatMap ? formState.eventSectorId.trim() || undefined : undefined,
     isVisible: formState.isVisible,
   };
 }
 
 export default function OrganizerTicketTypesPage() {
   const { eventId } = useParams<{ eventId: string }>();
+  const [searchParams] = useSearchParams();
   const { ready } = useOrganizerGate();
   const [ticketTypes, setTicketTypes] = useState<OrganizerTicketType[]>([]);
+  const [seatMap, setSeatMap] = useState<OrganizerSeatMap | null>(null);
+  const [setupMode, setSetupMode] = useState<"QUANTITY" | "SEAT_MAP" | null>(null);
   const [formState, setFormState] =
     useState<TicketTypeFormState>(defaultFormState);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -118,6 +125,12 @@ export default function OrganizerTicketTypesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const setupStorageKey = eventId
+    ? `organizer-ticket-setup-mode:${eventId}`
+    : "";
+  const requestedSetupMode = searchParams.get("mode");
+  const requestedSectorId = searchParams.get("sectorId");
+  const shouldOpenCreateForm = searchParams.get("create") === "1";
 
   useEffect(() => {
     if (!ready || !eventId) {
@@ -129,14 +142,42 @@ export default function OrganizerTicketTypesPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const nextTicketTypes =
-          await organizerWorkspaceService.getTicketTypes(eventId);
+        const [nextTicketTypes, nextSeatMap] = await Promise.all([
+          organizerWorkspaceService.getTicketTypes(eventId),
+          organizerWorkspaceService.getSeatMap(eventId),
+        ]);
 
         if (cancelled) {
           return;
         }
 
         setTicketTypes(nextTicketTypes);
+        setSeatMap(nextSeatMap);
+
+        if (requestedSetupMode === "SEAT_MAP") {
+          setSetupMode("SEAT_MAP");
+          if (setupStorageKey) {
+            sessionStorage.setItem(setupStorageKey, "SEAT_MAP");
+          }
+          if (shouldOpenCreateForm) {
+            setEditingId(null);
+            setFormState({
+              ...defaultFormState,
+              eventSectorId: requestedSectorId || "",
+            });
+            setIsCreateFormOpen(true);
+          }
+          return;
+        }
+
+        const storedSetupMode = setupStorageKey
+          ? sessionStorage.getItem(setupStorageKey)
+          : null;
+        setSetupMode(
+          storedSetupMode === "QUANTITY" || storedSetupMode === "SEAT_MAP"
+            ? storedSetupMode
+            : null,
+        );
       } catch {
         if (!cancelled) {
           toast.error("Không thể tải danh sách loại vé.");
@@ -153,7 +194,14 @@ export default function OrganizerTicketTypesPage() {
     return () => {
       cancelled = true;
     };
-  }, [eventId, ready]);
+  }, [
+    eventId,
+    ready,
+    requestedSectorId,
+    requestedSetupMode,
+    setupStorageKey,
+    shouldOpenCreateForm,
+  ]);
 
   const handleChange = <K extends keyof TicketTypeFormState>(
     key: K,
@@ -177,15 +225,65 @@ export default function OrganizerTicketTypesPage() {
     setIsCreateFormOpen(true);
   };
 
+  const handleChooseQuantityMode = () => {
+    setSetupMode("QUANTITY");
+    if (setupStorageKey) {
+      sessionStorage.setItem(setupStorageKey, "QUANTITY");
+    }
+    setEditingId(null);
+    setFormState(defaultFormState);
+    setIsCreateFormOpen(true);
+  };
+
+  const handleChooseSeatMapMode = () => {
+    setSetupMode("SEAT_MAP");
+    if (setupStorageKey) {
+      sessionStorage.setItem(setupStorageKey, "SEAT_MAP");
+    }
+    resetForm();
+  };
+
+  const activeSectors = (seatMap?.sectors ?? []).filter(
+    (sector) => sector.mapData?.visible !== false,
+  );
+  const eventUsesSeatMap = setupMode === "SEAT_MAP" && activeSectors.length > 0;
+  const selectedSector = activeSectors.find(
+    (sector) => sector.id === formState.eventSectorId,
+  );
+  const requestedSectorExists = requestedSectorId
+    ? activeSectors.some((sector) => sector.id === requestedSectorId)
+    : true;
+  const selectedSectorType = selectedSector?.sectorType === "SEATED" ? "SEATED" : "STANDING";
+  const isAssignedSeatTicket = eventUsesSeatMap && selectedSectorType === "SEATED";
+
   const handleSubmit = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault();
     if (!eventId) {
       return;
     }
 
-    const payload = toPayload(formState);
+    if (eventUsesSeatMap && !formState.eventSectorId.trim()) {
+      toast.error("Chọn khu vực áp dụng cho loại vé.");
+      return;
+    }
+
+    if (eventUsesSeatMap && !selectedSector) {
+      toast.error("Khu vực này chưa được publish. Hãy publish sector trước khi tạo loại vé.");
+      return;
+    }
+
+    const payload = toPayload(
+      formState,
+      isAssignedSeatTicket ? 0 : undefined,
+      isAssignedSeatTicket,
+      eventUsesSeatMap,
+    );
     if (!payload) {
-      toast.error("Điền đủ tên vé, giá và số lượng.");
+      toast.error(
+        isAssignedSeatTicket
+          ? "Điền đủ tên vé, giá và chọn khu ghế ngồi đã có ghế."
+          : "Điền đủ tên vé, giá và số lượng.",
+      );
       return;
     }
 
@@ -288,28 +386,86 @@ export default function OrganizerTicketTypesPage() {
   return (
     <OrganizerLayout
       title="Quản lý loại vé"
-      description="Thêm, sửa và xóa các loại vé cho event hiện tại"
+      description="Quản lý các loại vé của sự kiện."
+      hideTopBar
     >
       {eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
 
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải loại vé</p>
+          <p>Đang tải danh sách loại vé...</p>
         </section>
       ) : (
         <>
+          {requestedSetupMode === "SEAT_MAP" && !requestedSectorExists ? (
+            <section className="organizer-panel organizer-empty-state compact">
+              <p>Khu vực vừa chọn chưa được publish. Hãy publish sector trong Seat map trước khi tạo loại vé cho khu đó.</p>
+            </section>
+          ) : null}
+          {setupMode === null ? (
+              <section
+                className="organizer-panel organizer-ticket-setup-panel"
+                aria-labelledby="organizer-ticket-setup-title"
+              >
+                <div className="organizer-panel-heading">
+                  <h2 id="organizer-ticket-setup-title">
+                    Bạn có cần sơ đồ khu vực hoặc ghế không?
+                  </h2>
+                </div>
+                <div className="organizer-ticket-setup-actions">
+                  <button
+                    type="button"
+                    className="organizer-ticket-setup-option"
+                    onClick={handleChooseQuantityMode}
+                  >
+                    <span aria-hidden="true">○</span>
+                    <div>
+                      <strong>Không dùng sơ đồ</strong>
+                      <p>Bán vé theo số lượng.</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="organizer-ticket-setup-option"
+                    onClick={handleChooseSeatMapMode}
+                  >
+                    <span aria-hidden="true">○</span>
+                    <div>
+                      <strong>Dùng sơ đồ</strong>
+                      <p>
+                        Tạo khu đứng, khu tự do, khu ghế ngồi hoặc kết hợp.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              </section>
+          ) : null}
           {isCreateFormOpen ? (
-            <form
-              className="organizer-panel organizer-event-form"
-              onSubmit={handleSubmit}
-            >
-              <div className="organizer-panel-heading">
-                <h2 className="organizer-panel-title-pill">
-                  {editingId ? "Chỉnh sửa loại vé" : "Tạo loại vé mới"}
-                </h2>
-              </div>
-
+            <div className="organizer-media-modal-backdrop" role="presentation">
+              <section
+                className="organizer-ticket-form-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="organizer-ticket-form-title"
+              >
+                <div className="organizer-media-modal-header">
+                  <h2 id="organizer-ticket-form-title">
+                    {editingId ? "Cập nhật vé sự kiện" : "Tạo vé sự kiện"}
+                  </h2>
+                  <button
+                    type="button"
+                    className="organizer-media-modal-close"
+                    aria-label="Đóng popup tạo vé"
+                    onClick={resetForm}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <form
+                  className="organizer-media-modal-body organizer-event-form organizer-ticket-form-body"
+                  onSubmit={handleSubmit}
+                >
               <div className="organizer-form-grid">
                 <label className="organizer-field organizer-form-span-2">
                   <span>Tên loại vé</span>
@@ -369,12 +525,22 @@ export default function OrganizerTicketTypesPage() {
                     type="number"
                     min={0}
                     className="organizer-input"
-                    value={formState.quantityTotal}
+                    value={isAssignedSeatTicket ? "0" : formState.quantityTotal}
+                    readOnly={isAssignedSeatTicket}
                     onChange={(event) =>
                       handleChange("quantityTotal", event.target.value)
                     }
-                    placeholder="Số lượng vé"
+                    placeholder={
+                      isAssignedSeatTicket
+                        ? "Tự tính từ số ghế active"
+                        : "Số lượng vé"
+                    }
                   />
+                  {isAssignedSeatTicket ? (
+                    <small className="organizer-inline-help">
+                      Backend sẽ đồng bộ số lượng sau khi ghế được gán loại vé và publish seat map.
+                    </small>
+                  ) : null}
                 </label>
 
                 <label className="organizer-field">
@@ -389,6 +555,7 @@ export default function OrganizerTicketTypesPage() {
                     }
                   />
                 </label>
+
 
                 <label className="organizer-field">
                   <span>Mở bán từ</span>
@@ -415,61 +582,70 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <span>Màu hiển thị</span>
-                  <input
-                    type="color"
-                    className="organizer-input"
-                    value={formState.colorCode}
-                    onChange={(event) =>
-                      handleChange("colorCode", event.target.value)
-                    }
-                  />
-                </label>
-
-                <label className="organizer-field">
                   <span>Thứ tự hiển thị</span>
-                  <input
-                    type="number"
-                    className="organizer-input"
-                    value={formState.displayOrder}
-                    onChange={(event) =>
-                      handleChange("displayOrder", event.target.value)
-                    }
-                  />
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <input
+                      type="number"
+                      className="organizer-input"
+                      value={formState.displayOrder}
+                      onChange={(event) =>
+                        handleChange("displayOrder", event.target.value)
+                      }
+                      style={{ flex: 1 }}
+                    />
+                    <div style={{ position: "relative", width: "48px", height: "48px", flexShrink: 0 }}>
+                      <input
+                        type="color"
+                        value={formState.colorCode}
+                        onChange={(event) =>
+                          handleChange("colorCode", event.target.value)
+                        }
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          opacity: 0,
+                          cursor: "pointer",
+                          zIndex: 2,
+                        }}
+                        title="Chọn màu hiển thị"
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          backgroundColor: formState.colorCode,
+                          borderRadius: "16px",
+                          border: "1px solid #cbd5e1",
+                          zIndex: 1,
+                        }}
+                      />
+                    </div>
+                  </div>
                 </label>
 
-                <label className="organizer-field organizer-form-span-2">
-                  <span>Event sector ID</span>
-                  <input
-                    className="organizer-input"
-                    value={formState.eventSectorId}
-                    onChange={(event) =>
-                      handleChange("eventSectorId", event.target.value)
-                    }
-                    placeholder="Để trống nếu loại vé chưa gắn sector cụ thể"
-                  />
-                </label>
+                {eventUsesSeatMap ? (
+                  <label className="organizer-field organizer-form-span-2">
+                    <span>Thuộc khu vực nào?</span>
+                    <select
+                      className="organizer-input"
+                      value={formState.eventSectorId}
+                      onChange={(event) =>
+                        handleChange("eventSectorId", event.target.value)
+                      }
+                    >
+                      <option value="">Chọn khu vực</option>
+                      {activeSectors.map((sector) => (
+                        <option key={sector.id} value={sector.id}>
+                          {sector.name} - {sector.sectorType === "SEATED" ? "Khu ghế ngồi" : "Khu tự do / khu đứng"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
 
                 <div className="organizer-checkbox-grid organizer-form-span-2">
-                  <label className="organizer-checkbox-card">
-                    <input
-                      type="checkbox"
-                      checked={formState.seatSelectionEnabled}
-                      onChange={(event) =>
-                        handleChange(
-                          "seatSelectionEnabled",
-                          event.target.checked,
-                        )
-                      }
-                    />
-                    <div>
-                      <strong>Cho chọn ghế</strong>
-                      <p>
-                        Dùng khi ticket type gắn seat map hoặc sector có ghế.
-                      </p>
-                    </div>
-                  </label>
-
                   <label className="organizer-checkbox-card">
                     <input
                       type="checkbox"
@@ -489,7 +665,7 @@ export default function OrganizerTicketTypesPage() {
                 </div>
               </div>
 
-              <div className="organizer-form-actions" style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%", gap: "16px" }}>
+              <div className="organizer-form-actions organizer-ticket-modal-actions">
                 <button
                   type="button"
                   className="btn btn-secondary organizer-inline-button"
@@ -511,33 +687,38 @@ export default function OrganizerTicketTypesPage() {
                       : "Tạo loại vé"}
                 </button>
               </div>
-            </form>
+                </form>
+              </section>
+            </div>
           ) : null}
 
-          <section className="organizer-panel">
+          {setupMode !== null ? (
+            <section className="organizer-panel">
             <div className="organizer-panel-heading-row organizer-ticket-header-row">
-              <h2 className="organizer-panel-title-pill">Danh sách loại vé</h2>
               <div className="organizer-ticket-header-actions">
-                <label className="organizer-ticket-search">
+                <label className="organizer-events-list-search organizer-ticket-search">
                   <input
                     value={ticketSearch}
                     onChange={(event) => setTicketSearch(event.target.value)}
+                    className="organizer-events-list-search-input"
                     placeholder="Tìm loại vé..."
                   />
-                  <span className="organizer-ticket-search-icon">
-                    <Search size={16} />
+                  <span
+                    className="organizer-events-list-search-button organizer-ticket-search-icon"
+                    aria-hidden="true"
+                  >
+                    <Search size={14} />
                   </span>
                 </label>
                 <button
                   type="button"
-                  className="organizer-ticket-create-button"
+                  className="organizer-events-add-button organizer-ticket-create-button"
                   onClick={handleCreateClick}
                 >
                   Tạo vé sự kiện
                 </button>
               </div>
             </div>
-
             {ticketTypes.length === 0 ? (
               <div className="organizer-empty-state compact">
                 <p>Event này chưa có loại vé nào</p>
@@ -656,9 +837,11 @@ export default function OrganizerTicketTypesPage() {
                 </table>
               </div>
             )}
-          </section>
+            </section>
+          ) : null}
         </>
       )}
     </OrganizerLayout>
   );
 }
+

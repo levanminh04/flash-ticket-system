@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+﻿import { FormEvent, useEffect, useMemo, useState } from "react";
 import Chart from "react-apexcharts";
 import { Link } from "react-router-dom";
 import { LoaderCircle, Edit, Search, Ticket, Trash2 } from "lucide-react";
@@ -17,11 +17,30 @@ import {
   OrganizerEventDetail,
 } from "../../services/organizerWorkspaceService";
 import { SpringPage } from "../../types/api";
-import { formatDateTime } from "./organizerWorkspaceUtils";
+import {
+  formatDateTime,
+  getEventEstimatedRevenue,
+  getEventTicketsSold,
+} from "./organizerWorkspaceUtils";
 import { useOrganizerGate } from "./useOrganizerGate";
 
 const PAGE_SIZE = 10;
 const ANALYTICS_PAGE_SIZE = 100;
+
+type RevenueRange = "week" | "month" | "year";
+type EventListFilter = "all" | "active" | "draft";
+
+const revenueRangeOptions: Array<{ value: RevenueRange; label: string }> = [
+  { value: "week", label: "This week" },
+  { value: "month", label: "This month" },
+  { value: "year", label: "This year" },
+];
+
+const eventListFilters: Array<{ value: EventListFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "draft", label: "Draft" },
+];
 
 const categoryChartColors = [
   "#8B5CF6",
@@ -42,16 +61,6 @@ function currencyFormat(value: number): string {
   return `${Math.round(value).toLocaleString("vi-VN")} đ`;
 }
 
-function getEstimatedRevenue(event: OrganizerEventDetail): number {
-  const ticketTypes = event.ticketTypes ?? [];
-  return ticketTypes.reduce((sum, ticketType) => {
-    const total = ticketType.quantityTotal ?? 0;
-    const available = ticketType.quantityAvailable ?? total;
-    const sold = Math.max(total - available, 0);
-    return sum + sold * Number(ticketType.price ?? 0);
-  }, 0);
-}
-
 function getEventStartTime(event: OrganizerEventDetail): number {
   const value = event.schedule?.startDatetime;
   if (!value) return 0;
@@ -59,9 +68,35 @@ function getEventStartTime(event: OrganizerEventDetail): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
+function isEventInRevenueRange(
+  event: OrganizerEventDetail,
+  range: RevenueRange,
+): boolean {
+  const time = getEventStartTime(event);
+  if (time <= 0) return false;
+
+  const eventDate = new Date(time);
+  const now = new Date();
+
+  if (range === "week") {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+    return eventDate >= weekAgo && eventDate <= now;
+  }
+
+  if (range === "month") {
+    return (
+      eventDate.getFullYear() === now.getFullYear() &&
+      eventDate.getMonth() === now.getMonth()
+    );
+  }
+
+  return eventDate.getFullYear() === now.getFullYear();
+}
+
 function getMonthLabel(time: number): string {
   const date = new Date(time);
-  return `${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+  return String(date.getMonth() + 1).padStart(2, "0");
 }
 
 async function getAllOrganizerEvents(): Promise<OrganizerEventDetail[]> {
@@ -149,6 +184,9 @@ export default function OrganizerEventsPage() {
     Array<{ src: string; alt: string }>
   >([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [revenueRange, setRevenueRange] = useState<RevenueRange>("year");
+  const [eventListFilter, setEventListFilter] =
+    useState<EventListFilter>("all");
 
   useEffect(() => {
     if (!ready) return;
@@ -215,20 +253,36 @@ export default function OrganizerEventsPage() {
     };
   }, [ready]);
 
-  const filteredEvents = searchResults ?? pageData?.content ?? [];
-  const pageCount = searchResults
-    ? Math.ceil(searchResults.length / PAGE_SIZE)
+  const baseEvents =
+    searchResults ??
+    (eventListFilter === "all" ? pageData?.content : allEvents) ??
+    [];
+  const filteredEvents = useMemo(() => {
+    if (eventListFilter === "all") return baseEvents;
+    const expectedStatus = eventListFilter === "active" ? "PUBLISHED" : "DRAFT";
+    return baseEvents.filter((event) => event.status === expectedStatus);
+  }, [baseEvents, eventListFilter]);
+  const pageCount = searchResults || eventListFilter !== "all"
+    ? Math.ceil(filteredEvents.length / PAGE_SIZE)
     : (pageData?.totalPages ?? 0);
-  const displayedEvents = searchResults
-    ? searchResults.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
+  const displayedEvents = searchResults || eventListFilter !== "all"
+    ? filteredEvents.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
     : filteredEvents;
+  const eventFilterCounts = useMemo(() => {
+    const source = searchResults ?? allEvents;
+    return {
+      all: source.length || pageData?.totalElements || baseEvents.length,
+      active: source.filter((event) => event.status === "PUBLISHED").length,
+      draft: source.filter((event) => event.status === "DRAFT").length,
+    };
+  }, [allEvents, baseEvents.length, pageData?.totalElements, searchResults]);
 
   const analytics = useMemo(() => {
     const totalEvents = allEvents.length;
     const publishedCount = allEvents.filter((event) => event.status === "PUBLISHED").length;
     const draftCount = allEvents.filter((event) => event.status === "DRAFT").length;
     const totalTicketsSold = allEvents.reduce(
-      (sum, event) => sum + (event.statistics?.ticketsSold ?? 0),
+      (sum, event) => sum + getEventTicketsSold(event),
       0,
     );
 
@@ -252,7 +306,7 @@ export default function OrganizerEventsPage() {
       .sort((a, b) => b.count - a.count);
 
     const topTicketEvents = [...allEvents]
-      .sort((a, b) => (b.statistics?.ticketsSold ?? 0) - (a.statistics?.ticketsSold ?? 0))
+      .sort((a, b) => getEventTicketsSold(b) - getEventTicketsSold(a))
       .slice(0, 5);
 
     const timelineItems = [...allEvents.reduce((map, event) => {
@@ -270,7 +324,7 @@ export default function OrganizerEventsPage() {
       .sort((a, b) => a.time - b.time);
 
     const topRevenueEvents = [...allEvents]
-      .map((event) => ({ event, revenue: getEstimatedRevenue(event) }))
+      .map((event) => ({ event, revenue: getEventEstimatedRevenue(event) }))
       .filter((item) => item.revenue > 0)
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10);
@@ -287,91 +341,18 @@ export default function OrganizerEventsPage() {
     };
   }, [allEvents]);
 
-  const categoryChartOptions = useMemo<ApexOptions>(
-    () => ({
-      chart: { type: "donut", toolbar: { show: false }, fontFamily: "Inter, system-ui, sans-serif" },
-      labels: analytics.categoryItems.map((item) => item.label),
-      colors: analytics.categoryItems.map((item) => item.color),
-      dataLabels: {
-        enabled: true,
-        formatter: (_value, opts) =>
-          numberFormat(analytics.categoryItems[opts?.seriesIndex ?? 0]?.count ?? 0),
-      },
-      legend: {
-        position: "bottom",
-        horizontalAlign: "center",
-        offsetX: 0,
-        itemMargin: { horizontal: 12, vertical: 4 },
-        fontWeight: 600,
-        labels: { colors: "#475569" },
-      },
-      plotOptions: {
-        pie: {
-          customScale: 0.9,
-          donut: {
-            labels: {
-              show: true,
-              name: {
-                show: true,
-                color: "#64748b",
-                fontSize: "13px",
-                fontWeight: 600,
-              },
-              value: {
-                show: true,
-                color: "#0f172a",
-                fontSize: "24px",
-                fontWeight: 800,
-                formatter: (value) => numberFormat(Number(value)),
-              },
-              total: {
-                show: true,
-                showAlways: true,
-                label: "Tổng sự kiện",
-                color: "#64748b",
-                fontSize: "13px",
-                fontWeight: 600,
-                formatter: () =>
-                  numberFormat(analytics.categoryItems.reduce((sum, item) => sum + item.count, 0)),
-              },
-            },
-          },
-        },
-      },
-      stroke: { width: 0 },
-      tooltip: { y: { formatter: (value) => `${numberFormat(value)} sự kiện` } },
-    }),
-    [analytics.categoryItems],
+  const filteredTopRevenueEvents = useMemo(
+    () =>
+      allEvents
+        .filter((event) => isEventInRevenueRange(event, revenueRange))
+        .map((event) => ({ event, revenue: getEventEstimatedRevenue(event) }))
+        .filter((item) => item.revenue > 0)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10),
+    [allEvents, revenueRange],
   );
 
-  const topTicketsChartOptions = useMemo<ApexOptions>(
-    () => ({
-      chart: { type: "bar", toolbar: { show: false }, fontFamily: "Inter, system-ui, sans-serif" },
-      colors: ["#F59E0B"],
-      plotOptions: { bar: { horizontal: false, borderRadius: 6, columnWidth: "48%" } },
-      dataLabels: { enabled: false },
-      grid: { borderColor: "#e2e8f0", strokeDashArray: 4 },
-      xaxis: {
-        categories: analytics.topTicketEvents.map((event) => event.title),
-        labels: {
-          rotate: -45,
-          rotateAlways: true,
-          hideOverlappingLabels: false,
-          trim: true,
-          maxHeight: 130,
-          style: { colors: "#64748b", fontWeight: 600 },
-        },
-      },
-      yaxis: {
-        labels: {
-          style: { colors: "#334155", fontWeight: 600 },
-          formatter: (value) => numberFormat(value),
-        },
-      },
-      tooltip: { y: { formatter: (value) => `${numberFormat(value)} vé` } },
-    }),
-    [analytics.topTicketEvents],
-  );
+
 
   const timelineChartOptions = useMemo<ApexOptions>(
     () => ({
@@ -404,7 +385,7 @@ export default function OrganizerEventsPage() {
       dataLabels: { enabled: false },
       grid: { borderColor: "#e2e8f0", strokeDashArray: 4 },
       xaxis: {
-        categories: analytics.topRevenueEvents.map(({ event }) => event.title),
+        categories: filteredTopRevenueEvents.map(({ event }) => event.title),
         labels: {
           rotate: -45,
           rotateAlways: true,
@@ -422,22 +403,9 @@ export default function OrganizerEventsPage() {
       },
       tooltip: { y: { formatter: (value) => currencyFormat(value) } },
     }),
-    [analytics.topRevenueEvents],
+    [filteredTopRevenueEvents],
   );
 
-  const categorySeries = useMemo(
-    () => analytics.categoryItems.map((item) => item.count),
-    [analytics.categoryItems],
-  );
-  const topTicketsSeries = useMemo(
-    () => [
-      {
-        name: "Vé đã bán",
-        data: analytics.topTicketEvents.map((event) => event.statistics?.ticketsSold ?? 0),
-      },
-    ],
-    [analytics.topTicketEvents],
-  );
   const timelineSeries = useMemo(
     () => [
       {
@@ -451,10 +419,10 @@ export default function OrganizerEventsPage() {
     () => [
       {
         name: "Doanh thu ước tính",
-        data: analytics.topRevenueEvents.map((item) => item.revenue),
+        data: filteredTopRevenueEvents.map((item) => item.revenue),
       },
     ],
-    [analytics.topRevenueEvents],
+    [filteredTopRevenueEvents],
   );
 
   const handleSearch = async (submitEvent: FormEvent<HTMLFormElement>) => {
@@ -522,7 +490,7 @@ export default function OrganizerEventsPage() {
   return (
     <OrganizerLayout
       title="Quản lý sự kiện"
-      description="Danh sách sự kiện của ban tổ chức, có thể tạo mới và chỉnh sửa thông tin sự kiện"
+      description="Danh sách và thông tin các sự kiện."
       actions={null}
     >
       <section className="organizer-events-analytics">
@@ -558,9 +526,9 @@ export default function OrganizerEventsPage() {
         </div>
 
         {analyticsLoading ? (
-          <section className="organizer-panel organizer-events-chart-state">
+          <section className="organizer-panel organizer-empty-state">
             <div className="loading-spinner" />
-            <p>Đang tải dữ liệu biểu đồ</p>
+            <p>Đang tải dữ liệu biểu đồ...</p>
           </section>
         ) : (
           <>
@@ -580,8 +548,27 @@ export default function OrganizerEventsPage() {
               </article>
 
               <article className="organizer-panel organizer-events-chart-card">
-                <p className="organizer-dashboard-chart-title">Doanh thu ước tính theo sự kiện</p>
-                {analytics.topRevenueEvents.length > 0 ? (
+                <div className="organizer-panel-heading-row organizer-events-chart-heading">
+                  <p className="organizer-dashboard-chart-title">
+                    Doanh thu ước tính theo sự kiện
+                  </p>
+                  <div
+                    className="organizer-dashboard-time-tabs"
+                    aria-label="Chọn khoảng thời gian doanh thu"
+                  >
+                    {revenueRangeOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={revenueRange === option.value ? "is-active" : ""}
+                        onClick={() => setRevenueRange(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {filteredTopRevenueEvents.length > 0 ? (
                   <Chart
                     options={revenueChartOptions}
                     series={revenueSeries}
@@ -589,40 +576,14 @@ export default function OrganizerEventsPage() {
                     height={360}
                   />
                 ) : (
-                  <div className="organizer-dashboard-empty-chart">Chưa có dữ liệu doanh thu.</div>
+                  <div className="organizer-dashboard-empty-chart">
+                    Chưa có dữ liệu doanh thu.
+                  </div>
                 )}
               </article>
             </section>
 
-            <section className="organizer-events-chart-grid">
-              <article className="organizer-panel organizer-events-chart-card organizer-events-donut-card">
-                <p className="organizer-dashboard-chart-title">Sự kiện theo danh mục</p>
-                {categorySeries.length > 0 ? (
-                  <Chart
-                    options={categoryChartOptions}
-                    series={categorySeries}
-                    type="donut"
-                    height={300}
-                  />
-                ) : (
-                  <div className="organizer-dashboard-empty-chart">Chưa có dữ liệu danh mục.</div>
-                )}
-              </article>
 
-              <article className="organizer-panel organizer-events-chart-card">
-                <p className="organizer-dashboard-chart-title">Top 5 sự kiện theo vé đã bán</p>
-                {analytics.topTicketEvents.length > 0 ? (
-                  <Chart
-                    options={topTicketsChartOptions}
-                    series={topTicketsSeries}
-                    type="bar"
-                    height={360}
-                  />
-                ) : (
-                  <div className="organizer-dashboard-empty-chart">Chưa có dữ liệu vé bán.</div>
-                )}
-              </article>
-            </section>
           </>
         )}
       </section>
@@ -631,7 +592,7 @@ export default function OrganizerEventsPage() {
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
           <p>
-            {searching ? "Đang tìm kiếm sự kiện" : "Đang tải danh sách sự kiện"}
+            {searching ? "Đang tìm kiếm sự kiện..." : "Đang tải danh sách sự kiện..."}
           </p>
         </section>
       ) : displayedEvents.length === 0 ? (
@@ -646,7 +607,23 @@ export default function OrganizerEventsPage() {
       ) : (
         <section className="organizer-panel">
           <div className="organizer-panel-heading-row organizer-events-list-heading">
-            <p className="organizer-panel-title-pill">Danh sách sự kiện</p>
+            <div className="organizer-events-list-filter-row">
+              {eventListFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={`organizer-events-filter-pill ${
+                    eventListFilter === filter.value ? "is-active" : ""
+                  }`}
+                  onClick={() => {
+                    setEventListFilter(filter.value);
+                    setCurrentPage(0);
+                  }}
+                >
+                  {filter.label} {numberFormat(eventFilterCounts[filter.value])}
+                </button>
+              ))}
+            </div>
             <div className="organizer-events-list-actions">
               <form className="organizer-events-list-search" onSubmit={handleSearch}>
                 <input
@@ -661,7 +638,7 @@ export default function OrganizerEventsPage() {
                   disabled={loading || searching}
                   aria-label="Tìm kiếm sự kiện"
                 >
-                  <Search size={18} />
+                  <Search size={14} />
                 </button>
               </form>
               <Link to="/organizer/events/new" className="organizer-events-add-button">
@@ -670,7 +647,7 @@ export default function OrganizerEventsPage() {
             </div>
           </div>
           <div className="organizer-media-table-wrap organizer-event-table-wrap">
-            <table className="organizer-event-table">
+            <table className="organizer-event-table organizer-events-page-table">
               <thead>
                 <tr>
                   <th>STT</th>
@@ -788,3 +765,5 @@ export default function OrganizerEventsPage() {
     </OrganizerLayout>
   );
 }
+
+

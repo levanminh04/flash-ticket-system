@@ -12,6 +12,7 @@ import { MdMarkEmailRead } from "react-icons/md";
 import { TbWorldCheck } from "react-icons/tb";
 import { toast } from "react-toastify";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
+import { ORGANIZER_PROFILE_UPDATED_EVENT } from "../../components/organizer/OrganizerTopBar";
 import {
   organizerService,
   OrganizerProfile,
@@ -151,6 +152,11 @@ export default function OrganizerProfilePage() {
     try {
       const updatedProfile = await organizerService.uploadLogo(file);
       setProfile(updatedProfile);
+      window.dispatchEvent(
+        new CustomEvent(ORGANIZER_PROFILE_UPDATED_EVENT, {
+          detail: updatedProfile,
+        }),
+      );
       toast.success("Đã cập nhật logo ban tổ chức.");
     } catch {
       toast.error("Không thể cập nhật logo lúc này.");
@@ -168,6 +174,11 @@ export default function OrganizerProfilePage() {
     try {
       const updatedProfile = await organizerService.uploadBanner(file);
       setProfile(updatedProfile);
+      window.dispatchEvent(
+        new CustomEvent(ORGANIZER_PROFILE_UPDATED_EVENT, {
+          detail: updatedProfile,
+        }),
+      );
       toast.success("Đã cập nhật banner ban tổ chức.");
     } catch {
       toast.error("Không thể cập nhật banner lúc này.");
@@ -180,12 +191,12 @@ export default function OrganizerProfilePage() {
   return (
     <OrganizerLayout
       title="Hồ sơ ban tổ chức"
-      description="Trang này hiển thị thông tin chi tiết về ban tổ chức của bạn."
+      description="Thông tin chi tiết về ban tổ chức."
     >
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải hồ sơ ban tổ chức</p>
+          <p>Đang tải hồ sơ ban tổ chức...</p>
         </section>
       ) : error || !profile ? (
         <section className="organizer-panel organizer-empty-state">
@@ -264,6 +275,12 @@ export default function OrganizerProfilePage() {
                     </div>
                   </div>
 
+                  <div className="organizer-profile-field organizer-profile-description">
+                    <span className="organizer-profile-field-value">
+                      {profile.description || "Organizer chưa cập nhật mô tả."}
+                    </span>
+                  </div>
+
                   {profile.isVerified ? (
                     <div className="organizer-identity-row">
                       <span className="organizer-verified-pill">
@@ -272,12 +289,6 @@ export default function OrganizerProfilePage() {
                       </span>
                     </div>
                   ) : null}
-
-                  <div className="organizer-profile-field organizer-profile-description">
-                    <span className="organizer-profile-field-value">
-                      {profile.description || "Organizer chưa cập nhật mô tả."}
-                    </span>
-                  </div>
                 </div>
               </div>
 
@@ -305,7 +316,7 @@ export default function OrganizerProfilePage() {
           <section className="organizer-grid">
             <article className="organizer-panel organizer-stat-panel">
               <div className="organizer-panel-heading">
-                <p className="organizer-panel-title-pill">Chỉ số hiện có</p>
+                <p className="organizer-badge">Chỉ số hiện có</p>
               </div>
 
               <div className="organizer-stats-grid">
@@ -342,7 +353,7 @@ export default function OrganizerProfilePage() {
 
             <article className="organizer-panel">
               <div className="organizer-panel-heading">
-                <p className="organizer-panel-title-pill">Thông tin định danh</p>
+                <p className="organizer-badge">Thông tin định danh</p>
               </div>
 
               <div className="organizer-profile-meta-list">

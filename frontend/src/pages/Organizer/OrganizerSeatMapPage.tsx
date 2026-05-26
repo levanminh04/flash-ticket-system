@@ -1,36 +1,13 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowDownToLine,
-  ArrowUpToLine,
-  Circle,
-  Diamond,
-  Download,
-  Ellipsis,
-  Eye,
-  EyeOff,
-  Hexagon,
-  Layers3,
-  Lock,
-  LockOpen,
-  Move,
-  MousePointer2,
-  Pentagon,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Save,
-  Square,
-  SquareStack,
-  Trash2,
-  Upload,
-} from "lucide-react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
-import SeatMapEditorCanvas from "../../components/seat-map/editor/SeatMapEditorCanvas";
+import SeatMapCanvasShell from "../../components/seat-map/editor/SeatMapCanvasShell";
+import SeatMapRightSidebar from "../../components/seat-map/editor/SeatMapRightSidebar";
 import {
   buildSeatMapPublishPayload,
+  createEditorDraftKey,
   exportEditorDocument,
   importEditorDocument,
 } from "../../components/seat-map/editor/seatMapEditorUtils";
@@ -38,9 +15,11 @@ import { useSeatMapEditorState } from "../../components/seat-map/editor/useSeatM
 import {
   OrganizerEventDetail,
   OrganizerEventLayout,
+  OrganizerPublicTicketType,
   OrganizerSeatMap,
   organizerWorkspaceService,
 } from "../../services/organizerWorkspaceService";
+import { SeatMapEditorSectorType } from "../../components/seat-map/editor/seatMapEditorTypes";
 import { summarizeSeatMap } from "./organizerWorkspaceUtils";
 import { useOrganizerGate } from "./useOrganizerGate";
 
@@ -111,16 +90,50 @@ function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+const PUBLISH_CONFIRM_RETRY_ATTEMPTS = 3;
+const PUBLISH_CONFIRM_RETRY_DELAY_MS = 1000;
+const PROTECTED_SEAT_STATUSES = new Set(["RESERVED", "SOLD"]);
+
 function formatElapsedTime(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function getTicketTypeSectorId(ticketType: { eventSectorId?: string | null; sectorId?: string | null }) {
+  return ticketType.eventSectorId || ticketType.sectorId || "";
+}
+
+function isProtectedSeatStatus(status?: string) {
+  return status ? PROTECTED_SEAT_STATUSES.has(status.toUpperCase()) : false;
+}
+
+function getRequestErrorMessage(error: unknown) {
+  const response = (error as { response?: { data?: unknown; status?: number } })?.response;
+  const data = response?.data;
+
+  if (data && typeof data === "object") {
+    const message =
+      (data as { message?: unknown; error?: unknown }).message ??
+      (data as { message?: unknown; error?: unknown }).error;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  if (typeof data === "string" && data.trim()) {
+    return data;
+  }
+
+  return response?.status ? `Request failed with status ${response.status}.` : "Request failed.";
+}
+
 export default function OrganizerSeatMapPage() {
   const { eventId } = useParams<{ eventId: string }>();
+  const navigate = useNavigate();
   const { ready } = useOrganizerGate();
   const [eventDetail, setEventDetail] = useState<OrganizerEventDetail | null>(null);
+  const [organizerTicketTypes, setOrganizerTicketTypes] = useState<OrganizerPublicTicketType[]>([]);
   const [layout, setLayout] = useState<OrganizerEventLayout | null>(null);
   const [seatMap, setSeatMap] = useState<OrganizerSeatMap | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,7 +141,7 @@ export default function OrganizerSeatMapPage() {
   const [publishElapsedSeconds, setPublishElapsedSeconds] = useState(0);
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [seatLayoutInputs, setSeatLayoutInputs] = useState<Record<SeatLayoutFieldKey, string>>(DEFAULT_LAYOUT_INPUTS);
-  const [unsavedChanges, setUnsavedChanges] = useState(false);
+  const [, setUnsavedChanges] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -141,20 +154,23 @@ export default function OrganizerSeatMapPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [nextEvent, nextLayout, nextSeatMap] = await Promise.all([
+        const [nextEvent, nextLayout, nextSeatMap, nextTicketTypes] = await Promise.all([
           organizerWorkspaceService.getMyEvent(eventId),
           organizerWorkspaceService.getLayout(eventId),
           organizerWorkspaceService.getSeatMap(eventId),
+          organizerWorkspaceService.getTicketTypes(eventId),
         ]);
 
         if (!cancelled) {
           setEventDetail(nextEvent);
+          setOrganizerTicketTypes(nextTicketTypes);
           setLayout(nextLayout);
           setSeatMap(nextSeatMap);
+          setUnsavedChanges(false);
         }
       } catch {
         if (!cancelled) {
-          toast.error("Không thể tải dữ liệu editor seat map của sự kiện.");
+          toast.error("Cannot load seat map editor data.");
         }
       } finally {
         if (!cancelled) {
@@ -171,7 +187,25 @@ export default function OrganizerSeatMapPage() {
   }, [eventId, ready]);
 
   const editorSource = useMemo(() => buildEditorSource(seatMap, layout), [layout, seatMap]);
-  const ticketTypes = eventDetail?.ticketTypes ?? [];
+  const ticketTypes = organizerTicketTypes.length ? organizerTicketTypes : eventDetail?.ticketTypes ?? [];
+  const ticketTypeById = useMemo(
+    () => new Map(ticketTypes.map((ticketType) => [ticketType.id, ticketType] as const)),
+    [ticketTypes],
+  );
+  const publishedSectorIds = useMemo(
+    () => new Set((seatMap?.sectors ?? []).map((sector) => sector.id)),
+    [seatMap],
+  );
+  const ticketTypeCountBySectorId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ticketType of ticketTypes) {
+      const sectorId = getTicketTypeSectorId(ticketType);
+      if (sectorId) {
+        counts.set(sectorId, (counts.get(sectorId) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [ticketTypes]);
   const {
     activeTool,
     document,
@@ -179,31 +213,41 @@ export default function OrganizerSeatMapPage() {
     referenceImageVisible,
     selectedSeat,
     selectedSeatId,
+    selectedSeatIds,
+    selectedSeats,
     selectedShape,
     selectedShapeIds,
+    canRedo,
+    canUndo,
     viewport,
-    addPolygon,
     addTrapezoid,
     addDiamond,
     addHexagon,
     addCircle,
     addEllipse,
-    addRectangle,
+    addFanSection,
+    addRoundedBlock,
+    addBottomRingSection,
+    addLeftSideRing,
+    addRightSideRing,
+    addVipLeftCurved,
+    addVipRightCurved,
     clearDraft,
     clearSeats,
     clearSelection,
     hideSeat,
+    hideSelectedSeats,
     moveSeat,
     moveSeatBlock,
-    moveShapeZIndex,
     regenerateSeats,
     removeShape,
     replaceDocument,
-    resetViewport,
     resizeSeatBlock,
     resizeShape,
     restoreAllSeats,
     restoreSeat,
+    restoreSelectedSeats,
+    redo,
     selectSeat,
     selectShape,
     setActiveTool,
@@ -213,13 +257,13 @@ export default function OrganizerSeatMapPage() {
     toggleShapeVisibility,
     transformPolygon,
     translateShapeBy,
+    undo,
     updateSeatLayout,
     updateShape,
     updateSeat,
   } = useSeatMapEditorState(eventId, editorSource);
 
   useEffect(() => {
-    // Triggers unsaved state whenever document config/shapes change, requiring user to explicitly "Lưu"
     setUnsavedChanges(true);
   }, [document]);
 
@@ -261,43 +305,17 @@ export default function OrganizerSeatMapPage() {
     return () => window.clearInterval(intervalId);
   }, [publishing]);
 
-  const handleSeatLayoutInputChange =
-    (shapeId: string, key: SeatLayoutFieldKey) => (event: ChangeEvent<HTMLInputElement>) => {
-      const rawValue = event.target.value;
-      setSeatLayoutInputs((current) => ({
-        ...current,
-        [key]: rawValue,
-      }));
-
-      if (rawValue.trim() === "") {
-        return;
-      }
-
-      updateSeatLayout(shapeId, {
-        [key]: normalizeSeatLayoutValue(rawValue, SEAT_LAYOUT_MINIMUMS[key]),
-      });
-    };
-
-  const handleSeatLayoutInputBlur = (shapeId: string, key: SeatLayoutFieldKey) => {
-    const normalizedValue = normalizeSeatLayoutValue(seatLayoutInputs[key], SEAT_LAYOUT_MINIMUMS[key]);
-    setSeatLayoutInputs((current) => ({
-      ...current,
-      [key]: String(normalizedValue),
-    }));
-    updateSeatLayout(shapeId, { [key]: normalizedValue });
-  };
-
   const seatDropdownOptions = useMemo(() => {
     if (!selectedShape) return { rows: [], seatNumbers: [] };
     const rowMap = new Map<string, boolean>();
     const noMap = new Map<string, boolean>();
+
     for (const seat of selectedShape.seats) {
       if (seat.rowName) {
         if (!rowMap.has(seat.rowName)) rowMap.set(seat.rowName, seat.hidden ?? false);
         else if (seat.hidden) rowMap.set(seat.rowName, true);
       }
       if (seat.seatNumber) {
-        // Evaluate the hidden status of the seat number specific to the current row if selectedSeat exists
         if (selectedSeat && seat.rowName === selectedSeat.rowName) {
           noMap.set(seat.seatNumber, seat.hidden ?? false);
         } else if (!selectedSeat || !noMap.has(seat.seatNumber)) {
@@ -306,25 +324,82 @@ export default function OrganizerSeatMapPage() {
         }
       }
     }
-    
+
     return {
       rows: Array.from(rowMap.entries())
         .map(([value, hidden]) => ({ value, hidden }))
         .sort((a, b) => a.value.localeCompare(b.value)),
       seatNumbers: Array.from(noMap.entries())
         .map(([value, hidden]) => ({ value, hidden }))
-        .sort((a, b) => parseInt(a.value) - parseInt(b.value)),
+        .sort((a, b) => Number(a.value) - Number(b.value)),
     };
-  }, [selectedShape]);
+  }, [selectedSeat, selectedShape]);
+
+  const handleSeatLayoutInputChange =
+    (shapeId: string, key: string) => (event: ChangeEvent<HTMLInputElement>) => {
+      const fieldKey = key as SeatLayoutFieldKey;
+      const rawValue = event.target.value;
+      setSeatLayoutInputs((current) => ({
+        ...current,
+        [fieldKey]: rawValue,
+      }));
+
+      if (rawValue.trim() === "") {
+        return;
+      }
+
+      updateSeatLayout(shapeId, {
+        [fieldKey]: normalizeSeatLayoutValue(rawValue, SEAT_LAYOUT_MINIMUMS[fieldKey]),
+      });
+    };
+
+  const handleSeatLayoutInputBlur = (shapeId: string, key: string) => {
+    const fieldKey = key as SeatLayoutFieldKey;
+    const normalizedValue = normalizeSeatLayoutValue(seatLayoutInputs[fieldKey], SEAT_LAYOUT_MINIMUMS[fieldKey]);
+    setSeatLayoutInputs((current) => ({
+      ...current,
+      [fieldKey]: String(normalizedValue),
+    }));
+    updateSeatLayout(shapeId, { [fieldKey]: normalizedValue });
+  };
 
   const handleShapeMetaChange = (
     shapeId: string,
-    patch: { name?: string; color?: string; ticketTypeId?: string },
+    patch: {
+      name?: string;
+      color?: string;
+      ticketTypeId?: string;
+      sectorType?: SeatMapEditorSectorType;
+      totalCapacity?: number;
+    },
   ) => {
+    const currentShape = document?.shapes.find((shape) => shape.id === shapeId);
+    if (!currentShape) {
+      return;
+    }
+
+    if (
+      patch.sectorType !== undefined &&
+      patch.sectorType !== currentShape.sectorType &&
+      publishedSectorIds.has(shapeId) &&
+      (currentShape.seats.length > 0 || (ticketTypeCountBySectorId.get(shapeId) ?? 0) > 0)
+    ) {
+      toast.error("Không thể đổi loại khu vực khi sector đã có ghế hoặc loại vé.");
+      return;
+    }
+
     updateShape(shapeId, (shape) => ({
       ...shape,
       ...(patch.name !== undefined ? { name: patch.name, label: patch.name } : {}),
       ...(patch.color !== undefined ? { color: patch.color } : {}),
+      ...(patch.sectorType !== undefined
+        ? {
+            sectorType: patch.sectorType,
+            seats: patch.sectorType === "STANDING" ? [] : shape.seats,
+            seatCount: patch.sectorType === "STANDING" ? 0 : shape.seatCount,
+          }
+        : {}),
+      ...(patch.totalCapacity !== undefined ? { totalCapacity: patch.totalCapacity } : {}),
       ...(patch.ticketTypeId !== undefined
         ? {
             ticketTypeId: patch.ticketTypeId || undefined,
@@ -332,6 +407,184 @@ export default function OrganizerSeatMapPage() {
           }
         : {}),
     }));
+  };
+
+  const handleAssignTicketTypeToSeats = (
+    shapeId: string,
+    scope: "seat" | "selected" | "all",
+    value: string,
+    ticketTypeId: string,
+  ) => {
+    if (!ticketTypeId) {
+      return;
+    }
+
+    const ticketType = ticketTypeById.get(ticketTypeId);
+    if (!ticketType || getTicketTypeSectorId(ticketType) !== shapeId) {
+      toast.error("Seat type không thuộc khu đang chọn.");
+      return;
+    }
+
+    updateShape(shapeId, (shape) => ({
+      ...shape,
+      seats: shape.seats.map((seat) => {
+        const targetSelectedSeatIds = value
+          ? value.split(",").map((seatId) => seatId.trim()).filter(Boolean)
+          : selectedSeatIds;
+        const matches =
+          scope === "all" ||
+          (scope === "seat" && seat.id === value) ||
+          (scope === "selected" && targetSelectedSeatIds.includes(seat.id));
+
+        if (!matches) {
+          return seat;
+        }
+
+        return {
+          ...seat,
+          ticketTypeId,
+          colorCode: ticketType.colorCode ?? seat.colorCode,
+        };
+      }),
+    }));
+  };
+
+  const hasProtectedSeats = (shapeId: string, seatIds?: string[]) => {
+    const shape = document?.shapes.find((item) => item.id === shapeId);
+    if (!shape) {
+      return false;
+    }
+    const targetSeatIds = seatIds ? new Set(seatIds) : null;
+    return shape.seats.some((seat) =>
+      (!targetSeatIds || targetSeatIds.has(seat.id)) &&
+      isProtectedSeatStatus(seat.inventoryStatus),
+    );
+  };
+
+  const hasCommittedSectorState = (shapeId: string) => {
+    const shape = document?.shapes.find((item) => item.id === shapeId);
+    return Boolean(
+      shape &&
+      (shape.seats.some((seat) => isProtectedSeatStatus(seat.inventoryStatus)) ||
+        (ticketTypeCountBySectorId.get(shapeId) ?? 0) > 0),
+    );
+  };
+
+  const handleToggleShapeVisibility = (shapeId: string) => {
+    if (publishedSectorIds.has(shapeId) && hasCommittedSectorState(shapeId)) {
+      toast.error("Không thể ẩn sector đã có loại vé hoặc ghế đã giữ/đã bán.");
+      return;
+    }
+    toggleShapeVisibility(shapeId);
+  };
+
+  const handleRemoveShape = (shapeId: string) => {
+    if (publishedSectorIds.has(shapeId) && hasCommittedSectorState(shapeId)) {
+      toast.error("Không thể xóa sector đã có loại vé hoặc ghế đã giữ/đã bán.");
+      return;
+    }
+    removeShape(shapeId);
+  };
+
+  const handleClearSeats = (shapeId: string) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể xóa ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    clearSeats(shapeId);
+  };
+
+  const handleHideSeat = (shapeId: string, seatId: string) => {
+    if (hasProtectedSeats(shapeId, [seatId])) {
+      toast.error("Không thể ẩn ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    hideSeat(shapeId, seatId);
+  };
+
+  const handleHideSelectedSeats = (shapeId: string, seatIds: string[]) => {
+    if (hasProtectedSeats(shapeId, seatIds)) {
+      toast.error("Không thể ẩn ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    hideSelectedSeats(shapeId, seatIds);
+  };
+
+  const handleUpdateSeat = (shapeId: string, seatId: string, patch: Parameters<typeof updateSeat>[2]) => {
+    if (hasProtectedSeats(shapeId, [seatId])) {
+      toast.error("Không thể sửa ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    updateSeat(shapeId, seatId, patch);
+  };
+
+  const handleMoveSeat = (shapeId: string, seatId: string, nextX: number, nextY: number) => {
+    if (hasProtectedSeats(shapeId, [seatId])) {
+      toast.error("Không thể di chuyển ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    moveSeat(shapeId, seatId, nextX, nextY);
+  };
+
+  const handleMoveSeatBlock = (shapeId: string, deltaX: number, deltaY: number) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể di chuyển nhóm ghế có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    moveSeatBlock(shapeId, deltaX, deltaY);
+  };
+
+  const handleResizeSeatBlock = (
+    shapeId: string,
+    previousBounds: Parameters<typeof resizeSeatBlock>[1],
+    nextBounds: Parameters<typeof resizeSeatBlock>[2],
+  ) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể resize nhóm ghế có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    resizeSeatBlock(shapeId, previousBounds, nextBounds);
+  };
+
+  const handleResizeShape = (
+    shapeId: string,
+    nextBounds: Parameters<typeof resizeShape>[1],
+    nextPoints?: Parameters<typeof resizeShape>[2],
+  ) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể resize sector có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    resizeShape(shapeId, nextBounds, nextPoints);
+  };
+
+  const handleTransformPolygon = (
+    shapeId: string,
+    nextBounds: Parameters<typeof transformPolygon>[1],
+    scaleX: number,
+    scaleY: number,
+  ) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể chỉnh sector có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    transformPolygon(shapeId, nextBounds, scaleX, scaleY);
+  };
+
+  const handleTranslateShapeBy = (shapeId: string, deltaX: number, deltaY: number) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể di chuyển sector có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    translateShapeBy(shapeId, deltaX, deltaY);
+  };
+
+  const handleRegenerateSeats = (shapeId: string) => {
+    if (hasProtectedSeats(shapeId)) {
+      toast.error("Không thể tạo lại ghế cho sector có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    regenerateSeats(shapeId);
   };
 
   const handlePublish = async () => {
@@ -343,11 +596,48 @@ export default function OrganizerSeatMapPage() {
       sectorCount: document.shapes.filter((shape) => shape.visible !== false).length,
       activeSeatCount: document.shapes
         .filter((shape) => shape.visible !== false)
-        .reduce(
-          (total, shape) => total + shape.seats.filter((seat) => seat.hidden !== true).length,
-          0,
-        ),
+        .reduce((total, shape) => total + shape.seats.filter((seat) => seat.hidden !== true).length, 0),
     };
+
+    const invalidStandingSector = document.shapes.find(
+      (shape) =>
+        shape.visible !== false &&
+        shape.sectorType === "STANDING" &&
+        (!shape.totalCapacity || shape.totalCapacity < 1),
+    );
+    if (invalidStandingSector) {
+      toast.error(`Khu "${invalidStandingSector.name}" cần nhập sức chứa tối đa.`);
+      return;
+    }
+
+    const unassignedSeat = document.shapes
+      .filter((shape) => shape.visible !== false && shape.sectorType === "SEATED")
+      .flatMap((shape) =>
+        shape.seats
+          .filter((seat) => seat.hidden !== true && !seat.ticketTypeId)
+          .map((seat) => ({ shape, seat })),
+      )[0];
+    if (unassignedSeat) {
+      toast.error(
+        `Ghế "${unassignedSeat.seat.label}" trong khu "${unassignedSeat.shape.name}" cần chọn seat type trước khi publish.`,
+      );
+      return;
+    }
+
+    const mismatchedTicketTypeSector = document.shapes
+      .filter((shape) => shape.visible !== false && shape.sectorType === "SEATED")
+      .flatMap((shape) =>
+        shape.seats
+          .filter((seat) => seat.hidden !== true && seat.ticketTypeId)
+          .map((seat) => ({ shape, seat, ticketType: ticketTypeById.get(seat.ticketTypeId || "") })),
+      )
+      .find(({ shape, ticketType }) => !ticketType || getTicketTypeSectorId(ticketType) !== shape.id);
+    if (mismatchedTicketTypeSector) {
+      toast.error(
+        `Seat type "${mismatchedTicketTypeSector.ticketType?.name ?? mismatchedTicketTypeSector.seat.ticketTypeId}" không thuộc khu "${mismatchedTicketTypeSector.shape.name}". Hãy chọn seat type đúng khu hoặc tạo lại seat type cho khu này.`,
+      );
+      return;
+    }
 
     const fetchPublishedSeatMap = async () => {
       const publishedSeatMap = await organizerWorkspaceService.getSeatMap(eventId);
@@ -363,6 +653,18 @@ export default function OrganizerSeatMapPage() {
       return looksUpdated ? publishedSeatMap : null;
     };
 
+    const refetchPublishedSeatMap = async () => {
+      for (let attempt = 0; attempt < PUBLISH_CONFIRM_RETRY_ATTEMPTS; attempt += 1) {
+        await wait(PUBLISH_CONFIRM_RETRY_DELAY_MS);
+        const publishedSeatMap = await fetchPublishedSeatMap();
+        if (publishedSeatMap) {
+          return publishedSeatMap;
+        }
+      }
+
+      return null;
+    };
+
     setPublishing(true);
     try {
       const payload = buildSeatMapPublishPayload(document, {
@@ -370,47 +672,68 @@ export default function OrganizerSeatMapPage() {
         backgroundPublicId: layout?.backgroundPublicId,
         mapConfig: layout?.mapConfig,
       });
-      await organizerWorkspaceService.publishSeatMap(eventId, payload);
-      let publishedSeatMap = await fetchPublishedSeatMap();
 
-      if (!publishedSeatMap) {
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          await wait(2000);
-          publishedSeatMap = await fetchPublishedSeatMap();
-          if (publishedSeatMap) {
-            break;
-          }
-        }
+      const payloadSectorCount = payload.sectors?.length ?? 0;
+      if (document.shapes.length > 0 && payloadSectorCount === 0) {
+        console.error("Seat map publish aborted because payload sectors are empty.", {
+          documentShapeCount: document.shapes.length,
+          expectedSummary,
+          payload,
+        });
+        toast.error("Publish aborted: editor has sectors but request payload is empty.");
+        return;
+      }
+
+      console.info("Publishing seat map.", {
+        documentShapeCount: document.shapes.length,
+        visibleShapeCount: expectedSummary.sectorCount,
+        payloadSectorCount,
+        payloadActiveSeatCount: payload.sectors?.reduce(
+          (total, sector) => total + (sector.seats ?? []).filter((seat) => seat.isActive !== false).length,
+          0,
+        ),
+      });
+
+      const publishedResponse = await organizerWorkspaceService.publishSeatMap(eventId, payload);
+      let publishedSeatMap: OrganizerSeatMap | null = publishedResponse;
+
+      const responseSummary = summarizeSeatMap(publishedResponse);
+      const responseLooksUpdated =
+        responseSummary.sectorCount === expectedSummary.sectorCount &&
+        responseSummary.activeSeatCount === expectedSummary.activeSeatCount;
+
+      if (!responseLooksUpdated) {
+        publishedSeatMap = await fetchPublishedSeatMap();
       }
 
       if (!publishedSeatMap) {
-        throw new Error("publish_pending");
+        publishedSeatMap = await refetchPublishedSeatMap();
       }
 
+      if (!publishedSeatMap) {
+        console.warn("Seat map publish response did not match editor state.", {
+          expectedSummary,
+          responseSummary,
+          payloadSectorCount,
+          responseSectorCount: publishedResponse.sectors?.length ?? 0,
+          response: publishedResponse,
+        });
+        toast.warning("Publish completed, but the server response does not include the expected sectors. Draft kept locally.");
+        return;
+      }
+
+      window.localStorage.removeItem(createEditorDraftKey(eventId));
       setSeatMap(publishedSeatMap);
-      toast.success("Đã publish seat map.");
-    } catch {
-      toast.info("Backend đang publish. Đang đợi đồng bộ seat map...");
-
-      try {
-        let publishedSeatMap = null;
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          await wait(2000);
-          publishedSeatMap = await fetchPublishedSeatMap();
-          if (publishedSeatMap) {
-            break;
-          }
-        }
-
-        if (publishedSeatMap) {
-          setSeatMap(publishedSeatMap);
-          toast.success("Đã publish seat map.");
-        } else {
-          toast.error("Không thể xác nhận publish seat map. Hãy kiểm tra lại sau.");
-        }
-      } catch {
-        toast.error("Không thể xác nhận publish seat map. Hãy kiểm tra lại sau.");
+      setUnsavedChanges(false);
+      toast.success("Seat map published.");
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status && status >= 400 && status < 500) {
+        toast.error(getRequestErrorMessage(error));
+        return;
       }
+
+      toast.error(getRequestErrorMessage(error));
     } finally {
       setPublishing(false);
     }
@@ -421,9 +744,7 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
-    const blob = new Blob([exportEditorDocument(document)], {
-      type: "application/json;charset=utf-8",
-    });
+    const blob = new Blob([exportEditorDocument(document)], { type: "application/json;charset=utf-8" });
     const objectUrl = window.URL.createObjectURL(blob);
     const anchor = window.document.createElement("a");
     anchor.href = objectUrl;
@@ -448,574 +769,156 @@ export default function OrganizerSeatMapPage() {
       const rawValue = await file.text();
       const importedDocument = importEditorDocument(rawValue);
       if (!importedDocument) {
-        toast.error("File JSON không đúng định dạng seat map editor.");
+        toast.error("Invalid seat map editor JSON file.");
         return;
       }
 
       replaceDocument(importedDocument);
       setUnsavedChanges(true);
-      toast.success("Đã import seat map JSON vào editor.");
+      toast.success("Seat map JSON imported.");
     } catch {
-      toast.error("Không thể đọc file JSON.");
+      toast.error("Cannot read JSON file.");
     }
   };
+
+  const handleClearDraft = () => {
+    clearDraft();
+    setUnsavedChanges(false);
+  };
+
+  const handleDeleteSelected = () => {
+    selectedShapeIds.forEach(handleRemoveShape);
+  };
+
+  const handleCreateSeatTypeForShape = (shapeId: string) => {
+    if (!eventId) {
+      return;
+    }
+    if (!publishedSectorIds.has(shapeId)) {
+      toast.error("Hãy publish sector này trước khi tạo loại vé cho khu đó.");
+      return;
+    }
+
+    navigate(`/organizer/events/${eventId}/ticket-types?mode=SEAT_MAP&sectorId=${shapeId}&create=1`);
+  };
+
+  const headerActions = (
+    <>
+      <button type="button" className="seat-map-editor-button danger" onClick={handleClearDraft} disabled={!hasDraft}>
+        Clear Draft
+      </button>
+      <button
+        type="button"
+        className="seat-map-editor-button primary"
+        onClick={handlePublish}
+        disabled={publishing || !document}
+      >
+        {publishing ? `Publishing ${formatElapsedTime(publishElapsedSeconds)}` : "Publish"}
+      </button>
+    </>
+  );
 
   return (
     <OrganizerLayout
       title="Seat map"
-      description="Canvas editor để organizer vẽ shape và sinh seat overlay trên ảnh reference"
+      description="Design seating sections, manage seats, and publish the interactive map for buyers."
+      actions={headerActions}
+      hideTopBar
     >
-      {eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
+      <div className="seat-map-editor-shell">
+        {eventId ? (
+          <div className="seat-map-editor-nav-strip">
+            <OrganizerEventWorkspaceNav eventId={eventId} />
+          </div>
+        ) : null}
 
-      {loading ? (
-        <section className="organizer-panel organizer-empty-state">
-          <div className="loading-spinner" />
-          <p>Đang tải editor seat map</p>
-        </section>
-      ) : !document ? (
-        <section className="organizer-panel organizer-empty-state">
-          <p>
-            Sự kiện này chưa có layout hoặc seat map khả dụng. Hãy tạo layout và gắn ảnh reference
-            trước khi sử dụng shape và seat overlay.
-          </p>
-        </section>
-      ) : (
-        <>
-          <section className="organizer-seat-map-editor-layout">
-            <div className="organizer-seat-map-left-col">
-              <section className="organizer-panel organizer-seat-map-editor-panel">
-                <div className="organizer-panel-heading organizer-seat-map-editor-heading">
-                  <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
-                    <p className="organizer-panel-title-pill">Shape and seat canvas (Zoom: {Math.round(viewport.scale * 100)}%)</p>
-                  </div>
-                </div>
-
-                <div className="organizer-seat-map-stage-frame">
-                  <SeatMapEditorCanvas
-                    document={document}
-                    viewport={viewport}
-                    referenceImageVisible={referenceImageVisible}
-                    selectedShapeIds={selectedShapeIds}
-                    selectedSeatId={selectedSeatId}
-                    onClearSelection={clearSelection}
-                    onMoveSeat={moveSeat}
-                    onMoveSeatBlock={moveSeatBlock}
-                    onResizeSeatBlock={resizeSeatBlock}
-                    onResizeShape={resizeShape}
-                    onSelectSeat={selectSeat}
-                    onSelectShape={selectShape}
-                    onTransformPolygon={transformPolygon}
-                    onTranslateShape={translateShapeBy}
-                    onViewportChange={setViewport}
-                  />
-                </div>
-              </section>
-
-              <section className="organizer-seat-map-detail-panel">
-                <div className="organizer-seat-map-detail-grid">
-                  <section className="organizer-seat-map-detail-card organizer-seat-map-detail-card-wide">
-                    <div className="organizer-seat-map-sidebar-section-header">
-                      <SquareStack size={18} />
-                      <strong>Selected shape</strong>
-                    </div>
-
-                    {selectedShape ? (
-                      <>
-                        <div className="organizer-seat-map-detail-info">
-                          <h3>{selectedShape.name}</h3>
-                          <div className="organizer-seat-map-detail-meta-row">
-                            <span>{selectedShape.shapeType}</span>
-                            <span>
-                              {Math.round(selectedShape.bounds.width)} × {Math.round(selectedShape.bounds.height)}
-                            </span>
-                            <span>{selectedShape.visible ? "Visible" : "Hidden"}</span>
-                            <span>{selectedShape.locked ? "Locked" : "Unlocked"}</span>
-                            <span>{selectedShape.seatCount} seats</span>
-                            <span>{selectedShape.seats.filter((s) => s.hidden).length} hidden</span>
-                            <span>{selectedShape.ticketTypeName ?? "No ticket type"}</span>
-                          </div>
-                        </div>
-
-                        <div className="organizer-seat-map-detail-actions">
-                          <button
-                            type="button"
-                            className="btn organizer-inline-button organizer-seat-map-zoom-button"
-                            onClick={() => toggleShapeVisibility(selectedShape.id)}
-                          >
-                            {selectedShape.visible ? <EyeOff size={16} /> : <Eye size={16} />}
-                            {selectedShape.visible ? "Hide" : "Show"}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn organizer-inline-button organizer-seat-map-zoom-button"
-                            onClick={() => toggleShapeLocked(selectedShape.id)}
-                          >
-                            {selectedShape.locked ? <LockOpen size={16} /> : <Lock size={16} />}
-                            {selectedShape.locked ? "Unlock" : "Lock"}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn organizer-inline-button organizer-seat-map-zoom-button"
-                            onClick={() => moveShapeZIndex(selectedShape.id, "down")}
-                          >
-                            <ArrowDownToLine size={16} />
-                            Back
-                          </button>
-                          <button
-                            type="button"
-                            className="btn organizer-inline-button organizer-seat-map-zoom-button"
-                            onClick={() => moveShapeZIndex(selectedShape.id, "up")}
-                          >
-                            <ArrowUpToLine size={16} />
-                            Front
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="organizer-seat-map-detail-empty">
-                        Chon mot shape tren canvas hoac sidebar de bat dau sinh seat overlay.
-                      </p>
-                    )}
-                  </section>
-
-                  {selectedShape ? (
-                    <section className="organizer-seat-map-detail-card organizer-seat-map-detail-card-wide">
-                      <div className="organizer-seat-map-sidebar-section-header">
-                        <Layers3 size={18} />
-                        <strong>Seat generation</strong>
-                      </div>
-
-                      <div className="organizer-seat-map-detail-form-row">
-                        {(["rows", "seatsPerRow", "gapX", "gapY", "paddingX", "paddingY", "seatRadius", "seatStartNumber"] as SeatLayoutFieldKey[]).map(
-                          (key) => (
-                            <label key={key} className="organizer-seat-map-form-field">
-                              <span>{key}</span>
-                              <input
-                                type="number"
-                                min={SEAT_LAYOUT_MINIMUMS[key]}
-                                value={seatLayoutInputs[key]}
-                                onChange={handleSeatLayoutInputChange(selectedShape.id, key)}
-                                onBlur={() => handleSeatLayoutInputBlur(selectedShape.id, key)}
-                              />
-                            </label>
-                          ),
-                        )}
-                      </div>
-
-                      <div className="organizer-seat-map-detail-actions">
-                        <button
-                          type="button"
-                          className="btn organizer-inline-button organizer-seat-map-zoom-button"
-                          onClick={() => regenerateSeats(selectedShape.id)}
-                        >
-                          <Plus size={16} />
-                          Generate seats
-                        </button>
-                        <button
-                          type="button"
-                          className="btn organizer-inline-button organizer-seat-map-zoom-button"
-                          onClick={() => restoreAllSeats(selectedShape.id)}
-                        >
-                          <RotateCcw size={16} />
-                          Restore hidden
-                        </button>
-                        <button
-                          type="button"
-                          className="btn organizer-inline-button organizer-seat-map-danger-button"
-                          onClick={() => clearSeats(selectedShape.id)}
-                        >
-                          <Trash2 size={16} />
-                          Clear seats
-                        </button>
-                      </div>
-                    </section>
-                  ) : null}
-
-                </div>
-              </section>
-            </div>
-
-            <aside className="organizer-panel organizer-seat-map-sidebar">
-              <div className="organizer-panel-heading">
-                <p className="organizer-panel-title-pill">Control panel</p>
-              </div>
-
-              <section className="organizer-seat-map-sidebar-section">
-                <div className="organizer-seat-map-sidebar-section-header">
-                  <MousePointer2 size={18} />
-                  <strong>Workspace tools</strong>
-                </div>
-
-                <input
-                  ref={importFileInputRef}
-                  type="file"
-                  accept="application/json,.json"
-                  style={{ display: "none" }}
-                  onChange={handleImportJson}
-                />
-
-                <div className="organizer-seat-map-canvas-actions" style={{ justifyContent: "flex-start" }}>
-                  <button
-                    type="button"
-                    className={`btn organizer-inline-button organizer-seat-map-toolbar-button ${activeTool === "rectangle" ? "is-active" : ""}`}
-                    onClick={() => {
-                      setActiveTool("rectangle");
-                      addRectangle();
-                    }}
-                  >
-                    <Square size={16} />
-                    Rectangle
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`btn organizer-inline-button organizer-seat-map-toolbar-button ${activeTool === "polygon" ? "is-active" : ""}`}
-                    onClick={() => {
-                      setActiveTool("polygon");
-                      addPolygon();
-                    }}
-                  >
-                    <Pentagon size={16} />
-                    Polygon
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={() => {
-                      setActiveTool("polygon");
-                      addTrapezoid();
-                    }}
-                  >
-                    <Pentagon size={16} />
-                    Trapezoid
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={() => {
-                      setActiveTool("polygon");
-                      addDiamond();
-                    }}
-                  >
-                    <Diamond size={16} />
-                    Diamond
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={() => {
-                      setActiveTool("polygon");
-                      addHexagon();
-                    }}
-                  >
-                    <Hexagon size={16} />
-                    Hexagon
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={() => {
-                      setActiveTool("rectangle");
-                      addCircle();
-                    }}
-                  >
-                    <Circle size={16} />
-                    Circle
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={() => {
-                      setActiveTool("rectangle");
-                      addEllipse();
-                    }}
-                  >
-                    <Ellipsis size={16} />
-                    Ellipse
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={() => setReferenceImageVisible((current) => !current)}
-                  >
-                    {referenceImageVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                    {referenceImageVisible ? "Hide reference" : "Show reference"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={resetViewport}
-                  >
-                    <Move size={16} />
-                    Reset view
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={handleImportJsonClick}
-                  >
-                    <Upload size={16} />
-                    Import JSON
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={handleExportJson}
-                    disabled={!document}
-                  >
-                    <Download size={16} />
-                    Export JSON
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={clearDraft}
-                    disabled={!hasDraft}
-                  >
-                    <Trash2 size={16} />
-                    Xoa draft local
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={() => {
-                      toast.success("Đã ghi nhận toàn bộ chỉnh sửa cục bộ.");
-                      setUnsavedChanges(false);
-                    }}
-                    disabled={!unsavedChanges}
-                  >
-                    <Save size={16} />
-                    Lưu
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-toolbar-button"
-                    onClick={handlePublish}
-                    disabled={publishing || unsavedChanges}
-                  >
-                    <Plus size={16} />
-                    {publishing
-                      ? `Publishing... ${formatElapsedTime(publishElapsedSeconds)}`
-                      : "Publish"}
-                  </button>
-                </div>
-              </section>
-
-              <section className="organizer-seat-map-sidebar-section">
-                <div className="organizer-seat-map-sidebar-section-header">
-                  <Layers3 size={18} />
-                  <strong>Shape layers</strong>
-                </div>
-
-                {!document.shapes.length ? (
-                  <div className="organizer-empty-state compact organizer-seat-map-empty-layers">
-                    <p>Chưa có shape nào. Hãy thêm rectangle, polygon hoặc các preset khác để bắt đầu vẽ sector.</p>
-                  </div>
-                ) : (
-                  <div className="organizer-seat-map-layer-list">
-                    {document.shapes.map((shape) => {
-                      const isActive = selectedShapeIds.includes(shape.id);
-
-                      return (
-                        <div
-                          key={shape.id}
-                          className={`organizer-seat-map-layer-item ${isActive ? "is-active" : ""}`}
-                        >
-                          <button
-                            type="button"
-                            className="organizer-seat-map-layer-main"
-                            onClick={(event) =>
-                              selectShape(shape.id, event.ctrlKey || event.metaKey || event.shiftKey)
-                            }
-                          >
-                            <span
-                              className="organizer-seat-map-layer-swatch"
-                              style={{ backgroundColor: shape.color, opacity: shape.visible ? 1 : 0.3 }}
-                            />
-
-                            <span className="organizer-seat-map-layer-copy">
-                              <strong>{shape.name}</strong>
-                              <span>
-                                {shape.shapeType} · {shape.seatCount} seats · z{shape.zIndex}
-                              </span>
-                            </span>
-                          </button>
-
-                          <div className="organizer-seat-map-layer-actions">
-                            <button
-                              type="button"
-                              className="organizer-seat-map-layer-edit"
-                              aria-label={`Edit sector ${shape.name}`}
-                              title="Edit sector"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                selectShape(shape.id, false);
-                                setEditingShapeId((current) => (current === shape.id ? null : shape.id));
-                              }}
-                            >
-                              <Pencil size={14} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="organizer-seat-map-layer-delete"
-                              aria-label={`Delete sector ${shape.name}`}
-                              title="Delete sector"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                if (editingShapeId === shape.id) {
-                                  setEditingShapeId(null);
-                                }
-                                removeShape(shape.id);
-                              }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-
-                          {editingShapeId === shape.id ? (
-                            <div className="organizer-seat-map-layer-editor">
-                              <label className="organizer-seat-map-form-field">
-                                <span>Sector name</span>
-                                <input
-                                  type="text"
-                                  value={shape.name}
-                                  onChange={(event) =>
-                                    handleShapeMetaChange(shape.id, { name: event.target.value })
-                                  }
-                                />
-                              </label>
-
-                              <label className="organizer-seat-map-form-field">
-                                <span>Sector color</span>
-                                <input
-                                  type="color"
-                                  value={shape.color}
-                                  onChange={(event) =>
-                                    handleShapeMetaChange(shape.id, { color: event.target.value })
-                                  }
-                                />
-                              </label>
-
-                              <label className="organizer-seat-map-form-field">
-                                <span>Ticket type</span>
-                                <select
-                                  value={shape.ticketTypeId ?? ""}
-                                  onChange={(event) =>
-                                    handleShapeMetaChange(shape.id, {
-                                      ticketTypeId: event.target.value,
-                                    })
-                                  }
-                                >
-                                  <option value="">Select Ticket</option>
-                                  {ticketTypes.map((ticketType) => (
-                                    <option key={ticketType.id} value={ticketType.id}>
-                                      {ticketType.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-
-              <section className="organizer-seat-map-sidebar-section">
-                <div className="organizer-seat-map-sidebar-section-header">
-                  <MousePointer2 size={18} />
-                  <strong>Selected seat</strong>
-                </div>
-
-                <div className="organizer-seat-map-detail-info" style={{ marginBottom: "1rem" }}>
-                  <div className="organizer-seat-map-detail-meta-row">
-                    <span>Sector: {selectedShape?.name || "-"}</span>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "1rem" }}>
-                  <label className="organizer-seat-map-form-field">
-                    <span>Row</span>
-                    <select
-                      value={selectedSeat?.rowName || ""}
-                      onChange={(e) => selectedShape && selectedSeat && updateSeat(selectedShape.id, selectedSeat.id, { rowName: e.target.value })}
-                    >
-                      <option value="" disabled>--Select Row--</option>
-                      {seatDropdownOptions.rows.map((row) => (
-                        <option key={row.value} value={row.value}>
-                          {row.value}{row.hidden ? " - hide" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="organizer-seat-map-form-field">
-                    <span>Seat No</span>
-                    <select
-                      value={selectedSeat?.seatNumber || ""}
-                      onChange={(e) => selectedShape && selectedSeat && updateSeat(selectedShape.id, selectedSeat.id, { seatNumber: e.target.value })}
-                    >
-                      <option value="" disabled>--Select No--</option>
-                      {seatDropdownOptions.seatNumbers.map((no) => (
-                        <option key={no.value} value={no.value}>
-                          {no.value}{no.hidden ? " - hide" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="organizer-seat-map-form-field">
-                    <span>Seat type</span>
-                    <select
-                      value={selectedSeat?.seatType || "Standard"}
-                      onChange={(e) => selectedShape && selectedSeat && updateSeat(selectedShape.id, selectedSeat.id, { seatType: e.target.value })}
-                    >
-                      <option value="Standard">Standard</option>
-                      <option value="VIP">VIP</option>
-                      <option value="Accessible">Accessible</option>
-                      <option value="Companion">Companion</option>
-                    </select>
-                  </label>
-                </div>
-
-                <div className="organizer-seat-map-canvas-actions" style={{ justifyContent: "flex-start" }}>
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-danger-button"
-                    onClick={() => selectedShape && selectedSeat && hideSeat(selectedShape.id, selectedSeat.id)}
-                    disabled={!selectedShape || !selectedSeat}
-                  >
-                    <EyeOff size={16} />
-                    Hide seat
-                  </button>
-                  <button
-                    type="button"
-                    className="btn organizer-inline-button organizer-seat-map-zoom-button"
-                    onClick={() => selectedShape && selectedSeat && restoreSeat(selectedShape.id, selectedSeat.id)}
-                    disabled={!selectedShape || !selectedSeat}
-                  >
-                    <Eye size={16} />
-                    Show seat
-                  </button>
-                </div>
-              </section>
-            </aside>
+        {loading ? (
+          <section className="organizer-panel organizer-empty-state">
+            <div className="loading-spinner" />
+            <p>Loading seat map editor...</p>
           </section>
-        </>
-      )}
+        ) : !document ? (
+          <section className="organizer-panel organizer-empty-state">
+            <p>This event does not have a layout or seat map yet. Create a layout before editing seats.</p>
+          </section>
+        ) : (
+          <main className="seat-map-editor-main">
+            <SeatMapCanvasShell
+              document={document}
+              viewport={viewport}
+              referenceImageVisible={referenceImageVisible}
+              activeTool={activeTool}
+              selectedShapeIds={selectedShapeIds}
+              selectedSeatId={selectedSeatId}
+              selectedSeatIds={selectedSeatIds}
+              onClearSelection={clearSelection}
+              onMoveSeat={handleMoveSeat}
+              onMoveSeatBlock={handleMoveSeatBlock}
+              onResizeSeatBlock={handleResizeSeatBlock}
+              onResizeShape={handleResizeShape}
+              onSelectSeat={selectSeat}
+              onSelectShape={selectShape}
+              onTransformPolygon={handleTransformPolygon}
+              onTranslateShape={handleTranslateShapeBy}
+              onViewportChange={setViewport}
+              onDeleteSelected={handleDeleteSelected}
+              onSetActiveTool={setActiveTool}
+              onToggleReference={() => setReferenceImageVisible((current) => !current)}
+              onUndo={undo}
+              onRedo={redo}
+              canUndo={canUndo}
+              canRedo={canRedo}
+            />
+
+            <SeatMapRightSidebar
+              document={document}
+              selectedShape={selectedShape}
+              selectedSeat={selectedSeat}
+              selectedSeats={selectedSeats}
+              selectedShapeIds={selectedShapeIds}
+              editingShapeId={editingShapeId}
+              seatLayoutInputs={seatLayoutInputs}
+              seatDropdownOptions={seatDropdownOptions}
+              ticketTypes={ticketTypes}
+              importFileInputRef={importFileInputRef}
+              onImportJson={handleImportJson}
+              onImportJsonClick={handleImportJsonClick}
+              onExportJson={handleExportJson}
+              onSetActiveTool={setActiveTool}
+              onAddTrapezoid={addTrapezoid}
+              onAddDiamond={addDiamond}
+              onAddHexagon={addHexagon}
+              onAddCircle={addCircle}
+              onAddEllipse={addEllipse}
+              onAddRoundedBlock={addRoundedBlock}
+              onAddVipLeftCurved={addVipLeftCurved}
+              onAddVipRightCurved={addVipRightCurved}
+              onAddBottomRingSection={addBottomRingSection}
+              onAddFanSection={addFanSection}
+              onAddLeftSideRing={addLeftSideRing}
+              onAddRightSideRing={addRightSideRing}
+              onSelectShape={selectShape}
+              onToggleShapeVisibility={handleToggleShapeVisibility}
+              onToggleShapeLocked={toggleShapeLocked}
+              onRemoveShape={handleRemoveShape}
+              onSetEditingShapeId={setEditingShapeId}
+              onShapeMetaChange={handleShapeMetaChange}
+              onSeatLayoutInputChange={handleSeatLayoutInputChange}
+              onSeatLayoutInputBlur={handleSeatLayoutInputBlur}
+              onGenerateSeats={handleRegenerateSeats}
+              onRestoreHiddenSeats={restoreAllSeats}
+              onClearSeats={handleClearSeats}
+              onUpdateSeat={handleUpdateSeat}
+              onAssignTicketTypeToSeats={handleAssignTicketTypeToSeats}
+              onHideSeat={handleHideSeat}
+              onHideSelectedSeats={handleHideSelectedSeats}
+              onRestoreSeat={restoreSeat}
+              onRestoreSelectedSeats={restoreSelectedSeats}
+              onCreateSeatTypeForShape={handleCreateSeatTypeForShape}
+            />
+          </main>
+        )}
+      </div>
     </OrganizerLayout>
   );
 }

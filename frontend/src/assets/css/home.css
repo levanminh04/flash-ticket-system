@@ -679,6 +679,13 @@
   color: #0f172a;
 }
 
+.dropdown-item-muted,
+.dropdown-item-muted:hover {
+  cursor: default;
+  background: #f8fafc;
+  color: #64748b;
+}
+
 .dropdown-item svg {
   flex-shrink: 0;
   color: #64748b;
@@ -871,8 +878,191 @@
 }
 
 .home-main-shell {
+  display: flex;
+  flex-direction: column;
   padding-top: 0;
   padding-bottom: 60px;
+}
+
+.home-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.home-editor-panel {
+  width: min(720px, 100%);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  box-shadow: -28px 0 80px rgba(15, 23, 42, 0.28);
+}
+
+.home-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.home-editor-header h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.home-editor-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.home-editor-body {
+  flex: 1;
+  overflow: auto;
+  padding: 22px 24px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.home-editor-body::-webkit-scrollbar {
+  display: none;
+}
+
+.home-editor-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 0 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.home-editor-section h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.home-editor-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.home-editor-field-full {
+  grid-column: 1 / -1;
+}
+
+.home-editor-field span {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.home-editor-field input,
+.home-editor-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+}
+
+.home-editor-field input {
+  height: 42px;
+  padding: 0 12px;
+}
+
+.home-editor-field textarea {
+  resize: vertical;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+.home-editor-field input:focus,
+.home-editor-field textarea:focus {
+  border-color: #cc9900;
+  box-shadow: 0 0 0 3px rgba(204, 153, 0, 0.16);
+}
+
+.home-editor-order-list {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.home-editor-order-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.home-editor-order-item span {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.home-editor-order-item div,
+.home-editor-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.home-editor-order-item button,
+.home-editor-actions button {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.home-editor-order-item button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.home-editor-actions {
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.home-editor-actions button:last-child {
+  border-color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
 }
 
 .home-hero {
@@ -2492,6 +2682,10 @@
     grid-template-columns: 1fr;
   }
 
+  .home-editor-section {
+    grid-template-columns: 1fr;
+  }
+
   .past-event-gallery {
     grid-auto-columns: minmax(180px, 210px);
     gap: 14px;
@@ -2558,6 +2752,16 @@
     flex-direction: column;
   }
 
+  .home-editor-panel {
+    width: 100%;
+  }
+
+  .home-editor-actions,
+  .home-editor-order-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .hero-event-stage {
     min-height: 500px;
     padding: 20px;
@@ -2578,4 +2782,5 @@
   .footer-newsletter input {
     width: 100%;
   }
+
 }

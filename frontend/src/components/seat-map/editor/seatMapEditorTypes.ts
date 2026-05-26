@@ -1,4 +1,17 @@
-export type SeatMapEditorShapeType = "rectangle" | "polygon" | "circle" | "ellipse";
+export type SeatMapEditorShapeType =
+  | "rectangle"
+  | "rect"
+  | "roundedRect"
+  | "polygon"
+  | "path"
+  | "ringSection"
+  | "fan"
+  | "stage"
+  | "foh"
+  | "circle"
+  | "ellipse";
+export type SeatMapEditorSectorType = "SEATED" | "STANDING";
+export type SeatMapEditorSeatLayoutMode = "grid" | "arc" | "fan";
 export type SeatMapEditorTool = "select" | "rectangle" | "polygon";
 
 export interface SeatMapEditorBounds {
@@ -9,6 +22,7 @@ export interface SeatMapEditorBounds {
 }
 
 export interface SeatMapEditorSeatLayoutConfig {
+  mode?: SeatMapEditorSeatLayoutMode;
   rows: number;
   seatsPerRow: number;
   gapX: number;
@@ -27,6 +41,8 @@ export interface SeatMapEditorSeat {
   label: string;
   rowName?: string;
   seatNumber?: string;
+  ticketTypeId?: string;
+  colorCode?: string;
   seatType?: string; // Standard, VIP, etc
   x: number;
   y: number;
@@ -42,7 +58,10 @@ export interface SeatMapEditorShape {
   code?: string;
   ticketTypeId?: string;
   ticketTypeName?: string;
+  sectorType: SeatMapEditorSectorType;
+  totalCapacity?: number;
   shapeType: SeatMapEditorShapeType;
+  mapData?: Record<string, unknown>;
   color: string;
   bounds: SeatMapEditorBounds;
   points: number[];

@@ -1,6 +1,17 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
-import { Bot, LoaderCircle, MessageCircle, SendHorizontal, X } from "lucide-react";
+import {
+  CalendarDays,
+  Flame,
+  LoaderCircle,
+  MapPin,
+  MessageCircle,
+  ReceiptText,
+  SendHorizontal,
+  Ticket,
+  X,
+} from "lucide-react";
+import { RiRobot2Fill } from "react-icons/ri";
 import { chatService } from "../../services/chatService";
 
 type ChatMessage = {
@@ -11,6 +22,39 @@ type ChatMessage = {
 };
 
 export const CHATBOT_PROMPT_EVENT = "flashTicket:chatbotPrompt";
+
+const quickActions = [
+  {
+    label: "Sự kiện HOT",
+    prompt: "Hiển thị các sự kiện HOT đang có trong hệ thống.",
+    icon: Flame,
+  },
+  {
+    label: "Sắp diễn ra",
+    prompt: "Liệt kê các sự kiện sắp diễn ra gần nhất.",
+    icon: CalendarDays,
+  },
+  {
+    label: "Tìm theo địa điểm",
+    prompt: "Tìm sự kiện theo địa điểm và thành phố đang có trong database.",
+    icon: MapPin,
+  },
+  {
+    label: "Loại vé còn bán",
+    prompt: "Cho tôi xem các sự kiện còn loại vé đang mở bán.",
+    icon: Ticket,
+  },
+  {
+    label: "Kiểm tra đơn vé",
+    prompt: "Kiểm tra các đơn vé gần đây của tôi.",
+    icon: ReceiptText,
+  },
+  {
+    label: "Hướng dẫn đặt vé",
+    prompt: "Hướng dẫn tôi cách tìm sự kiện, chọn vé và thanh toán.",
+    icon: MessageCircle,
+  },
+];
 
 function generateSessionId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -126,14 +170,38 @@ export default function FloatingChatbot() {
 
           <div className="floating-chatbot-messages">
             {messages.map((msg) => (
-              <article key={msg.id} className={`floating-msg floating-msg--${msg.role}`}>
+              <article
+                key={msg.id}
+                className={`floating-msg floating-msg--${msg.role}${
+                  msg.id === "welcome" ? " floating-msg--welcome" : ""
+                }`}
+              >
                 {msg.role === "assistant" ? (
                   <span className="floating-msg-icon">
-                    <Bot size={14} />
+                    <RiRobot2Fill size={20} color="#10B981" />
                   </span>
                 ) : null}
                 <div className="floating-msg-body">
                   <p>{msg.text}</p>
+                  {msg.id === "welcome" ? (
+                    <div className="floating-chatbot-options">
+                      {quickActions.map((action) => {
+                        const Icon = action.icon;
+
+                        return (
+                          <button
+                            key={action.label}
+                            type="button"
+                            onClick={() => void send(action.prompt)}
+                            disabled={sending}
+                          >
+                            <Icon size={16} />
+                            <span>{action.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <span className="floating-msg-time">{formatChatTime(msg.createdAt)}</span>
                 </div>
               </article>
@@ -141,7 +209,7 @@ export default function FloatingChatbot() {
             {sending ? (
               <div className="floating-msg floating-msg--assistant">
                 <span className="floating-msg-icon">
-                  <Bot size={14} />
+                  <RiRobot2Fill size={20} color="#10B981" />
                 </span>
                 <div className="floating-msg-body">
                   <p className="floating-msg-loading">

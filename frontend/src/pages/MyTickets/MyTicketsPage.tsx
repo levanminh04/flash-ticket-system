@@ -222,9 +222,14 @@ export default function MyTicketsPage() {
               <div className="modal-inline-loading"><div className="loading-spinner"></div><span>Đang tải chi tiết vé mới nhất...</span></div>
             ) : null}
             <h2>{selectedTicket.eventTitle}</h2>
-            <p className="modal-meta">{formatDate(selectedTicket.eventStartDatetime)}{selectedTicket.eventVenueName ? ` • ${selectedTicket.eventVenueName}` : ""}</p>
+            <p className="modal-meta">
+              <span style={{ opacity: 0.8 }}>Thời gian sự kiện: </span>
+              {formatDate(selectedTicket.eventStartDatetime)}
+              {selectedTicket.eventVenueName ? ` • ${selectedTicket.eventVenueName}` : ""}
+            </p>
             <div className="ticket-detail-info">
               <div className="info-row"><span className="label">Mã vé</span><span className="value">{selectedTicket.ticketCode}</span></div>
+              <div className="info-row"><span className="label">Thời gian mua</span><span className="value">{formatDate(selectedTicket.createdAt)}</span></div>
               <div className="info-row"><span className="label">Loại vé</span><span className="value">{selectedTicket.ticketTypeName}</span></div>
               {selectedTicket.seatLabel ? <div className="info-row"><span className="label">Ghế</span><span className="value">{selectedTicket.seatLabel}</span></div> : null}
               {selectedTicket.holderName ? <div className="info-row"><span className="label">Người sở hữu</span><span className="value">{selectedTicket.holderName}</span></div> : null}

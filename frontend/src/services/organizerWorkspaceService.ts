@@ -64,6 +64,7 @@ export interface OrganizerEventSchedule {
 export interface OrganizerEventConfig {
   minTicketsPerOrder?: number;
   maxTicketsPerOrder?: number;
+  maxTicketsPerBuyer?: number;
   visibility?: OrganizerVisibility | string;
 }
 
@@ -83,14 +84,19 @@ export interface OrganizerMiniOrganizer {
 
 export interface OrganizerPublicTicketType {
   id: string;
+  eventSectorId?: string | null;
+  sectorId?: string | null;
   name: string;
   description?: string;
   price: number;
-  originalPrice?: number;
+  originalPrice?: number | null;
   currency?: string;
   quantityTotal?: number;
   quantityAvailable?: number;
+  quantityReserved?: number;
   maxPerOrder?: number;
+  maxPerBuyer?: number;
+  inventoryMode?: string;
   saleStartDatetime?: string;
   saleEndDatetime?: string;
   seatSelectionEnabled?: boolean;
@@ -157,6 +163,8 @@ export interface OrganizerTicketType {
   quantityAvailable?: number;
   quantityReserved?: number;
   maxPerOrder?: number;
+  maxPerBuyer?: number;
+  inventoryMode?: string;
   seatSelectionEnabled?: boolean;
   saleStartDatetime?: string;
   saleEndDatetime?: string;
@@ -222,9 +230,13 @@ export interface OrganizerSeatMap {
 export interface OrganizerSeatSector {
   id: string;
   name: string;
+  code?: string | null;
   sectorType?: string;
+  totalCapacity?: number;
   mapData?: Record<string, unknown>;
   colorCode?: string;
+  displayOrder?: number | null;
+  isActive?: boolean | null;
   seatsData?: OrganizerSeat[];
 }
 
@@ -235,6 +247,8 @@ export interface OrganizerSeat {
   seatLabel?: string;
   coordX?: number;
   coordY?: number;
+  ticketTypeId?: string | null;
+  colorCode?: string | null;
   seatType?: string;
   isActive?: boolean;
   inventoryStatus?: string;
@@ -247,6 +261,8 @@ export interface OrganizerSeatPublishPayload {
   seatLabel?: string;
   coordX: number;
   coordY: number;
+  ticketTypeId?: string;
+  colorCode?: string;
   seatType?: string;
   isActive?: boolean;
   coordMetadata?: Record<string, unknown>;
@@ -257,6 +273,7 @@ export interface OrganizerSeatSectorPublishPayload {
   name: string;
   code?: string;
   sectorType?: string;
+  totalCapacity?: number;
   colorCode?: string;
   visible?: boolean;
   displayOrder?: number;
@@ -447,11 +464,12 @@ export const organizerWorkspaceService = {
   publishSeatMap: async (
     eventId: string,
     payload: OrganizerSeatMapPublishPayload,
-  ): Promise<void> => {
-    await axiosClient.post(
+  ): Promise<OrganizerSeatMap> => {
+    const response = await axiosClient.post<OrganizerSeatMap>(
       `/api/organizer/events/${eventId}/seat-map/publish`,
       payload,
     );
+    return response.data;
   },
 
   getOrganizerByUserIdDirect: async (userId: string) => {
