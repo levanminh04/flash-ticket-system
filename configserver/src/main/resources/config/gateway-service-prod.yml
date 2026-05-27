@@ -4,8 +4,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://15.134.248.39:9090/realms/flash-ticket
-          jwk-set-uri: http://15.134.248.39:9090/realms/flash-ticket/protocol/openid-connect/certs
+          issuer-uri: http://15.134.248.39:9090/auth/realms/flash-ticket
+          jwk-set-uri: http://15.134.248.39:9090/auth/realms/flash-ticket/protocol/openid-connect/certs
 
   # 2. Ghi đè Redis trỏ về container Redis nội bộ
   data:
