@@ -1,6 +1,8 @@
-# Flash Ticket System - Hệ thống đặt vé sự kiện phân tán
+# ⚡ Flash Ticket System - Hệ thống đặt vé sự kiện phân tán
 
-Chào mừng bạn đến với **Flash Ticket System**. Dự án được phát triển theo kiến trúc Microservices sử dụng hệ sinh thái Spring Boot & Spring Cloud kết hợp với ứng dụng khách hàng React (Vite, TS). Hệ thống cũng tích hợp công cụ vẽ sơ đồ ghế ngồi động (Canvas-based Seat Map), thanh toán trực tuyến qua cổng VNPay, và chức năng tìm kiếm/tư vấn vé thông minh bằng AI Agent (LangChain4j + Gemini API + PGVector).
+Chào mừng bạn đến với **Flash Ticket System** (Hệ thống bán vé sự kiện hiệu năng cao). Dự án được phát triển theo kiến trúc Microservices sử dụng hệ sinh thái Spring Boot & Spring Cloud kết hợp với ứng dụng khách hàng React (Vite, TS). Hệ thống cũng tích hợp công cụ vẽ sơ đồ ghế ngồi động (Canvas-based Seat Map), thanh toán trực tuyến qua cổng VNPay, và chức năng tìm kiếm/tư vấn vé thông minh bằng AI Agent (LangChain4j + Gemini API + PGVector).
+
+🌐 **Đường dẫn Deploy Demo**: [http://15.134.248.39/](http://15.134.248.39/)
 
 ---
 
@@ -139,7 +141,14 @@ Sau khi chạy thành công, truy cập giao diện web tại địa chỉ: **[h
 
 ## 🔑 Thông tin Demo & Tài khoản Thử nghiệm
 
-### 1. Quản lý Tài khoản (Keycloak Admin)
+🌐 **Đường dẫn Deploy Demo**: [http://15.134.248.39/](http://15.134.248.39/)
+
+### 1. Tài khoản Thử nghiệm (Test Accounts)
+- **Tài khoản Nhà tổ chức (Organizer)**:
+  - Email: `organizer@gmail.com`
+  - Mật khẩu: `123456`
+
+### 2. Quản lý Tài khoản (Keycloak Admin)
 Hệ thống sử dụng Keycloak để quản trị tài khoản tập trung:
 - **Địa chỉ console**: `http://15.134.248.39:9090`
 - **Tài khoản Admin**:
@@ -147,9 +156,9 @@ Hệ thống sử dụng Keycloak để quản trị tài khoản tập trung:
   - Password: `admin`
 - **Realms**: `flash-ticket`
 
-*Mẹo: Bạn có thể đăng ký tài khoản mới trực tiếp từ giao diện Frontend tại `http://localhost:5173/auth/register`, hệ thống sẽ tự động đồng bộ sang database của User Service thông qua RabbitMQ.*
+*Mẹo: Bạn có thể đăng ký tài khoản người mua mới trực tiếp từ giao diện Frontend tại `http://localhost:5173/auth/register` (hoặc trên bản deploy), hệ thống sẽ tự động đồng bộ sang database của User Service thông qua RabbitMQ.*
 
-### 2. Thông tin Thử nghiệm VNPay (Sandbox)
+### 3. Thông tin Thử nghiệm VNPay (Sandbox)
 Khi thực hiện thanh toán vé sự kiện trên ứng dụng, bạn có thể chọn phương thức thanh toán VNPay và sử dụng thẻ test sau của ngân hàng NCB Sandbox để thanh toán demo:
 - **Số thẻ**: `9704198526191432198`
 - **Tên chủ thẻ**: `NGUYEN VAN A`
