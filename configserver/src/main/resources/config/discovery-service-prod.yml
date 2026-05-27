@@ -14,7 +14,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://15.134.248.39/realms/flash-ticket
+          issuer-uri: http://15.134.248.39:9090/realms/flash-ticket
           jwk-set-uri: http://keycloak-flash-ticket:8080/realms/flash-ticket/protocol/openid-connect/certs
 
 # 4. Lưu vết API Key của Gemini để chạy AI chatbot
