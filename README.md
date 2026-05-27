@@ -49,46 +49,82 @@ Nếu bạn dùng Windows và đã cài đặt **Windows Terminal** (`wt`), bạ
 Script sẽ tự động mở một cửa sổ Windows Terminal mới với **6 tabs** tương ứng cho 6 services và khởi động chúng tuần tự theo đúng thời gian trễ cần thiết.
 
 #### 👉 Cách 2: Chạy thủ công từng Service (macOS / Linux hoặc không dùng Windows Terminal)
-Mở các tab terminal riêng biệt và chạy các lệnh sau theo đúng thứ tự dưới đây:
 
-1. **Config Server** (phải chạy đầu tiên):
-   ```bash
-   cd configserver
-   mvn spring-boot:run
-   ```
-   *(Đợi khoảng 10-15 giây cho đến khi khởi động hoàn tất)*
+> [!WARNING]
+> Do các service (Gateway, Core, User, Discovery) cần các biến môi trường trong file `.env` ở thư mục gốc (như `KEYCLOAK_JWK_SET_URI`, `POSTGRES_URL`,...), nếu chỉ chạy `mvn spring-boot:run` trực tiếp từ terminal, ứng dụng sẽ báo lỗi không giải nghĩa được placeholder (`PlaceholderResolutionException`).
+>
+> Bạn cần nạp các biến môi trường từ `.env` trước khi khởi chạy theo các cách sau:
 
-2. **Eureka Server**:
-   ```bash
-   cd eureka
-   mvn spring-boot:run
-   ```
-   *(Đợi khoảng 15 giây)*
+* **Cách A: Chạy bằng dòng lệnh (Terminal)**
+  Mở các tab terminal riêng biệt và chạy theo đúng thứ tự dưới đây:
 
-3. **API Gateway**:
-   ```bash
-   cd apigateway
-   mvn spring-boot:run
-   ```
-   *(Đợi khoảng 15 giây)*
+  1. **Config Server** (phải chạy đầu tiên):
+     ```bash
+     cd configserver
+     mvn spring-boot:run
+     ```
+     *(Config Server không dùng biến từ `.env` nên có thể chạy trực tiếp. Đợi 10-15s)*
 
-4. **Core Service**:
-   ```bash
-   cd core-service
-   mvn spring-boot:run
-   ```
+  2. **Eureka Server**:
+     - *Windows (PowerShell - Chạy từ thư mục gốc)*:
+       ```powershell
+       .\scripts\Start-ServiceWithEnv.ps1 -RepoRoot . -ServiceDir eureka -Title "Eureka Server"
+       ```
+     - *macOS / Linux (Bash - Đứng tại thư mục service)*:
+       ```bash
+       cd eureka
+       export $(grep -v '^#' ../.env | xargs) && mvn spring-boot:run
+       ```
+     *(Đợi khoảng 15 giây)*
 
-5. **User Service**:
-   ```bash
-   cd user-service
-   mvn spring-boot:run
-   ```
+  3. **API Gateway**:
+     - *Windows (PowerShell - Chạy từ thư mục gốc)*:
+       ```powershell
+       .\scripts\Start-ServiceWithEnv.ps1 -RepoRoot . -ServiceDir apigateway -Title "API Gateway"
+       ```
+     - *macOS / Linux (Bash - Đứng tại thư mục service)*:
+       ```bash
+       cd apigateway
+       export $(grep -v '^#' ../.env | xargs) && mvn spring-boot:run
+       ```
+     *(Đợi khoảng 15 giây)*
 
-6. **Discovery Service** (AI Agent):
-   ```bash
-   cd discovery-service
-   mvn spring-boot:run
-   ```
+  4. **Core Service**:
+     - *Windows (PowerShell - Chạy từ thư mục gốc)*:
+       ```powershell
+       .\scripts\Start-ServiceWithEnv.ps1 -RepoRoot . -ServiceDir core-service -Title "Core Service"
+       ```
+     - *macOS / Linux (Bash - Đứng tại thư mục service)*:
+       ```bash
+       cd core-service
+       export $(grep -v '^#' ../.env | xargs) && mvn spring-boot:run
+       ```
+
+  5. **User Service**:
+     - *Windows (PowerShell - Chạy từ thư mục gốc)*:
+       ```powershell
+       .\scripts\Start-ServiceWithEnv.ps1 -RepoRoot . -ServiceDir user-service -Title "User Service"
+       ```
+     - *macOS / Linux (Bash - Đứng tại thư mục service)*:
+       ```bash
+       cd user-service
+       export $(grep -v '^#' ../.env | xargs) && mvn spring-boot:run
+       ```
+
+  6. **Discovery Service** (AI Agent):
+     - *Windows (PowerShell - Chạy từ thư mục gốc)*:
+       ```powershell
+       .\scripts\Start-ServiceWithEnv.ps1 -RepoRoot . -ServiceDir discovery-service -Title "Discovery Service"
+       ```
+     - *macOS / Linux (Bash - Đứng tại thư mục service)*:
+       ```bash
+       cd discovery-service
+       export $(grep -v '^#' ../.env | xargs) && mvn spring-boot:run
+       ```
+
+* **Cách B: Khởi chạy bằng IDE (IntelliJ IDEA / VS Code)**
+  - **IntelliJ**: Cài đặt plugin **Env File**. Mở cấu hình chạy (Run Configuration) của từng service -> Tích chọn **Enable Env File** -> Thêm file `.env` từ thư mục gốc của dự án. Sau đó nhấn nút Run.
+  - **VS Code**: Cài đặt extension **Dotenv**. Cấu hình trong `.vscode/launch.json` để load file `.env` trước khi debug/run.
 
 ### Bước 4: Khởi chạy Frontend
 Mở một terminal mới, chuyển đến thư mục `frontend`, tiến hành cài đặt dependencies và chạy dev server:
@@ -126,10 +162,16 @@ Khi thực hiện thanh toán vé sự kiện trên ứng dụng, bạn có th�
 
 1. **Config Server không load được file config**:
    Config Server trong cấu hình local tìm kiếm các file cấu hình YAML tại thư mục: `file:./src/main/resources/config/`. Đảm bảo bạn chạy dự án từ đúng thư mục `configserver`.
-2. **Cấp quyền chạy script trên Windows**:
+2. **Lỗi khởi động Config Server yêu cầu Git URI** (`You need to configure a uri for the git repository`):
+   Lỗi này xảy ra khi Config Server khởi chạy mà không kích hoạt profile `native` (dùng để đọc file cấu hình offline cục bộ), dẫn đến việc Spring Cloud mặc định tìm cấu hình Git.
+   * **Cách xử lý**: Đảm bảo khởi chạy dự án với cả 2 profile `local` và `native`. Mặc định cấu hình `active` trong file `application.yml` của `configserver` đã được cập nhật sẵn là `local,native`. Tuy nhiên nếu khởi chạy thủ công từ terminal, bạn có thể truyền tham số tường minh:
+     ```bash
+     mvn spring-boot:run "-Dspring-boot.run.profiles=local,native"
+     ```
+3. **Cấp quyền chạy script trên Windows**:
    Nếu PowerShell báo lỗi không cho phép chạy script `run-all-services.ps1`, hãy chạy lệnh sau để cấp quyền tạm thời cho session hiện tại:
    ```powershell
    Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
    ```
-3. **Thay đổi môi trường sang hoàn toàn Offline (Local DB)**:
-   Nếu bạn muốn chạy database PostgreSQL, MongoDB và Keycloak trên máy của mình thay vì server demo từ xa, hãy sửa các địa chỉ IP `15.134.248.39` trong file `.env` thành `localhost` hoặc `127.0.0.1` và chạy lại Docker Compose.
+4. **Thay đổi môi trường sang hoàn toàn Offline (Local DB)**:
+   If you want to run PostgreSQL, MongoDB, and Keycloak databases locally instead of the remote demo server, change the IP addresses `15.134.248.39` in the `.env` file to `localhost` or `127.0.0.1` and restart Docker Compose. (Hoặc sửa các địa chỉ IP `15.134.248.39` thành `localhost` nếu muốn chạy offline hoàn toàn).

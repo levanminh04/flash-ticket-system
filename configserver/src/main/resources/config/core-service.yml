@@ -2,6 +2,9 @@ server:
   port: 8081
 
 spring:
+  cloud:
+    bus:
+      enabled: false
   # PostgreSQL Database
   datasource:
     url: ${POSTGRES_URL}
