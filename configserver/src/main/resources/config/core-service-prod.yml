@@ -19,7 +19,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://15.134.248.39/auth/realms/flash-ticket
+          issuer-uri: http://15.134.248.39/realms/flash-ticket
           jwk-set-uri: http://keycloak-flash-ticket:8080/realms/flash-ticket/protocol/openid-connect/certs
 
 # 5. Ghi đè VNPay return URL về IP AWS EC2 Public đúng
