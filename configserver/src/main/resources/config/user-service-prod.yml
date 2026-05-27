@@ -13,12 +13,12 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://15.134.248.39:9090/realms/flash-ticket
+          issuer-uri: http://15.134.248.39:9090/auth/realms/flash-ticket
 
 # 4. Ghi đè cấu hình Keycloak Admin API (Dùng container nội bộ keycloak:8080 để bypass internet)
 keycloak:
   admin:
-    server-url: http://keycloak-flash-ticket:8080
+    server-url: http://keycloak-flash-ticket:8080/auth
     realm: flash-ticket
     client-id: flash-ticket-user-management-client
     client-secret: XS9KSU9iwnXL4bg47bHX3TQPi9DiPROD

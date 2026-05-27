@@ -16,12 +16,13 @@ import "./assets/css/chatbot-widget.css";
 const KC_ORIGIN = import.meta.env.VITE_KEYCLOAK_URL as string;
 
 if (KC_ORIGIN) {
+  const replacement = KC_ORIGIN.endsWith("/auth") ? "/auth" : "";
   const originalFetch = window.fetch;
   window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
     if (typeof input === "string" && input.startsWith(KC_ORIGIN)) {
-      input = input.replace(KC_ORIGIN, "");
+      input = input.replace(KC_ORIGIN, replacement);
     } else if (input instanceof Request && input.url.startsWith(KC_ORIGIN)) {
-      input = new Request(input.url.replace(KC_ORIGIN, ""), input);
+      input = new Request(input.url.replace(KC_ORIGIN, replacement), input);
     }
     return originalFetch.call(this, input, init);
   };
@@ -33,7 +34,7 @@ if (KC_ORIGIN) {
     ...rest: unknown[]
   ) {
     if (typeof url === "string" && url.startsWith(KC_ORIGIN)) {
-      url = url.replace(KC_ORIGIN, "");
+      url = url.replace(KC_ORIGIN, replacement);
     }
     return (originalOpen as any).call(this, method, url, ...rest);
   };
