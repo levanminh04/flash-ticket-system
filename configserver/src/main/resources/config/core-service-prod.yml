@@ -19,7 +19,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://15.134.248.39:9090/auth/realms/flash-ticket
+          issuer-uri: http://15.134.248.39:9090/realms/flash-ticket
 
 # 5. Ghi đè VNPay return URL về IP AWS EC2 Public đúng
 vnpay:
