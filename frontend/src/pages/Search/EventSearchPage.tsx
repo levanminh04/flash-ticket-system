@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import AppPagination from "../../components/common/AppPagination";
@@ -60,6 +60,10 @@ function formatEventPrice(event: EventSummary) {
 
 export default function EventSearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, []);
 
   // URL State
   const querySearch = searchParams.get("search") || "";
@@ -276,7 +280,7 @@ export default function EventSearchPage() {
               maxWidth: "300px",
               background: "white",
               padding: "24px",
-              borderRadius: "12px",
+              borderRadius: "8px",
               border: "1px solid var(--border)",
               height: "fit-content",
               position: "sticky",
@@ -354,7 +358,7 @@ export default function EventSearchPage() {
                       width: "100%",
                       paddingLeft: "40px",
                       paddingRight: searchInput ? "40px" : "16px",
-                      borderRadius: "9999px",
+                      borderRadius: "8px",
                       height: "44px",
                       border: "1px solid #ccc",
                       backgroundColor: "#f9f9f9",
@@ -466,7 +470,7 @@ export default function EventSearchPage() {
                   style={{
                     width: "100%",
                     padding: "10px 16px",
-                    borderRadius: "9999px",
+                    borderRadius: "8px",
                     border: "1px solid var(--border)",
                     background: "white",
                     display: "flex",
@@ -498,7 +502,7 @@ export default function EventSearchPage() {
                       marginTop: "8px",
                       background: "white",
                       border: "1px solid var(--border)",
-                      borderRadius: "12px",
+                      borderRadius: "8px",
                       boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                       zIndex: 10,
                       overflow: "hidden",
@@ -680,7 +684,7 @@ export default function EventSearchPage() {
                   onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
                   style={{
                     padding: "6px 12px",
-                    borderRadius: "9999px",
+                    borderRadius: "8px",
                     border: "1px solid var(--border)",
                     background: "white",
                     display: "flex",
@@ -718,7 +722,7 @@ export default function EventSearchPage() {
                       marginTop: "8px",
                       background: "white",
                       border: "1px solid var(--border)",
-                      borderRadius: "12px",
+                      borderRadius: "8px",
                       boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                       zIndex: 10,
                       overflow: "hidden",
@@ -851,7 +855,7 @@ export default function EventSearchPage() {
                   textAlign: "center",
                   padding: "80px 20px",
                   background: "white",
-                  borderRadius: "12px",
+                  borderRadius: "8px",
                   border: "1px solid var(--border)",
                 }}
               >
@@ -971,7 +975,7 @@ const chipStyle: React.CSSProperties = {
   alignItems: "center",
   background: "#f0f0f0",
   padding: "6px 12px",
-  borderRadius: "20px",
+  borderRadius: "8px",
   fontSize: "13px",
   fontWeight: "500",
   color: "var(--text-primary)",

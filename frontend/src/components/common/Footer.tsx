@@ -1,5 +1,24 @@
 import { Link } from "react-router-dom";
-import { Facebook, Instagram, SendHorizontal, Youtube } from "lucide-react";
+import { SendHorizontal } from "lucide-react";
+
+const socialLinks = [
+  {
+    label: "Facebook",
+    icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/2023_Facebook_icon.svg/960px-2023_Facebook_icon.svg.png",
+  },
+  {
+    label: "Instagram",
+    icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/3840px-Instagram_logo_2016.svg.png",
+  },
+  {
+    label: "Telegram",
+    icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/3840px-Telegram_logo.svg.png",
+  },
+  {
+    label: "YouTube",
+    icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/YouTube_full-color_icon_%282017%29.svg/3840px-YouTube_full-color_icon_%282017%29.svg.png",
+  },
+];
 
 export default function Footer() {
   return (
@@ -16,26 +35,16 @@ export default function Footer() {
               diện rõ ràng.
             </p>
             <div className="home-footer-socials">
-              <a href="#" aria-label="Facebook" className="home-footer-social">
-                <Facebook size={18} />
-              </a>
-              <a href="#" aria-label="TikTok" className="home-footer-social">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="18"
-                  height="18"
-                  fill="currentColor"
-                  aria-hidden="true"
+              {socialLinks.map((social) => (
+                <a
+                  href="#"
+                  aria-label={social.label}
+                  className="home-footer-social"
+                  key={social.label}
                 >
-                  <path d="M15.62 3c.55 1.57 1.78 2.8 3.35 3.35V9.4a6.9 6.9 0 0 1-3.35-.86v6.15a5.62 5.62 0 1 1-5.62-5.62c.3 0 .58.03.86.08v3.1a2.5 2.5 0 1 0 1.64 2.34V3h3.12Z" />
-                </svg>
-              </a>
-              <a href="#" aria-label="Instagram" className="home-footer-social">
-                <Instagram size={18} />
-              </a>
-              <a href="#" aria-label="YouTube" className="home-footer-social">
-                <Youtube size={18} />
-              </a>
+                  <img src={social.icon} alt="" aria-hidden="true" />
+                </a>
+              ))}
             </div>
           </div>
           <div className="footer-col home-footer-subscribe">

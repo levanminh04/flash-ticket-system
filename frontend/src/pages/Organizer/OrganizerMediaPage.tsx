@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   Eye,
@@ -26,6 +27,7 @@ import {
   OrganizerEventDetail,
 } from "../../services/organizerWorkspaceService";
 import { confirmDestructiveAction } from "../../lib/swal";
+import { useOrganizerGate } from "./useOrganizerGate";
 
 const imageTypes: OrganizerImageType[] = [
   "BANNER",
@@ -147,6 +149,8 @@ async function getAllOrganizerEvents(): Promise<OrganizerEventDetail[]> {
 }
 
 export default function OrganizerMediaPage() {
+  const { eventId } = useParams<{ eventId: string }>();
+  const { ready } = useOrganizerGate();
   const [events, setEvents] = useState<OrganizerEventDetail[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventSearch, setEventSearch] = useState("");
@@ -168,6 +172,19 @@ export default function OrganizerMediaPage() {
   const [eventPage, setEventPage] = useState(0);
   const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
   const [eventFilter, setEventFilter] = useState<MediaEventFilter>("all");
+
+  const activeEventId = eventId || resolvedEvent?.id;
+  const setupMode = useMemo(() => {
+    if (!activeEventId) return null;
+    return sessionStorage.getItem(`organizer-ticket-setup-mode:${activeEventId}`);
+  }, [activeEventId]);
+
+  const resolvedImageTypes = useMemo(() => {
+    if (setupMode === "QUANTITY") {
+      return imageTypes.filter((t) => t !== "SEAT_MAP");
+    }
+    return imageTypes;
+  }, [setupMode]);
 
   const setFileWithPreview = (file: File | null) => {
     setSelectedFile(file);
@@ -235,10 +252,10 @@ export default function OrganizerMediaPage() {
     (eventPage + 1) * EVENTS_PER_PAGE,
   );
 
-  const loadImages = async (eventId: string) => {
+  const loadImages = async (targetEventId: string) => {
     setImagesLoading(true);
     try {
-      const data = await organizerService.getEventImages(eventId);
+      const data = await organizerService.getEventImages(targetEventId);
       setImages(data);
       setCurrentPage(0);
     } catch {
@@ -266,7 +283,11 @@ export default function OrganizerMediaPage() {
     setLightboxIndex(-1);
   };
 
+  // Effect for multi-event mode (without eventId)
   useEffect(() => {
+    if (!ready) return;
+    if (eventId) return;
+
     let cancelled = false;
 
     const loadEvents = async () => {
@@ -296,11 +317,49 @@ export default function OrganizerMediaPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [eventId, ready]);
+
+  // Effect for single-event workspace mode (with eventId)
+  useEffect(() => {
+    if (!ready || !eventId) return;
+
+    let cancelled = false;
+
+    const loadSingleEvent = async () => {
+      setImagesLoading(true);
+      setEventsLoading(true);
+      try {
+        const nextEvent = await organizerWorkspaceService.getMyEvent(eventId);
+        if (cancelled) return;
+        setResolvedEvent(nextEvent);
+
+        const data = await organizerService.getEventImages(eventId);
+        if (cancelled) return;
+        setImages(data);
+        setCurrentPage(0);
+      } catch {
+        if (!cancelled) {
+          toast.error("Không thể tải thông tin sự kiện hoặc thư viện ảnh.");
+        }
+      } finally {
+        if (!cancelled) {
+          setImagesLoading(false);
+          setEventsLoading(false);
+        }
+      }
+    };
+
+    void loadSingleEvent();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, ready]);
 
   const handleUpload = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault();
-    if (!resolvedEvent) {
+    const activeEventId = eventId || resolvedEvent?.id;
+    if (!activeEventId) {
       toast.error("Hãy chọn sự kiện trước khi upload ảnh.");
       return;
     }
@@ -312,12 +371,12 @@ export default function OrganizerMediaPage() {
     setUploading(true);
     try {
       await organizerService.uploadEventImage(
-        resolvedEvent.id,
+        activeEventId,
         selectedFile,
         selectedType,
       );
       setFileWithPreview(null);
-      await loadImages(resolvedEvent.id);
+      await loadImages(activeEventId);
       toast.success("Upload ảnh thành công.");
     } catch {
       toast.error("Upload ảnh thất bại");
@@ -326,8 +385,25 @@ export default function OrganizerMediaPage() {
     }
   };
 
+  // Custom save event listener
+  useEffect(() => {
+    const handleSave = () => {
+      if (selectedFile) {
+        const mockEvent = { preventDefault: () => {} } as FormEvent<HTMLFormElement>;
+        void handleUpload(mockEvent);
+      } else {
+        toast.info("Ảnh sự kiện đã được đồng bộ. Hãy tiếp tục.");
+      }
+    };
+    document.addEventListener("organizer-save-event", handleSave);
+    return () => {
+      document.removeEventListener("organizer-save-event", handleSave);
+    };
+  }, [resolvedEvent, selectedFile, selectedType, eventId]);
+
   const handleDelete = async (imageId: string) => {
-    if (!resolvedEvent) return;
+    const activeEventId = eventId || resolvedEvent?.id;
+    if (!activeEventId) return;
 
     const confirmed = await confirmDestructiveAction({
       title: "Xóa ảnh khỏi sự kiện?",
@@ -339,7 +415,7 @@ export default function OrganizerMediaPage() {
 
     setDeletingId(imageId);
     try {
-      await organizerService.deleteEventImage(resolvedEvent.id, imageId);
+      await organizerService.deleteEventImage(activeEventId, imageId);
       setImages((current) => current.filter((image) => image.id !== imageId));
       toast.success("Đã xóa ảnh khỏi sự kiện.");
     } catch {
@@ -393,7 +469,8 @@ export default function OrganizerMediaPage() {
   };
 
   const handleEditMetadata = async (image: OrganizerEventImage) => {
-    if (!resolvedEvent) return;
+    const activeEventId = eventId || resolvedEvent?.id;
+    if (!activeEventId) return;
 
     const result = await Swal.fire({
       title: "Chỉnh sửa ảnh",
@@ -414,7 +491,7 @@ export default function OrganizerMediaPage() {
           <label class="organizer-media-editor-field">
             <span>Loại ảnh (Image type)</span>
             <select id="swal-image-type" class="organizer-media-editor-select">
-              ${imageTypes.map((type) => `<option value="${type}" ${image.imageType === type ? "selected" : ""}>${type}</option>`).join("")}
+              ${resolvedImageTypes.map((type) => `<option value="${type}" ${image.imageType === type ? "selected" : ""}>${type}</option>`).join("")}
             </select>
           </label>
         </div>
@@ -460,11 +537,11 @@ export default function OrganizerMediaPage() {
 
     try {
       await organizerService.updateEventImage(
-        resolvedEvent.id,
+        activeEventId,
         image.id,
         result.value,
       );
-      await loadImages(resolvedEvent.id);
+      await loadImages(activeEventId);
       toast.success("Cập nhật metadata ảnh.");
     } catch {
       toast.error("Không thể cập nhật metadata ảnh.");
@@ -497,10 +574,253 @@ export default function OrganizerMediaPage() {
     }
   }, [eventPage, eventPageCount]);
 
+  // SINGLE EVENT WORKSPACE MODE VIEW
+  if (eventId) {
+    return (
+      <OrganizerLayout
+        title={resolvedEvent?.title || "Quản lý ảnh sự kiện"}
+        description="Quản lý hình ảnh, banner, poster của sự kiện."
+        hideTopBar
+        showWorkflowNav
+        className="organizer-media-page"
+        eventId={eventId}
+      >
+
+        {eventsLoading || !resolvedEvent ? (
+          <section className="organizer-panel organizer-empty-state">
+            <div className="loading-spinner" />
+            <p>Đang tải thư viện ảnh...</p>
+          </section>
+        ) : (
+          <div className="organizer-media-workspace-container" style={{ marginTop: "0px" }}>
+            <div className="organizer-media-stack" style={{ marginTop: "0px" }}>
+              <form
+                className="organizer-panel organizer-upload-form organizer-upload-form-horizontal"
+                onSubmit={handleUpload}
+              >
+                <div className="organizer-upload-row">
+                  <label className="organizer-field">
+                    <span>
+                      <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Loại ảnh
+                    </span>
+                    <select
+                      className="organizer-input"
+                      value={selectedType}
+                      onChange={(event) =>
+                        setSelectedType(event.target.value as OrganizerImageType)
+                      }
+                    >
+                      {resolvedImageTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="organizer-field">
+                    <span>Tệp hình ảnh</span>
+                    <div
+                      {...getRootProps({
+                        className: `organizer-input organizer-dropzone${
+                          isDragActive ? " is-active" : ""
+                        }${isDragReject ? " is-reject" : ""}${
+                          selectedFile ? " has-file" : ""
+                        }`,
+                      })}
+                    >
+                      <input
+                        {...getInputProps({
+                          id: "organizer-image-file",
+                          name: "organizer-image-file",
+                        })}
+                      />
+                      {isDragReject ? (
+                        <p className="organizer-dropzone-text">
+                          Định dạng không hợp lệ. Chỉ hỗ trợ PNG, JPG, JPEG, WEBP.
+                        </p>
+                      ) : selectedPreviewUrl ? (
+                        <div className="organizer-dropzone-preview">
+                          <img
+                            src={selectedPreviewUrl}
+                            alt={selectedFile?.name ?? "preview"}
+                          />
+                          <p className="organizer-dropzone-file-name">
+                            {selectedFile?.name}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="organizer-dropzone-text">
+                          {isDragActive
+                            ? "Thả ảnh vào đây..."
+                            : "Kéo thả ảnh vào đây hoặc bấm để chọn"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="organizer-upload-submit-row">
+                  <button
+                    className="btn btn-primary organizer-upload-button organizer-upload-button-rect"
+                    disabled={uploading}
+                  >
+                    {uploading ? (
+                      <LoaderCircle size={16} className="spin" />
+                    ) : (
+                      <ImagePlus size={16} />
+                    )}
+                    Tải ảnh lên
+                  </button>
+                </div>
+              </form>
+
+              <section className="organizer-panel" style={{ marginTop: "20px" }}>
+                {imagesLoading ? (
+                  <div className="organizer-empty-state">
+                    <div className="loading-spinner" />
+                    <p>Đang tải thư viện ảnh...</p>
+                  </div>
+                ) : images.length === 0 ? (
+                  <div className="organizer-empty-state">
+                    <ImagePlus size={32} />
+                    <p>Sự kiện chưa có ảnh nào trong thư viện organizer.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="organizer-media-table-wrap">
+                      <table className="organizer-media-table organizer-events-page-table">
+                        <thead>
+                          <tr>
+                            <th>Ảnh</th>
+                            <th>ID</th>
+                            <th>Loại</th>
+                            <th>Kích thước</th>
+                            <th>Dung lượng</th>
+                            <th>Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedImages.map((image, index) => {
+                            const imageIndex =
+                              currentPage * IMAGES_PER_PAGE + index;
+
+                            return (
+                              <tr key={image.id}>
+                                <td>
+                                  <button
+                                    className="organizer-media-thumb organizer-media-thumb-trigger"
+                                    type="button"
+                                    onClick={() => setLightboxIndex(imageIndex)}
+                                    aria-label="Xem ảnh lớn"
+                                    title="Xem ảnh lớn"
+                                  >
+                                    <img
+                                      src={image.imageUrl}
+                                      alt={image.altText ?? image.imageType}
+                                    />
+                                  </button>
+                                </td>
+                                <td className="organizer-media-id" title={image.id}>
+                                  {image.id}
+                                </td>
+                                <td>
+                                  <div className="organizer-media-type-stack">
+                                    <span
+                                      className={`organizer-tag organizer-tag-${image.imageType
+                                        .toLowerCase()
+                                        .replace("_", "-")}`}
+                                    >
+                                      {image.imageType}
+                                    </span>
+                                    {image.isPrimary ? (
+                                      <span className="organizer-tag organizer-tag-primary">
+                                        Primary
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td>
+                                  {image.width && image.height
+                                    ? `${image.width} × ${image.height}`
+                                    : "-"}
+                                </td>
+                                <td>{formatBytes(image.fileSizeBytes)}</td>
+                                <td className="organizer-media-action-cell">
+                                  <div className="organizer-media-table-actions">
+                                    <button
+                                      type="button"
+                                      className="organizer-icon-action organizer-icon-action-view"
+                                      onClick={() => void handleViewDetails(image)}
+                                      aria-label="Xem chi tiết thông tin ảnh"
+                                      title="Xem chi tiết"
+                                    >
+                                      <Eye size={15} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="organizer-icon-action organizer-icon-action-edit"
+                                      onClick={() => void handleEditMetadata(image)}
+                                      aria-label="Chỉnh sửa ảnh"
+                                      title="Chỉnh sửa"
+                                    >
+                                      <FaEdit size={14} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="organizer-icon-action organizer-icon-action-delete"
+                                      onClick={() => void handleDelete(image.id)}
+                                      disabled={deletingId === image.id}
+                                      aria-label="Xóa ảnh khỏi sự kiện"
+                                      title="Xóa ảnh"
+                                    >
+                                      {deletingId === image.id ? (
+                                        <LoaderCircle size={15} className="spin" />
+                                      ) : (
+                                        <Trash2 size={15} />
+                                      )}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ marginTop: "15px" }}>
+                      <AppPagination
+                        currentPage={currentPage}
+                        pageCount={pageCount}
+                        onPageChange={setCurrentPage}
+                        pageRangeDisplayed={4}
+                        marginPagesDisplayed={1}
+                        showPageInfo={false}
+                      />
+                    </div>
+                  </>
+                )}
+              </section>
+            </div>
+          </div>
+        )}
+
+        <Lightbox
+          open={lightboxIndex >= 0}
+          close={() => setLightboxIndex(-1)}
+          slides={lightboxSlides}
+          index={lightboxIndex}
+        />
+      </OrganizerLayout>
+    );
+  }
+
+  // DEFAULT MULTI-EVENT LIST MODE
   return (
     <OrganizerLayout
       title="Thư viện ảnh sự kiện"
       description="Thực hi quản lý ảnh cho các sự kiện của bạn."
+      className="organizer-media-page"
     >
       <section className="organizer-panel organizer-lookup-panel">
         <div className="organizer-panel-heading">
@@ -698,208 +1018,210 @@ export default function OrganizerMediaPage() {
               </section>
 
               <div className="organizer-media-stack">
-            <form
-              className="organizer-panel organizer-upload-form organizer-upload-form-horizontal"
-              onSubmit={handleUpload}
-            >
-              <div className="organizer-upload-row">
-                <label className="organizer-field">
-                  <span>Loại ảnh</span>
-                  <select
-                    className="organizer-input"
-                    value={selectedType}
-                    onChange={(event) =>
-                      setSelectedType(event.target.value as OrganizerImageType)
-                    }
-                  >
-                    {imageTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="organizer-field">
-                  <span>Tệp hình ảnh</span>
-                  <div
-                    {...getRootProps({
-                      className: `organizer-input organizer-dropzone${
-                        isDragActive ? " is-active" : ""
-                      }${isDragReject ? " is-reject" : ""}${
-                        selectedFile ? " has-file" : ""
-                      }`,
-                    })}
-                  >
-                    <input
-                      {...getInputProps({
-                        id: "organizer-image-file",
-                        name: "organizer-image-file",
-                      })}
-                    />
-                    {isDragReject ? (
-                      <p className="organizer-dropzone-text">
-                        Định dạng không hợp lệ. Chỉ hỗ trợ PNG, JPG, JPEG, WEBP.
-                      </p>
-                    ) : selectedPreviewUrl ? (
-                      <div className="organizer-dropzone-preview">
-                        <img
-                          src={selectedPreviewUrl}
-                          alt={selectedFile?.name ?? "preview"}
-                        />
-                        <p className="organizer-dropzone-file-name">
-                          {selectedFile?.name}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="organizer-dropzone-text">
-                        {isDragActive
-                          ? "Thả ảnh vào đây..."
-                          : "Kéo thả ảnh vào đây hoặc bấm để chọn"}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="organizer-upload-submit-row">
-                <button
-                  className="btn btn-primary organizer-upload-button organizer-upload-button-rect"
-                  disabled={uploading}
+                <form
+                  className="organizer-panel organizer-upload-form organizer-upload-form-horizontal"
+                  onSubmit={handleUpload}
                 >
-                  {uploading ? (
-                    <LoaderCircle size={16} className="spin" />
-                  ) : (
-                    <ImagePlus size={16} />
-                  )}
-                  Tải ảnh lên
-                </button>
-              </div>
-            </form>
+                  <div className="organizer-upload-row">
+                    <label className="organizer-field">
+                      <span>
+                        <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Loại ảnh
+                      </span>
+                      <select
+                        className="organizer-input"
+                        value={selectedType}
+                        onChange={(event) =>
+                          setSelectedType(event.target.value as OrganizerImageType)
+                        }
+                      >
+                        {resolvedImageTypes.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
 
-            <section className="organizer-panel">
-              {imagesLoading ? (
-                <div className="organizer-empty-state">
-                  <div className="loading-spinner" />
-                  <p>Đang tải thư viện ảnh...</p>
-                </div>
-              ) : images.length === 0 ? (
-                <div className="organizer-empty-state">
-                  <ImagePlus size={32} />
-                  <p>Sự kiện chưa có ảnh nào trong thư viện organizer.</p>
-                </div>
-              ) : (
-                <>
-                  <div className="organizer-media-table-wrap">
-                    <table className="organizer-media-table organizer-events-page-table">
-                      <thead>
-                        <tr>
-                          <th>Ảnh</th>
-                          <th>ID</th>
-                          <th>Loại</th>
-                          <th>Kích thước</th>
-                          <th>Dung lượng</th>
-                          <th>Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedImages.map((image, index) => {
-                          const imageIndex =
-                            currentPage * IMAGES_PER_PAGE + index;
-
-                          return (
-                            <tr key={image.id}>
-                              <td>
-                                <button
-                                  className="organizer-media-thumb organizer-media-thumb-trigger"
-                                  type="button"
-                                  onClick={() => setLightboxIndex(imageIndex)}
-                                  aria-label="Xem ảnh lớn"
-                                  title="Xem ảnh lớn"
-                                >
-                                  <img
-                                    src={image.imageUrl}
-                                    alt={image.altText ?? image.imageType}
-                                  />
-                                </button>
-                              </td>
-                              <td className="organizer-media-id" title={image.id}>
-                                {image.id}
-                              </td>
-                              <td>
-                                <div className="organizer-media-type-stack">
-                                  <span
-                                    className={`organizer-tag organizer-tag-${image.imageType
-                                      .toLowerCase()
-                                      .replace("_", "-")}`}
-                                  >
-                                    {image.imageType}
-                                  </span>
-                                  {image.isPrimary ? (
-                                    <span className="organizer-tag organizer-tag-primary">
-                                      Primary
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </td>
-                              <td>
-                                {image.width && image.height
-                                  ? `${image.width} × ${image.height}`
-                                  : "-"}
-                              </td>
-                              <td>{formatBytes(image.fileSizeBytes)}</td>
-                              <td className="organizer-media-action-cell">
-                                <div className="organizer-media-actions">
-                                  <button
-                                    className="organizer-icon-action organizer-icon-action-info"
-                                    onClick={() => void handleViewDetails(image)}
-                                    type="button"
-                                    aria-label="Xem chi tiết ảnh"
-                                    title="Xem chi tiết ảnh"
-                                  >
-                                    <Eye size={16} />
-                                  </button>
-                                  <button
-                                    className="organizer-icon-action organizer-icon-action-edit"
-                                    onClick={() => void handleEditMetadata(image)}
-                                    type="button"
-                                    aria-label="Chỉnh sửa ảnh"
-                                    title="Chỉnh sửa ảnh"
-                                  >
-                                    <Edit size={16} />
-                                  </button>
-                                  <button
-                                    className="organizer-icon-action organizer-icon-action-danger"
-                                    onClick={() => void handleDelete(image.id)}
-                                    disabled={deletingId === image.id}
-                                    type="button"
-                                    aria-label="Xóa ảnh"
-                                    title="Xóa ảnh"
-                                  >
-                                    {deletingId === image.id ? (
-                                      <LoaderCircle size={16} className="spin" />
-                                    ) : (
-                                      <Trash2 size={16} />
-                                    )}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
+                    <div className="organizer-field">
+                      <span>Tệp hình ảnh</span>
+                      <div
+                        {...getRootProps({
+                          className: `organizer-input organizer-dropzone${
+                            isDragActive ? " is-active" : ""
+                          }${isDragReject ? " is-reject" : ""}${
+                            selectedFile ? " has-file" : ""
+                          }`,
                         })}
-                      </tbody>
-                    </table>
+                      >
+                        <input
+                          {...getInputProps({
+                            id: "organizer-image-file",
+                            name: "organizer-image-file",
+                          })}
+                        />
+                        {isDragReject ? (
+                          <p className="organizer-dropzone-text">
+                            Định dạng không hợp lệ. Chỉ hỗ trợ PNG, JPG, JPEG, WEBP.
+                          </p>
+                        ) : selectedPreviewUrl ? (
+                          <div className="organizer-dropzone-preview">
+                            <img
+                              src={selectedPreviewUrl}
+                              alt={selectedFile?.name ?? "preview"}
+                            />
+                            <p className="organizer-dropzone-file-name">
+                              {selectedFile?.name}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="organizer-dropzone-text">
+                            {isDragActive
+                              ? "Thả ảnh vào đây..."
+                              : "Kéo thả ảnh vào đây hoặc bấm để chọn"}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="organizer-media-pagination">
-                    <AppPagination
-                      currentPage={currentPage}
-                      pageCount={pageCount}
-                      onPageChange={(page) => setCurrentPage(page)}
-                    />
+
+                  <div className="organizer-upload-submit-row">
+                    <button
+                      className="btn btn-primary organizer-upload-button organizer-upload-button-rect"
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <LoaderCircle size={16} className="spin" />
+                      ) : (
+                        <ImagePlus size={16} />
+                      )}
+                      Tải ảnh lên
+                    </button>
                   </div>
-                </>
-              )}
-            </section>
+                </form>
+
+                <section className="organizer-panel">
+                  {imagesLoading ? (
+                    <div className="organizer-empty-state">
+                      <div className="loading-spinner" />
+                      <p>Đang tải thư viện ảnh...</p>
+                    </div>
+                  ) : images.length === 0 ? (
+                    <div className="organizer-empty-state">
+                      <ImagePlus size={32} />
+                      <p>Sự kiện chưa có ảnh nào trong thư viện organizer.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="organizer-media-table-wrap">
+                        <table className="organizer-media-table organizer-events-page-table">
+                          <thead>
+                            <tr>
+                              <th>Ảnh</th>
+                              <th>ID</th>
+                              <th>Loại</th>
+                              <th>Kích thước</th>
+                              <th>Dung lượng</th>
+                              <th>Thao tác</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paginatedImages.map((image, index) => {
+                              const imageIndex =
+                                currentPage * IMAGES_PER_PAGE + index;
+
+                              return (
+                                <tr key={image.id}>
+                                  <td>
+                                    <button
+                                      className="organizer-media-thumb organizer-media-thumb-trigger"
+                                      type="button"
+                                      onClick={() => setLightboxIndex(imageIndex)}
+                                      aria-label="Xem ảnh lớn"
+                                      title="Xem ảnh lớn"
+                                    >
+                                      <img
+                                        src={image.imageUrl}
+                                        alt={image.altText ?? image.imageType}
+                                      />
+                                    </button>
+                                  </td>
+                                  <td className="organizer-media-id" title={image.id}>
+                                    {image.id}
+                                  </td>
+                                  <td>
+                                    <div className="organizer-media-type-stack">
+                                      <span
+                                        className={`organizer-tag organizer-tag-${image.imageType
+                                          .toLowerCase()
+                                          .replace("_", "-")}`}
+                                      >
+                                        {image.imageType}
+                                      </span>
+                                      {image.isPrimary ? (
+                                        <span className="organizer-tag organizer-tag-primary">
+                                          Primary
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    {image.width && image.height
+                                      ? `${image.width} × ${image.height}`
+                                      : "-"}
+                                  </td>
+                                  <td>{formatBytes(image.fileSizeBytes)}</td>
+                                  <td className="organizer-media-action-cell">
+                                    <div className="organizer-media-actions">
+                                      <button
+                                        className="organizer-icon-action organizer-icon-action-info"
+                                        onClick={() => void handleViewDetails(image)}
+                                        type="button"
+                                        aria-label="Xem chi tiết ảnh"
+                                        title="Xem chi tiết ảnh"
+                                      >
+                                        <Eye size={16} />
+                                      </button>
+                                      <button
+                                        className="organizer-icon-action organizer-icon-action-edit"
+                                        onClick={() => void handleEditMetadata(image)}
+                                        type="button"
+                                        aria-label="Chỉnh sửa ảnh"
+                                        title="Chỉnh sửa ảnh"
+                                      >
+                                        <Edit size={16} />
+                                      </button>
+                                      <button
+                                        className="organizer-icon-action organizer-icon-action-danger"
+                                        onClick={() => void handleDelete(image.id)}
+                                        disabled={deletingId === image.id}
+                                        type="button"
+                                        aria-label="Xóa ảnh"
+                                        title="Xóa ảnh"
+                                      >
+                                        {deletingId === image.id ? (
+                                          <LoaderCircle size={16} className="spin" />
+                                        ) : (
+                                          <Trash2 size={16} />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="organizer-media-pagination">
+                        <AppPagination
+                          currentPage={currentPage}
+                          pageCount={pageCount}
+                          onPageChange={(page) => setCurrentPage(page)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </section>
               </div>
             </div>
 

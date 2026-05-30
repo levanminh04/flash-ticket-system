@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Chart from "react-apexcharts";
 import { Link } from "react-router-dom";
 import { LoaderCircle, Edit, Search, Ticket, Trash2 } from "lucide-react";
@@ -492,6 +492,7 @@ export default function OrganizerEventsPage() {
       title="Quản lý sự kiện"
       description="Danh sách và thông tin các sự kiện."
       actions={null}
+      className="organizer-events-page"
     >
       <section className="organizer-events-analytics">
         <div className="organizer-events-stat-grid">

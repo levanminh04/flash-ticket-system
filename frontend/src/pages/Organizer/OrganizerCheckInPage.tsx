@@ -80,6 +80,7 @@ export default function OrganizerCheckInPage() {
     <OrganizerLayout
       title="Check-in vé"
       description="Quét mã QR soát vé."
+      className="organizer-check-in-page"
     >
       <section className="organizer-grid organizer-grid-checkin">
         <form

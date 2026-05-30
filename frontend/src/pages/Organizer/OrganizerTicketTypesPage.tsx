@@ -1,9 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Edit, Search, Trash2, X } from "lucide-react";
+import { Copy, Edit, Search, Ticket, Trash2, X } from "lucide-react";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
-import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
 import { confirmDestructiveAction } from "../../lib/swal";
 import {
   organizerWorkspaceService,
@@ -51,6 +50,15 @@ const defaultFormState: TicketTypeFormState = {
   eventSectorId: "",
   isVisible: true,
 };
+
+function RequiredFieldLabel({ children }: { children: string }) {
+  return (
+    <span>
+      <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>
+      {children}
+    </span>
+  );
+}
 
 function buildFormState(ticketType: OrganizerTicketType): TicketTypeFormState {
   return {
@@ -256,6 +264,19 @@ export default function OrganizerTicketTypesPage() {
   const selectedSectorType = selectedSector?.sectorType === "SEATED" ? "SEATED" : "STANDING";
   const isAssignedSeatTicket = eventUsesSeatMap && selectedSectorType === "SEATED";
 
+  const invalidateSeatMapPublishedState = () => {
+    if (!eventId || setupMode !== "SEAT_MAP") {
+      return;
+    }
+
+    sessionStorage.removeItem(`organizer-seat-map-published:${eventId}`);
+    document.dispatchEvent(
+      new CustomEvent("organizer-seat-map-published-updated", {
+        detail: { eventId, published: false },
+      }),
+    );
+  };
+
   const handleSubmit = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault();
     if (!eventId) {
@@ -317,6 +338,7 @@ export default function OrganizerTicketTypesPage() {
         return [nextTicketType, ...current];
       });
 
+      invalidateSeatMapPublishedState();
       resetForm();
       toast.success(
         isEditing ? "Cập nhật loại vé thành công." : "Tạo loại vé thành công.",
@@ -329,6 +351,16 @@ export default function OrganizerTicketTypesPage() {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    const handleSave = () => {
+      toast.success("Thông tin vé sự kiện đã được lưu thành công.");
+    };
+    document.addEventListener("organizer-save-event", handleSave);
+    return () => {
+      document.removeEventListener("organizer-save-event", handleSave);
+    };
+  }, []);
 
   const handleEdit = (ticketType: OrganizerTicketType) => {
     setEditingId(ticketType.id);
@@ -358,6 +390,7 @@ export default function OrganizerTicketTypesPage() {
       setTicketTypes((current) =>
         current.filter((item) => item.id !== ticketType.id),
       );
+      invalidateSeatMapPublishedState();
       if (editingId === ticketType.id) {
         resetForm();
       }
@@ -388,9 +421,10 @@ export default function OrganizerTicketTypesPage() {
       title="Quản lý loại vé"
       description="Quản lý các loại vé của sự kiện."
       hideTopBar
+      showWorkflowNav={Boolean(eventId)}
+      eventId={eventId}
+      className="organizer-ticket-types-page"
     >
-      {eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
-
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
@@ -434,7 +468,7 @@ export default function OrganizerTicketTypesPage() {
                     <div>
                       <strong>Dùng sơ đồ</strong>
                       <p>
-                        Tạo khu đứng, khu tự do, khu ghế ngồi hoặc kết hợp.
+                        Tạo khu đứng, khu ghế ngồi hoặc kết hợp.
                       </p>
                     </div>
                   </button>
@@ -468,7 +502,7 @@ export default function OrganizerTicketTypesPage() {
                 >
               <div className="organizer-form-grid">
                 <label className="organizer-field organizer-form-span-2">
-                  <span>Tên loại vé</span>
+                  <RequiredFieldLabel>Tên loại vé</RequiredFieldLabel>
                   <input
                     className="organizer-input"
                     value={formState.name}
@@ -480,7 +514,7 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field organizer-form-span-2">
-                  <span>Mô tả</span>
+                  <RequiredFieldLabel>Mô tả</RequiredFieldLabel>
                   <textarea
                     className="organizer-input organizer-textarea organizer-textarea-sm"
                     value={formState.description}
@@ -492,7 +526,7 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <span>Giá bán</span>
+                  <RequiredFieldLabel>Giá bán</RequiredFieldLabel>
                   <input
                     type="number"
                     min={0}
@@ -506,7 +540,7 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <span>Giá gốc</span>
+                  <RequiredFieldLabel>Giá gốc</RequiredFieldLabel>
                   <input
                     type="number"
                     min={0}
@@ -520,7 +554,7 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <span>Số lượng</span>
+                  <RequiredFieldLabel>Số lượng</RequiredFieldLabel>
                   <input
                     type="number"
                     min={0}
@@ -544,7 +578,7 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <span>Tối đa mỗi đơn</span>
+                  <RequiredFieldLabel>Tối đa mỗi đơn</RequiredFieldLabel>
                   <input
                     type="number"
                     min={1}
@@ -558,7 +592,7 @@ export default function OrganizerTicketTypesPage() {
 
 
                 <label className="organizer-field">
-                  <span>Mở bán từ</span>
+                  <RequiredFieldLabel>Mở bán từ</RequiredFieldLabel>
                   <input
                     type="datetime-local"
                     className="organizer-input"
@@ -570,7 +604,7 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <span>Kết thúc bán</span>
+                  <RequiredFieldLabel>Kết thúc bán</RequiredFieldLabel>
                   <input
                     type="datetime-local"
                     className="organizer-input"
@@ -582,52 +616,42 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <span>Thứ tự hiển thị</span>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    <input
-                      type="number"
-                      className="organizer-input"
-                      value={formState.displayOrder}
-                      onChange={(event) =>
-                        handleChange("displayOrder", event.target.value)
-                      }
-                      style={{ flex: 1 }}
-                    />
-                    <div style={{ position: "relative", width: "48px", height: "48px", flexShrink: 0 }}>
+                  <span>Màu vé</span>
+                  <div className="organizer-ticket-color-control">
+                    <div className="organizer-ticket-color-value">
                       <input
                         type="color"
+                        className="organizer-ticket-color-input"
                         value={formState.colorCode}
                         onChange={(event) =>
                           handleChange("colorCode", event.target.value)
                         }
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          width: "100%",
-                          height: "100%",
-                          opacity: 0,
-                          cursor: "pointer",
-                          zIndex: 2,
-                        }}
-                        title="Chọn màu hiển thị"
+                        title="Chọn màu vé"
                       />
-                      <div
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          backgroundColor: formState.colorCode,
-                          borderRadius: "16px",
-                          border: "1px solid #cbd5e1",
-                          zIndex: 1,
-                        }}
+                      <span
+                        className="organizer-ticket-color-swatch"
+                        style={{ backgroundColor: formState.colorCode }}
+                        aria-hidden="true"
                       />
+                      <span className="organizer-ticket-color-prefix">#</span>
+                      <strong>{formState.colorCode.replace("#", "").toUpperCase()}</strong>
                     </div>
+                    <button
+                      type="button"
+                      className="organizer-ticket-color-copy"
+                      aria-label="Sao chép mã màu vé"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(formState.colorCode.toUpperCase());
+                      }}
+                    >
+                      <Copy size={16} />
+                    </button>
                   </div>
                 </label>
 
                 {eventUsesSeatMap ? (
-                  <label className="organizer-field organizer-form-span-2">
-                    <span>Thuộc khu vực nào?</span>
+                  <label className="organizer-field">
+                    <RequiredFieldLabel>Thuộc khu vực nào?</RequiredFieldLabel>
                     <select
                       className="organizer-input"
                       value={formState.eventSectorId}
@@ -638,7 +662,7 @@ export default function OrganizerTicketTypesPage() {
                       <option value="">Chọn khu vực</option>
                       {activeSectors.map((sector) => (
                         <option key={sector.id} value={sector.id}>
-                          {sector.name} - {sector.sectorType === "SEATED" ? "Khu ghế ngồi" : "Khu tự do / khu đứng"}
+                          {sector.name} - {sector.sectorType === "SEATED" ? "khu ghế ngồi" : "khu đứng"}
                         </option>
                       ))}
                     </select>
@@ -666,14 +690,6 @@ export default function OrganizerTicketTypesPage() {
               </div>
 
               <div className="organizer-form-actions organizer-ticket-modal-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary organizer-inline-button"
-                  onClick={resetForm}
-                  style={{ flex: 1 }}
-                >
-                  {editingId ? "Hủy chỉnh sửa" : "Đóng form"}
-                </button>
                 <button
                   type="submit"
                   className="btn btn-primary organizer-action-button"
@@ -720,11 +736,13 @@ export default function OrganizerTicketTypesPage() {
               </div>
             </div>
             {ticketTypes.length === 0 ? (
-              <div className="organizer-empty-state compact">
+              <div className="organizer-empty-state compact" style={{ background: "transparent", border: "none", boxShadow: "none" }}>
+                <Ticket size={48} style={{ color: "#16a34a", marginBottom: "12px" }} />
                 <p>Event này chưa có loại vé nào</p>
               </div>
             ) : filteredTicketTypes.length === 0 ? (
-              <div className="organizer-empty-state compact">
+              <div className="organizer-empty-state compact" style={{ background: "transparent", border: "none", boxShadow: "none" }}>
+                <Search size={48} style={{ color: "#16a34a", marginBottom: "12px" }} />
                 <p>Không có loại vé nào phù hợp</p>
               </div>
             ) : (

@@ -52,11 +52,12 @@ const standaloneShellPaths = [
 
 function AppRoutes() {
   const location = useLocation();
+  const isTicketSelectionPath = /^\/events\/[^/]+\/book$/.test(location.pathname);
   const usesStandaloneShell = standaloneShellPaths.some(
     (path) =>
       location.pathname === path ||
       (path !== "/venues" && location.pathname.startsWith(`${path}/`)),
-  );
+  ) || isTicketSelectionPath;
 
   return (
     <>
@@ -97,6 +98,10 @@ function AppRoutes() {
           <Route
             path="/organizer/events/:eventId/edit"
             element={<OrganizerEventEditorPage />}
+          />
+          <Route
+            path="/organizer/events/:eventId/media"
+            element={<OrganizerMediaPage />}
           />
           <Route
             path="/organizer/events/:eventId/ticket-types"

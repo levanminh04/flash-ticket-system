@@ -349,6 +349,8 @@
 .event-detail-description {
   line-height: 1.8;
   color: #334155;
+  white-space: pre-wrap;
+  font-size: 16px;
 }
 
 .event-detail-description p {
@@ -357,6 +359,37 @@
 
 .event-detail-description p:last-child {
   margin-bottom: 0;
+}
+
+.event-detail-description h1,
+.event-detail-description h2,
+.event-detail-description h3 {
+  color: #0f172a;
+  font-weight: 700;
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+.event-detail-description h1 { font-size: 24px; }
+.event-detail-description h2 { font-size: 20px; }
+.event-detail-description h3 { font-size: 18px; }
+
+.event-detail-description ul,
+.event-detail-description ol {
+  padding-left: 20px;
+  margin-bottom: 14px;
+}
+
+.event-detail-description ul {
+  list-style-type: disc;
+}
+
+.event-detail-description ol {
+  list-style-type: decimal;
+}
+
+.event-detail-description li {
+  margin-bottom: 6px;
 }
 
 .event-detail-card-divider {
@@ -709,7 +742,7 @@
   font-size: 65px;
   line-height: 1.1;
   font-weight: 800;
-  color: #0f172a;
+  color: #ffffff;
 }
 
 .event-gallery-title-highlight {
@@ -721,7 +754,7 @@
   max-width: 760px;
   font-size: 15px;
   line-height: 1.65;
-  color: #475569;
+  color: #ffffff;
 }
 
 .event-gallery-grid {
@@ -789,11 +822,11 @@
   font-size: 65px;
   line-height: 1.1;
   font-weight: 800;
-  color: #0f172a;
+  color: #ffffff;
 }
 
 .event-trust-title-highlight {
-  color: #000000;
+  color: #CC9900;
 }
 
 .event-trust-copy {
@@ -802,7 +835,7 @@
   font-size: 18px;
   line-height: 1.7;
   font-weight: 600;
-  color: #475569;
+  color: #ffffff;
 }
 
 .event-partner-grid {

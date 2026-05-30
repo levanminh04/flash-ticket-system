@@ -2,7 +2,6 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
-import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
 import SeatMapCanvasShell from "../../components/seat-map/editor/SeatMapCanvasShell";
 import SeatMapRightSidebar from "../../components/seat-map/editor/SeatMapRightSidebar";
 import {
@@ -94,10 +93,12 @@ const PUBLISH_CONFIRM_RETRY_ATTEMPTS = 3;
 const PUBLISH_CONFIRM_RETRY_DELAY_MS = 1000;
 const PROTECTED_SEAT_STATUSES = new Set(["RESERVED", "SOLD"]);
 
-function formatElapsedTime(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+function dispatchWorkflowSeatMapSaveStatus(eventId: string | undefined, saving: boolean) {
+  window.document.dispatchEvent(
+    new CustomEvent("organizer-workflow-seat-map-save-status", {
+      detail: { eventId, saving },
+    }),
+  );
 }
 
 function getTicketTypeSectorId(ticketType: { eventSectorId?: string | null; sectorId?: string | null }) {
@@ -137,8 +138,7 @@ export default function OrganizerSeatMapPage() {
   const [layout, setLayout] = useState<OrganizerEventLayout | null>(null);
   const [seatMap, setSeatMap] = useState<OrganizerSeatMap | null>(null);
   const [loading, setLoading] = useState(true);
-  const [publishing, setPublishing] = useState(false);
-  const [publishElapsedSeconds, setPublishElapsedSeconds] = useState(0);
+  const [, setPublishing] = useState(false);
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [seatLayoutInputs, setSeatLayoutInputs] = useState<Record<SeatLayoutFieldKey, string>>(DEFAULT_LAYOUT_INPUTS);
   const [, setUnsavedChanges] = useState(false);
@@ -291,20 +291,6 @@ export default function OrganizerSeatMapPage() {
     }
   }, [document, editingShapeId]);
 
-  useEffect(() => {
-    if (!publishing) {
-      setPublishElapsedSeconds(0);
-      return;
-    }
-
-    const startedAt = Date.now();
-    const intervalId = window.setInterval(() => {
-      setPublishElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
-    }, 250);
-
-    return () => window.clearInterval(intervalId);
-  }, [publishing]);
-
   const seatDropdownOptions = useMemo(() => {
     if (!selectedShape) return { rows: [], seatNumbers: [] };
     const rowMap = new Map<string, boolean>();
@@ -399,7 +385,7 @@ export default function OrganizerSeatMapPage() {
             seatCount: patch.sectorType === "STANDING" ? 0 : shape.seatCount,
           }
         : {}),
-      ...(patch.totalCapacity !== undefined ? { totalCapacity: patch.totalCapacity } : {}),
+      ...("totalCapacity" in patch ? { totalCapacity: patch.totalCapacity } : {}),
       ...(patch.ticketTypeId !== undefined
         ? {
             ticketTypeId: patch.ticketTypeId || undefined,
@@ -425,12 +411,27 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
+    const targetSelectedSeatIds = value
+      ? value.split(",").map((seatId) => seatId.trim()).filter(Boolean)
+      : selectedSeatIds;
+    const assignedSeatCount =
+      document?.shapes
+        .find((shape) => shape.id === shapeId)
+        ?.seats.filter((seat) => {
+          if (scope === "all") {
+            return seat.hidden !== true;
+          }
+
+          if (scope === "seat") {
+            return seat.id === value;
+          }
+
+          return targetSelectedSeatIds.includes(seat.id);
+        }).length ?? 0;
+
     updateShape(shapeId, (shape) => ({
       ...shape,
       seats: shape.seats.map((seat) => {
-        const targetSelectedSeatIds = value
-          ? value.split(",").map((seatId) => seatId.trim()).filter(Boolean)
-          : selectedSeatIds;
         const matches =
           scope === "all" ||
           (scope === "seat" && seat.id === value) ||
@@ -447,6 +448,10 @@ export default function OrganizerSeatMapPage() {
         };
       }),
     }));
+
+    if (assignedSeatCount > 0) {
+      toast.success(`Đã gán "${ticketType.name}" cho ${assignedSeatCount} ghế.`);
+    }
   };
 
   const hasProtectedSeats = (shapeId: string, seatIds?: string[]) => {
@@ -516,6 +521,11 @@ export default function OrganizerSeatMapPage() {
       return;
     }
     updateSeat(shapeId, seatId, patch);
+
+    if ("ticketTypeId" in patch && patch.ticketTypeId) {
+      const ticketType = ticketTypeById.get(patch.ticketTypeId);
+      toast.success(`Đã gán "${ticketType?.name ?? "loại vé"}" cho ghế.`);
+    }
   };
 
   const handleMoveSeat = (shapeId: string, seatId: string, nextX: number, nextY: number) => {
@@ -607,6 +617,17 @@ export default function OrganizerSeatMapPage() {
     );
     if (invalidStandingSector) {
       toast.error(`Khu "${invalidStandingSector.name}" cần nhập sức chứa tối đa.`);
+      return;
+    }
+
+    const mismatchedStandingTicketTypeSector = document.shapes
+      .filter((shape) => shape.visible !== false && shape.sectorType === "STANDING" && shape.ticketTypeId)
+      .map((shape) => ({ shape, ticketType: ticketTypeById.get(shape.ticketTypeId || "") }))
+      .find(({ shape, ticketType }) => !ticketType || getTicketTypeSectorId(ticketType) !== shape.id);
+    if (mismatchedStandingTicketTypeSector) {
+      toast.error(
+        `Loại vé "${mismatchedStandingTicketTypeSector.ticketType?.name ?? mismatchedStandingTicketTypeSector.shape.ticketTypeId}" không thuộc khu đứng "${mismatchedStandingTicketTypeSector.shape.name}".`,
+      );
       return;
     }
 
@@ -723,6 +744,12 @@ export default function OrganizerSeatMapPage() {
       }
 
       window.localStorage.removeItem(createEditorDraftKey(eventId));
+      sessionStorage.setItem(`organizer-seat-map-published:${eventId}`, "true");
+      window.document.dispatchEvent(
+        new CustomEvent("organizer-seat-map-published-updated", {
+          detail: { eventId, published: true },
+        }),
+      );
       setSeatMap(publishedSeatMap);
       setUnsavedChanges(false);
       toast.success("Seat map published.");
@@ -738,6 +765,21 @@ export default function OrganizerSeatMapPage() {
       setPublishing(false);
     }
   };
+
+  useEffect(() => {
+    const handleSave = async () => {
+      dispatchWorkflowSeatMapSaveStatus(eventId, true);
+      try {
+        await handlePublish();
+      } finally {
+        dispatchWorkflowSeatMapSaveStatus(eventId, false);
+      }
+    };
+    window.document.addEventListener("organizer-save-event", handleSave);
+    return () => {
+      window.document.removeEventListener("organizer-save-event", handleSave);
+    };
+  }, [document, eventId, layout, publishedSectorIds, ticketTypeById, ticketTypes]);
 
   const handleExportJson = () => {
     if (!document || !eventId) {
@@ -802,35 +844,17 @@ export default function OrganizerSeatMapPage() {
     navigate(`/organizer/events/${eventId}/ticket-types?mode=SEAT_MAP&sectorId=${shapeId}&create=1`);
   };
 
-  const headerActions = (
-    <>
-      <button type="button" className="seat-map-editor-button danger" onClick={handleClearDraft} disabled={!hasDraft}>
-        Clear Draft
-      </button>
-      <button
-        type="button"
-        className="seat-map-editor-button primary"
-        onClick={handlePublish}
-        disabled={publishing || !document}
-      >
-        {publishing ? `Publishing ${formatElapsedTime(publishElapsedSeconds)}` : "Publish"}
-      </button>
-    </>
-  );
-
   return (
     <OrganizerLayout
       title="Seat map"
       description="Design seating sections, manage seats, and publish the interactive map for buyers."
-      actions={headerActions}
+      actions={null}
       hideTopBar
+      showWorkflowNav={Boolean(eventId)}
+      eventId={eventId}
+      className="organizer-seat-map-page"
     >
       <div className="seat-map-editor-shell">
-        {eventId ? (
-          <div className="seat-map-editor-nav-strip">
-            <OrganizerEventWorkspaceNav eventId={eventId} />
-          </div>
-        ) : null}
 
         {loading ? (
           <section className="organizer-panel organizer-empty-state">
@@ -914,6 +938,8 @@ export default function OrganizerSeatMapPage() {
               onHideSelectedSeats={handleHideSelectedSeats}
               onRestoreSeat={restoreSeat}
               onRestoreSelectedSeats={restoreSelectedSeats}
+              onClearDraft={handleClearDraft}
+              canClearDraft={hasDraft}
               onCreateSeatTypeForShape={handleCreateSeatTypeForShape}
             />
           </main>

@@ -1,9 +1,23 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+const SafeEditorContent = EditorContent as any;
+import {
+  Bold,
+  Italic,
+  Strikethrough,
+  Heading1,
+  Heading2,
+  Heading3,
+  List,
+  ListOrdered,
+  Quote,
+  Undo,
+  Redo,
+} from "lucide-react";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
-import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
-import { confirmDestructiveAction } from "../../lib/swal";
 import {
   organizerWorkspaceService,
   OrganizerEventDetail,
@@ -41,10 +55,23 @@ type EventFormState = {
   metaKeywords: string;
 };
 
+const eventDescriptionTemplate = `<h2>Giới thiệu sự kiện:</h2>
+<p>[Tóm tắt ngắn gọn về sự kiện: Nội dung chính của sự kiện, điểm đặc sắc nhất và lý do khiến người tham gia không nên bỏ lỡ]</p>
+<h2>Chi tiết sự kiện:</h2>
+<p><strong>Chương trình chính:</strong> [Liệt kê những hoạt động nổi bật trong sự kiện: các phần trình diễn, khách mời đặc biệt, lịch trình các tiết mục cụ thể nếu có.]</p>
+<p><strong>Khách mời:</strong> [Thông tin về các khách mời đặc biệt, nghệ sĩ, diễn giả sẽ tham gia sự kiện. Có thể bao gồm phần mô tả ngắn gọn về họ và những gì họ sẽ mang lại cho sự kiện.]</p>
+<p><strong>Trải nghiệm đặc biệt:</strong> [Nếu có các hoạt động đặc biệt khác như workshop, khu trải nghiệm, photo booth, khu vực check-in hay các phần quà/ưu đãi dành riêng cho người tham dự.]</p>
+<h2>Điều khoản và điều kiện:</h2>
+<ul>
+  <li>[TnC] sự kiện</li>
+  <li>Lưu ý về điều khoản trẻ em</li>
+  <li>Lưu ý về điều khoản VAT</li>
+</ul>`;
+
 const defaultFormState: EventFormState = {
   title: "",
   shortDescription: "",
-  description: "",
+  description: eventDescriptionTemplate,
   tags: "",
   startDatetime: "",
   endDatetime: "",
@@ -151,6 +178,115 @@ function buildUpdatePayload(
   return nextPayload;
 }
 
+type MenuBarProps = {
+  editor: ReturnType<typeof useEditor>;
+};
+
+function MenuBar({ editor }: MenuBarProps) {
+  if (!editor) {
+    return null;
+  }
+
+  return (
+    <div className="tiptap-toolbar">
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        disabled={!editor.can().chain().focus().toggleBold().run()}
+        className={editor.isActive("bold") ? "is-active" : ""}
+        title="Bold"
+      >
+        <Bold size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        disabled={!editor.can().chain().focus().toggleItalic().run()}
+        className={editor.isActive("italic") ? "is-active" : ""}
+        title="Italic"
+      >
+        <Italic size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        disabled={!editor.can().chain().focus().toggleStrike().run()}
+        className={editor.isActive("strike") ? "is-active" : ""}
+        title="Strike"
+      >
+        <Strikethrough size={16} />
+      </button>
+      <div style={{ width: "1px", height: "20px", background: "#cbd5e1", margin: "0 4px" }} />
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        className={editor.isActive("heading", { level: 1 }) ? "is-active" : ""}
+        title="Heading 1"
+      >
+        <Heading1 size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        className={editor.isActive("heading", { level: 2 }) ? "is-active" : ""}
+        title="Heading 2"
+      >
+        <Heading2 size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        className={editor.isActive("heading", { level: 3 }) ? "is-active" : ""}
+        title="Heading 3"
+      >
+        <Heading3 size={16} />
+      </button>
+      <div style={{ width: "1px", height: "20px", background: "#cbd5e1", margin: "0 4px" }} />
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        className={editor.isActive("bulletList") ? "is-active" : ""}
+        title="Bullet List"
+      >
+        <List size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        className={editor.isActive("orderedList") ? "is-active" : ""}
+        title="Ordered List"
+      >
+        <ListOrdered size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        className={editor.isActive("blockquote") ? "is-active" : ""}
+        title="Blockquote"
+      >
+        <Quote size={16} />
+      </button>
+      <div style={{ width: "1px", height: "20px", background: "#cbd5e1", margin: "0 4px" }} />
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().chain().focus().undo().run()}
+        title="Undo"
+      >
+        <Undo size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().chain().focus().redo().run()}
+        title="Redo"
+      >
+        <Redo size={16} />
+      </button>
+    </div>
+  );
+}
+
 export default function OrganizerEventEditorPage() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
@@ -163,10 +299,73 @@ export default function OrganizerEventEditorPage() {
   const [formState, setFormState] = useState<EventFormState>(defaultFormState);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [publishing, setPublishing] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
   const shortDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (
+        categoryDropdownRef.current &&
+        !categoryDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+    window.addEventListener("click", handleClickOutside, true);
+    window.addEventListener("mousedown", handleClickOutside, true);
+    window.addEventListener("touchstart", handleClickOutside, true);
+    return () => {
+      window.removeEventListener("click", handleClickOutside, true);
+      window.removeEventListener("mousedown", handleClickOutside, true);
+      window.removeEventListener("touchstart", handleClickOutside, true);
+    };
+  }, []);
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: formState.description,
+    onUpdate: ({ editor }) => {
+      handleChange("description", editor.getHTML());
+    },
+  });
+
+  // Sync editor content with formState.description on load (when editor isn't focused)
+  useEffect(() => {
+    if (editor && !loading) {
+      if (editor.getHTML() !== formState.description && !editor.isFocused) {
+        editor.commands.setContent(formState.description);
+      }
+    }
+  }, [formState.description, editor, loading]);
+
+  useEffect(() => {
+    const handleSave = (e: Event) => {
+      const customEvent = e as CustomEvent<{ nextStep?: string }>;
+      const nextStep = customEvent.detail?.nextStep;
+      const mockEvent = { preventDefault: () => {} } as FormEvent<HTMLFormElement>;
+      void handleSubmit(mockEvent, nextStep);
+    };
+    document.addEventListener("organizer-save-event", handleSave);
+    return () => {
+      document.removeEventListener("organizer-save-event", handleSave);
+    };
+  }, [formState, currentEvent, isCreateMode, saving, eventId]);
+
+  useEffect(() => {
+    const handleEventStatusUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<OrganizerEventDetail>;
+      if (!customEvent.detail || customEvent.detail.id !== eventId) return;
+      setCurrentEvent(customEvent.detail);
+      setFormState(buildFormState(customEvent.detail));
+    };
+
+    document.addEventListener("organizer-event-status-updated", handleEventStatusUpdate);
+    return () => {
+      document.removeEventListener("organizer-event-status-updated", handleEventStatusUpdate);
+    };
+  }, [eventId]);
 
   useEffect(() => {
     if (!ready) return;
@@ -221,10 +420,6 @@ export default function OrganizerEventEditorPage() {
     autoResizeTextarea(shortDescriptionRef.current);
   }, [formState.shortDescription]);
 
-  useEffect(() => {
-    autoResizeTextarea(descriptionRef.current);
-  }, [formState.description]);
-
   const handleChange = <K extends keyof EventFormState>(
     key: K,
     value: EventFormState[K],
@@ -235,20 +430,19 @@ export default function OrganizerEventEditorPage() {
     }));
   };
 
-  const handleCategoryToggle = (categoryId: string) => {
-    setFormState((current) => ({
-      ...current,
-      categoryIds: current.categoryIds.includes(categoryId)
-        ? current.categoryIds.filter((item) => item !== categoryId)
-        : [...current.categoryIds, categoryId],
-    }));
-  };
-
-  const handleSubmit = async (submitEvent: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    submitEvent: FormEvent<HTMLFormElement>,
+    nextStep?: string,
+  ) => {
     submitEvent.preventDefault();
 
     if (!formState.title.trim()) {
       toast.error("Tên sự kiện là bắt buộc.");
+      return;
+    }
+
+    if (!formState.categoryIds.length || !formState.categoryIds[0]) {
+      toast.error("Danh mục là bắt buộc.");
       return;
     }
 
@@ -301,7 +495,15 @@ export default function OrganizerEventEditorPage() {
 
       if (isCreateMode) {
         toast.success("Tạo sự kiện thành công.");
-        navigate(`/organizer/events/${nextEvent.id}/edit`, { replace: true });
+        sessionStorage.setItem(
+          `organizer-workflow-step-saved:/organizer/events/${nextEvent.id}/edit`,
+          "true",
+        );
+        if (nextStep === "media") {
+          navigate(`/organizer/events/${nextEvent.id}/media`);
+        } else {
+          navigate(`/organizer/events/${nextEvent.id}/edit`, { replace: true });
+        }
         return;
       }
 
@@ -310,50 +512,6 @@ export default function OrganizerEventEditorPage() {
       toast.error(isCreateMode ? "Tạo sự kin thất bại." : "Cập nhật sự kin thất bại.");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handlePublish = async () => {
-    if (!eventId || currentEvent?.status !== "DRAFT") return;
-    setPublishing(true);
-    try {
-      const nextEvent = await organizerWorkspaceService.publishEvent(eventId);
-      setCurrentEvent(nextEvent);
-      setFormState(buildFormState(nextEvent));
-      toast.success("Đã publish sự kiện");
-    } catch {
-      toast.error("Không thể publish sự kiện.");
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  const handleCancel = async () => {
-    if (
-      !eventId ||
-      currentEvent?.status === "CANCELLED" ||
-      currentEvent?.status === "COMPLETED"
-    ) return;
-
-    const confirmed = await confirmDestructiveAction({
-      title: "Hủy sự kiện này?",
-      text: "Sự kiện sẽ chuyển sang trạng thái đã hủy. Hãy chắc chắn organizer đã sẵn sàng cho thao tác này.",
-      confirmButtonText: "Xác nhận hủy",
-      cancelButtonText: "Giữ nguyên",
-    });
-
-    if (!confirmed) return;
-
-    setCancelling(true);
-    try {
-      const nextEvent = await organizerWorkspaceService.cancelEvent(eventId);
-      setCurrentEvent(nextEvent);
-      setFormState(buildFormState(nextEvent));
-      toast.success("Đã hủy sự kiện.");
-    } catch {
-      toast.error("Không thể hủy sự kiện.");
-    } finally {
-      setCancelling(false);
     }
   };
 
@@ -367,8 +525,10 @@ export default function OrganizerEventEditorPage() {
       description={pageDescription}
       actions={null}
       hideTopBar
+      className="organizer-event-editor-page"
+      showWorkflowNav
+      eventId={eventId}
     >
-      {!isCreateMode && eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
 
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
@@ -380,7 +540,9 @@ export default function OrganizerEventEditorPage() {
           <form className="organizer-panel organizer-event-form" onSubmit={handleSubmit}>
             <div className="organizer-form-grid">
               <label className="organizer-field organizer-form-span-2">
-                <span>Tên sự kiện</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Tên sự kiện
+                </span>
                 <input
                   className="organizer-input"
                   value={formState.title}
@@ -390,7 +552,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field organizer-form-span-2">
-                <span>Mô tả ngắn</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Mô tả ngắn
+                </span>
                 <textarea
                   ref={shortDescriptionRef}
                   className="organizer-input organizer-textarea organizer-textarea-sm"
@@ -400,19 +564,20 @@ export default function OrganizerEventEditorPage() {
                 />
               </label>
 
-              <label className="organizer-field organizer-form-span-2">
-                <span>Mô tả chi tiết</span>
-                <textarea
-                  ref={descriptionRef}
-                  className="organizer-input organizer-textarea"
-                  value={formState.description}
-                  onChange={(event) => handleChange("description", event.target.value)}
-                  placeholder="Thông tin chi tiết về sự kiện"
-                />
-              </label>
+              <div className="organizer-field organizer-form-span-2">
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Mô tả chi tiết
+                </span>
+                <div className="tiptap-editor-wrapper">
+                  <MenuBar editor={editor} />
+                  <SafeEditorContent editor={editor} className="tiptap-editor-container" />
+                </div>
+              </div>
 
               <label className="organizer-field organizer-form-span-2">
-                <span>Tags</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Tags
+                </span>
                 <input
                   className="organizer-input"
                   value={formState.tags}
@@ -422,7 +587,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Bắt đầu</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Bắt đầu
+                </span>
                 <input
                   type="datetime-local"
                   className="organizer-input"
@@ -432,7 +599,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Kết thúc</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Kết thúc
+                </span>
                 <input
                   type="datetime-local"
                   className="organizer-input"
@@ -442,7 +611,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Timezone</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Timezone
+                </span>
                 <input
                   className="organizer-input"
                   value={formState.timezone}
@@ -452,7 +623,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field organizer-switch-field">
-                <span>Hình thức</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Hình thức
+                </span>
                 <label className="organizer-checkbox-card">
                   <input
                     type="checkbox"
@@ -477,7 +650,9 @@ export default function OrganizerEventEditorPage() {
                 </label>
               ) : (
                 <label className="organizer-field organizer-form-span-2">
-                  <span>Địa điểm</span>
+                  <span>
+                    <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Địa điểm
+                  </span>
                   <select
                     className="organizer-input"
                     value={formState.venueId}
@@ -494,7 +669,9 @@ export default function OrganizerEventEditorPage() {
               )}
 
               <label className="organizer-field">
-                <span>Bắt đầu bán</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Bắt đầu bán
+                </span>
                 <input
                   type="datetime-local"
                   className="organizer-input"
@@ -504,7 +681,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Kết thúc bán</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Kết thúc bán
+                </span>
                 <input
                   type="datetime-local"
                   className="organizer-input"
@@ -514,7 +693,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Mua tối thiểu</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Mua tối thiểu
+                </span>
                 <input
                   type="number"
                   min={1}
@@ -525,7 +706,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Mua tối đa</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Mua tối đa
+                </span>
                 <input
                   type="number"
                   min={1}
@@ -536,7 +719,9 @@ export default function OrganizerEventEditorPage() {
               </label>
 
               <label className="organizer-field organizer-form-span-2">
-                <span>Hiển thị</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Hiển thị
+                </span>
                 <select
                   className="organizer-input"
                   value={formState.visibility}
@@ -550,21 +735,131 @@ export default function OrganizerEventEditorPage() {
                 </select>
               </label>
 
-              <div className="organizer-field organizer-form-span-2">
-                <span>Danh mục</span>
-                <div className="organizer-checkbox-grid">
-                  {categories.map((category) => (
-                    <label key={category.id} className="organizer-checkbox-card">
-                      <input
-                        type="checkbox"
-                        checked={formState.categoryIds.includes(category.id)}
-                        onChange={() => handleCategoryToggle(category.id)}
-                      />
-                      <div>
-                        <strong>{category.name}</strong>
-                      </div>
-                    </label>
-                  ))}
+              <div className="organizer-field organizer-form-span-2" ref={categoryDropdownRef}>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Danh mục
+                </span>
+                <div style={{ position: "relative" }}>
+                  <div
+                    className="organizer-input"
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "6px",
+                      alignItems: "center",
+                      minHeight: "44px",
+                      height: "auto",
+                      padding: "6px 12px",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                  >
+                    {formState.categoryIds.length === 0 ? (
+                      <span style={{ color: "#94a3b8" }}>Chọn danh mục (cho phép chọn nhiều)</span>
+                    ) : (
+                      formState.categoryIds.map((id) => {
+                        const cat = categories.find((c) => c.id === id);
+                        return (
+                          <span
+                            key={id}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              background: "#ecfdf5",
+                              border: "1px solid #bbf7d0",
+                              color: "#065f46",
+                              padding: "2px 8px",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {cat?.name || id}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const nextIds = formState.categoryIds.filter((cid) => cid !== id);
+                                handleChange("categoryIds", nextIds);
+                              }}
+                              style={{
+                                border: "none",
+                                background: "none",
+                                color: "#065f46",
+                                cursor: "pointer",
+                                padding: 0,
+                                fontSize: "10px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: "14px",
+                                height: "14px",
+                                borderRadius: "50%",
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        );
+                      })
+                    )}
+                  </div>
+                  
+                  {isCategoryDropdownOpen && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: "4px",
+                        background: "#ffffff",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "8px",
+                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                        zIndex: 1000,
+                        maxHeight: "200px",
+                        overflowY: "auto",
+                        padding: "4px",
+                      }}
+                    >
+                      {categories.map((category) => {
+                        const isSelected = formState.categoryIds.includes(category.id);
+                        return (
+                          <div
+                            key={category.id}
+                            onClick={() => {
+                              const nextIds = isSelected
+                                ? formState.categoryIds.filter((id) => id !== category.id)
+                                : [...formState.categoryIds, category.id];
+                              handleChange("categoryIds", nextIds);
+                            }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              padding: "8px 12px",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              background: isSelected ? "#f1f5f9" : "transparent",
+                              fontWeight: isSelected ? 600 : 500,
+                              fontSize: "13px",
+                              color: "#1e293b",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              readOnly
+                              style={{ cursor: "pointer" }}
+                            />
+                            <span>{category.name}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -596,37 +891,7 @@ export default function OrganizerEventEditorPage() {
               </label>
             </div>
 
-            <div className="organizer-form-actions">
-              <button type="submit" className="btn btn-primary organizer-action-button" disabled={saving}>
-                {saving ? "Đang lưu" : isCreateMode ? "Tạo sự kiện" : "Lưu thay đổi"}
-              </button>
-            </div>
           </form>
-
-          {!isCreateMode ? (
-            <div className="organizer-editor-secondary-actions">
-              <button
-                type="button"
-                className="btn btn-secondary organizer-editor-secondary-button"
-                onClick={handleCancel}
-                disabled={
-                  cancelling ||
-                  currentEvent?.status === "CANCELLED" ||
-                  currentEvent?.status === "COMPLETED"
-                }
-              >
-                {cancelling ? "Đang hủy" : "Hủy sự kiện"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary organizer-editor-secondary-button"
-                onClick={handlePublish}
-                disabled={publishing || currentEvent?.status !== "DRAFT"}
-              >
-                {publishing ? "Đang publish" : "Publish"}
-              </button>
-            </div>
-          ) : null}
         </>
       )}
     </OrganizerLayout>

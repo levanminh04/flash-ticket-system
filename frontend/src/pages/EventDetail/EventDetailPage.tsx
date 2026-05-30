@@ -405,7 +405,7 @@ export default function EventDetailPage() {
               onClick={() => navigate(`/events/${slug}/book`)}
               style={{ backgroundColor: "#CC9900", borderColor: "#CC9900" }}
             >
-              Chọn lịch diễn
+              Mua vé
             </button>
           </section>
 

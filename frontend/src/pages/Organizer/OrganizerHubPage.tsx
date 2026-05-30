@@ -632,6 +632,7 @@ export default function OrganizerHubPage() {
     <OrganizerLayout
       title="Tổng quan"
       description="Theo dõi hiệu suất sự kiện và vé bán."
+      className="organizer-hub-page"
     >
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
