@@ -132,7 +132,15 @@ export default function SeatMapEditorCanvas({
   const seatBlockDragOriginRef = useRef<
     Record<string, { x: number; y: number; width: number; height: number }>
   >({});
+  const panStartRef = useRef<{
+    pointerX: number;
+    pointerY: number;
+    viewportX: number;
+    viewportY: number;
+    moved: boolean;
+  } | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 640 });
+  const [isPanning, setIsPanning] = useState(false);
   const [seatBlockGuide, setSeatBlockGuide] = useState<{
     shapeId: string;
     showVertical: boolean;
@@ -297,6 +305,61 @@ export default function SeatMapEditorCanvas({
     }
 
     if (targetName === "seat-map-background") {
+      const stage = event.target.getStage();
+      const pointer = stage?.getPointerPosition();
+      if (!pointer) {
+        return;
+      }
+
+      event.evt.preventDefault();
+      panStartRef.current = {
+        pointerX: pointer.x,
+        pointerY: pointer.y,
+        viewportX: viewport.x,
+        viewportY: viewport.y,
+        moved: false,
+      };
+      setIsPanning(true);
+    }
+  };
+
+  const handleMouseMove = (event: any) => {
+    const panStart = panStartRef.current;
+    if (!panStart) {
+      return;
+    }
+
+    const stage = event.target.getStage();
+    const pointer = stage?.getPointerPosition();
+    if (!pointer) {
+      return;
+    }
+
+    const deltaX = pointer.x - panStart.pointerX;
+    const deltaY = pointer.y - panStart.pointerY;
+    const moved = Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3;
+    panStartRef.current = {
+      ...panStart,
+      moved: panStart.moved || moved,
+    };
+
+    onViewportChange({
+      ...viewport,
+      x: panStart.viewportX + deltaX,
+      y: panStart.viewportY + deltaY,
+    });
+  };
+
+  const handleMouseUp = () => {
+    const panStart = panStartRef.current;
+    if (!panStart) {
+      return;
+    }
+
+    panStartRef.current = null;
+    setIsPanning(false);
+
+    if (!panStart.moved) {
       onClearSelection();
     }
   };
@@ -320,13 +383,19 @@ export default function SeatMapEditorCanvas({
   return (
     <div
       ref={containerRef}
-      className="organizer-seat-map-canvas-shell"
+      className={`organizer-seat-map-canvas-shell${isPanning ? " is-panning" : ""}`}
     >
       <Stage
         width={viewportSize.width}
         height={viewportSize.height}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleMouseDown}
+        onTouchMove={handleMouseMove}
+        onTouchEnd={handleMouseUp}
       >
         <Layer>
           <Rect

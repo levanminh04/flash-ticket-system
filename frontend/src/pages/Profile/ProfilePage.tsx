@@ -5,7 +5,7 @@ import { toast } from "react-toastify";
 import { LoaderCircle } from "lucide-react";
 import { FaCalendarAlt, FaPhoneAlt, FaUser } from "react-icons/fa";
 import { IoCameraOutline } from "react-icons/io5";
-import { MdEmail, MdOpenInNew } from "react-icons/md";
+import { MdEmail } from "react-icons/md";
 import { userService, UserProfile } from "../../services/userService";
 import AccountSidebar from "../../components/account/AccountSidebar";
 import AccountCategoryNav from "../../components/common/AccountCategoryNav";
@@ -76,7 +76,6 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,7 +150,6 @@ export default function ProfilePage() {
       }
       setProfile(updatedProfile);
       setForm(createFormState(updatedProfile));
-      setIsEditorOpen(false);
       toast.success("Đã cập nhật hồ sơ cá nhân.");
     } finally {
       setSaving(false);
@@ -159,11 +157,6 @@ export default function ProfilePage() {
   };
 
   const handleResetForm = () => setForm(createFormState(profile));
-
-  const handleOpenEditor = () => {
-    setForm(createFormState(profile));
-    setIsEditorOpen(true);
-  };
 
   const handleAvatarSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -236,40 +229,24 @@ export default function ProfilePage() {
                     <div className="profile-info-pill">
                       <MdEmail size={17} />
                       <span className="profile-info-value">{email || "Chưa cập nhật"}</span>
-                      <button type="button" className="profile-info-open-btn" onClick={handleOpenEditor} aria-label="Chỉnh sửa thông tin">
-                        <MdOpenInNew size={17} />
-                      </button>
                     </div>
                     <div className="profile-info-pill">
                       <FaPhoneAlt size={15} />
                       <span className="profile-info-value">{profile?.phone || "Chưa cập nhật"}</span>
-                      <button type="button" className="profile-info-open-btn" onClick={handleOpenEditor} aria-label="Chỉnh sửa thông tin">
-                        <MdOpenInNew size={17} />
-                      </button>
                     </div>
                     <div className="profile-info-pill">
                       <FaCalendarAlt size={16} />
                       <span className="profile-info-value">{formatDateDisplay(profile?.dateOfBirth)}</span>
-                      <button type="button" className="profile-info-open-btn" onClick={handleOpenEditor} aria-label="Chỉnh sửa thông tin">
-                        <MdOpenInNew size={17} />
-                      </button>
                     </div>
                     <div className="profile-info-pill">
                       <FaUser size={16} />
                       <span className="profile-info-value">{formatGenderDisplay(profile?.gender)}</span>
-                      <button type="button" className="profile-info-open-btn" onClick={handleOpenEditor} aria-label="Chỉnh sửa thông tin">
-                        <MdOpenInNew size={17} />
-                      </button>
                     </div>
                   </div>
                 </div>
               </section>
-              {isEditorOpen ? (
-                <div className="profile-editor-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="profile-editor-title" onClick={() => setIsEditorOpen(false)}>
-                  <form className="profile-editor-modal profile-editor-card" onSubmit={handleSaveProfile} onClick={(event) => event.stopPropagation()}>
-                    <button type="button" className="profile-editor-modal-close" onClick={() => setIsEditorOpen(false)} aria-label="Đóng">
-                      ×
-                    </button>
+
+              <form className="profile-card profile-editor-card" onSubmit={handleSaveProfile}>
                 <div className="profile-editor-header">
                   <div>
                     <h2 id="profile-editor-title">Chỉnh sửa thông tin</h2>
@@ -292,9 +269,7 @@ export default function ProfilePage() {
                     Cập nhập
                   </button>
                 </div>
-                  </form>
-                </div>
-              ) : null}
+              </form>
             </div>
           )}
         </div>

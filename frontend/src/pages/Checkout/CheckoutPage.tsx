@@ -3,6 +3,7 @@ import {
   useState,
   useRef,
   useCallback,
+  useMemo,
   type MouseEvent,
 } from "react";
 import {
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { IoIosInformationCircle } from "react-icons/io";
 import { TiTicket } from "react-icons/ti";
+import { FaCheck } from "react-icons/fa6";
 
 function formatCurrency(value: number): string {
   return `${value.toLocaleString("vi-VN")} đ`;
@@ -41,6 +43,13 @@ function truncateBreadcrumbLabel(value: string, maxLength = 70): string {
   }
   return `${value.slice(0, maxLength)}...`;
 }
+
+const paymentStrategyLogos = {
+  default: "https://cdn.haitrieu.com/wp-content/uploads/2022/10/Icon-VNPAY-QR.png",
+  qr: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/MoMo_Logo_App.svg/960px-MoMo_Logo_App.svg.png",
+  bank: "https://congtyquatang.com.vn/wp-content/uploads/2026/02/Logo-VietinBank-CTG-Ori.png",
+  card: "https://download.logo.wine/logo/Visa_Inc./Visa_Inc.-Logo.wine.png",
+};
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -65,6 +74,16 @@ export default function CheckoutPage() {
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const allowNavigationRef = useRef(false);
   const popStateReadyRef = useRef(false);
+
+  const ticketTypeColorById = useMemo(() => {
+    const mapping = new Map<string, string>();
+    (event?.ticketTypes ?? []).forEach((ticketType) => {
+      if (ticketType.id && ticketType.colorCode) {
+        mapping.set(ticketType.id, ticketType.colorCode);
+      }
+    });
+    return mapping;
+  }, [event?.ticketTypes]);
 
   const clearCheckoutSession = useCallback(() => {
     sessionStorage.removeItem("bookingItems");
@@ -437,7 +456,7 @@ export default function CheckoutPage() {
               </h2>
 
               <div className="form-group">
-                <label>Họ và tên</label>
+                <label><span className="checkout-required-star">*</span>Họ và tên</label>
                 <input
                   type="text"
                   className="form-input"
@@ -450,7 +469,7 @@ export default function CheckoutPage() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Email</label>
+                  <label><span className="checkout-required-star">*</span>Email</label>
                   <input
                     type="email"
                     className="form-input"
@@ -462,7 +481,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="form-group">
-                  <label>Số điện thoại</label>
+                  <label><span className="checkout-required-star">*</span>Số điện thoại</label>
                   <input
                     type="tel"
                     className="form-input"
@@ -511,7 +530,16 @@ export default function CheckoutPage() {
                     value=""
                     checked={selectedBankCode === ""}
                     onChange={() => setSelectedBankCode("")}
-                    style={{ width: "18px", height: "18px", accentColor: "var(--primary)" }}
+                    className="payment-strategy-radio-input"
+                  />
+                  <span className="payment-strategy-radio" aria-hidden="true">
+                    <FaCheck size={10} />
+                  </span>
+                  <img
+                    src={paymentStrategyLogos.default}
+                    alt=""
+                    className="payment-strategy-logo"
+                    aria-hidden="true"
                   />
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontWeight: 600, fontSize: "14px" }}>Cổng thanh toán VNPay (Mặc định)</span>
@@ -535,7 +563,16 @@ export default function CheckoutPage() {
                     value="VNPAYQR"
                     checked={selectedBankCode === "VNPAYQR"}
                     onChange={() => setSelectedBankCode("VNPAYQR")}
-                    style={{ width: "18px", height: "18px", accentColor: "var(--primary)" }}
+                    className="payment-strategy-radio-input"
+                  />
+                  <span className="payment-strategy-radio" aria-hidden="true">
+                    <FaCheck size={10} />
+                  </span>
+                  <img
+                    src={paymentStrategyLogos.qr}
+                    alt=""
+                    className="payment-strategy-logo"
+                    aria-hidden="true"
                   />
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontWeight: 600, fontSize: "14px" }}>Thanh toán quét mã VNPay-QR</span>
@@ -559,7 +596,16 @@ export default function CheckoutPage() {
                     value="VNBANK"
                     checked={selectedBankCode === "VNBANK"}
                     onChange={() => setSelectedBankCode("VNBANK")}
-                    style={{ width: "18px", height: "18px", accentColor: "var(--primary)" }}
+                    className="payment-strategy-radio-input"
+                  />
+                  <span className="payment-strategy-radio" aria-hidden="true">
+                    <FaCheck size={10} />
+                  </span>
+                  <img
+                    src={paymentStrategyLogos.bank}
+                    alt=""
+                    className="payment-strategy-logo"
+                    aria-hidden="true"
                   />
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontWeight: 600, fontSize: "14px" }}>Thẻ ATM / Tài khoản ngân hàng nội địa</span>
@@ -583,7 +629,16 @@ export default function CheckoutPage() {
                     value="INTCARD"
                     checked={selectedBankCode === "INTCARD"}
                     onChange={() => setSelectedBankCode("INTCARD")}
-                    style={{ width: "18px", height: "18px", accentColor: "var(--primary)" }}
+                    className="payment-strategy-radio-input"
+                  />
+                  <span className="payment-strategy-radio" aria-hidden="true">
+                    <FaCheck size={10} />
+                  </span>
+                  <img
+                    src={paymentStrategyLogos.card}
+                    alt=""
+                    className="payment-strategy-logo"
+                    aria-hidden="true"
                   />
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontWeight: 600, fontSize: "14px" }}>Thẻ quốc tế (Visa, Mastercard, JCB...)</span>
@@ -625,6 +680,12 @@ export default function CheckoutPage() {
                   const lineTotal = item.subtotal;
                   const seatLabels = item.seats ? (item.seats.map(s => s.seatLabel).filter(Boolean) as string[]) : [];
                   const zoneTag = item.sectorName ? `Khu ${item.sectorName}` : null;
+                  const ticketColor = ticketTypeColorById.get(item.ticketTypeId) || "#2DC275";
+                  const ticketColorStyle = {
+                    backgroundColor: ticketColor,
+                    borderColor: ticketColor,
+                    color: "#ffffff",
+                  };
 
                   return (
                     <div className="ticket-summary-item" key={`${item.ticketTypeId}-${idx}`}>
@@ -635,7 +696,7 @@ export default function CheckoutPage() {
                         </p>
                         {zoneTag && (
                           <div className="ticket-tags">
-                            <span className="ticket-tag">{zoneTag}</span>
+                            <span className="ticket-tag" style={ticketColorStyle}>{zoneTag}</span>
                           </div>
                         )}
                       </div>
@@ -651,6 +712,7 @@ export default function CheckoutPage() {
                               <span
                                 className="seat-pill"
                                 key={`${item.ticketTypeId}-${seatLabel}`}
+                                style={ticketColorStyle}
                               >
                                 {seatLabel}
                               </span>

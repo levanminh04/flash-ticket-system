@@ -1,6 +1,10 @@
 ﻿import { useEffect, useState, useRef } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link, useLocation } from "react-router-dom";
+import { FaMusic } from "react-icons/fa6";
+import { FaMapMarkedAlt } from "react-icons/fa";
+import { AiFillPicture } from "react-icons/ai";
+import { GrWorkshop } from "react-icons/gr";
 import {
   Building2,
   Calendar,
@@ -19,10 +23,12 @@ import {
   Wallet,
 } from "lucide-react";
 import { eventService } from "../../services/eventService";
+import { categoryService } from "../../services/categoryService";
+import { venueService } from "../../services/venueService";
 import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 import Blog from "../../components/common/Blog";
 import Footer from "../../components/common/Footer";
-import { EventSummary } from "../../types/api";
+import { Category, EventSummary, Venue } from "../../types/api";
 import { partnerLogos } from "../../constants/partners";
 import { hasAnyRealmRole } from "../../lib/auth";
 
@@ -59,8 +65,23 @@ type HomeContentConfig = {
   sectionOrder: HomeSectionKey[];
 };
 
+type CategoryEventSection = {
+  category: Category;
+  events: EventSummary[];
+};
+
+type HomeVenueDestination = {
+  title: string;
+  to: string;
+  images: string[];
+};
+
 const HOME_HERO_OVERRIDES_KEY = "flashTicket.homeHeroOverrides";
 const HOME_CONTENT_CONFIG_KEY = "flashTicket.homeContentConfig";
+const EVENT_MEDIA_CANDIDATE_LIMIT = 20;
+const HOME_CATEGORY_BANNER_URL =
+  "https://i.ibb.co/tMB8JFfL/60f019b6-5f02-4ae0-8754-963c8785c246.png";
+const categoryTitleIcons = [FaMusic, GrWorkshop, AiFillPicture];
 
 const homeSectionLabels: Record<HomeSectionKey, string> = {
   trust: "Trust strip",
@@ -198,6 +219,30 @@ const pastEventGallery = [
   "https://cdn3.ivivu.com/2023/12/tri%E1%BB%83n-l%C3%A3m-Van-Gogh-ivivu.jpg",
 ];
 
+const venueCityFallbackImages: Record<string, string> = {
+  "tp. hồ chí minh":
+    "https://images.unsplash.com/photo-1583417319070-4a69db38a482?q=80&w=1200&auto=format&fit=crop",
+  "hồ chí minh":
+    "https://images.unsplash.com/photo-1583417319070-4a69db38a482?q=80&w=1200&auto=format&fit=crop",
+  "ha noi":
+    "https://images.unsplash.com/photo-1609167830220-7164aa360951?q=80&w=1200&auto=format&fit=crop",
+  "hà nội":
+    "https://images.unsplash.com/photo-1609167830220-7164aa360951?q=80&w=1200&auto=format&fit=crop",
+  "đà lạt":
+    "https://images.unsplash.com/photo-1559670978-1332cb79b449?q=80&w=1200&auto=format&fit=crop",
+  "da lat":
+    "https://images.unsplash.com/photo-1559670978-1332cb79b449?q=80&w=1200&auto=format&fit=crop",
+};
+
+const defaultVenueFallbackImage =
+  "https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=1200&auto=format&fit=crop";
+const otherVenueFallbackImages = [
+  "https://images.unsplash.com/photo-1528127269322-539801943592?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1528181304800-259b08848526?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1563492065599-3520f775eeed?q=80&w=800&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=800&auto=format&fit=crop",
+];
+
 const faqItems = [
   {
     question: "How to buy event tickets?",
@@ -260,6 +305,18 @@ function formatDate(value?: string) {
   });
 }
 
+function formatCategoryEventDate(value?: string) {
+  if (!value) return "Đang cập nhật";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  const day = parsed.toLocaleDateString("vi-VN", { day: "2-digit" });
+  const month = parsed.toLocaleDateString("vi-VN", { month: "2-digit" });
+  const year = parsed.getFullYear();
+
+  return `${day} tháng ${month}, ${year}`;
+}
+
 function formatPrice(event?: Partial<EventSummary>) {
   const minPrice =
     typeof event?.minPrice === "number"
@@ -282,6 +339,112 @@ function getEventImage(event?: Partial<EventSummary>) {
     event?.images?.find((image) => image.type === "THUMBNAIL")?.url ||
     "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?q=80&w=1400&auto=format&fit=crop"
   );
+}
+
+function getEventStartTime(event: Partial<EventSummary>) {
+  const parsed = new Date(
+    event.schedule?.startDatetime || event.startDatetime || "",
+  );
+  return Number.isNaN(parsed.getTime())
+    ? Number.MAX_SAFE_INTEGER
+    : parsed.getTime();
+}
+
+function hasEventImageType(event: Partial<EventSummary>, type: string) {
+  return Boolean(
+    event.images?.some(
+      (image) =>
+        image.type?.toUpperCase() === type &&
+        typeof image.url === "string" &&
+        image.url.trim().length > 0,
+    ),
+  );
+}
+
+function hasPosterAndBanner(event: Partial<EventSummary>) {
+  return hasEventImageType(event, "POSTER") && hasEventImageType(event, "BANNER");
+}
+
+function hasSummaryImage(event: Partial<EventSummary>) {
+  return Boolean(
+    event.bannerUrl ||
+      event.thumbnailUrl ||
+      event.images?.some(
+        (image) =>
+          typeof image.url === "string" && image.url.trim().length > 0,
+      ),
+  );
+}
+
+function getNearestEventsWithPosterAndBanner(
+  events: EventSummary[],
+  limit: number,
+  direction: "asc" | "desc" = "asc",
+) {
+  const sortByStartTime = (left: EventSummary, right: EventSummary) =>
+    direction === "asc"
+      ? getEventStartTime(left) - getEventStartTime(right)
+      : getEventStartTime(right) - getEventStartTime(left);
+
+  const sortedEvents = [...events].sort(
+    sortByStartTime,
+  );
+  const eventsWithRequiredMedia = sortedEvents.filter(hasPosterAndBanner);
+
+  return (eventsWithRequiredMedia.length > 0
+    ? eventsWithRequiredMedia
+    : sortedEvents.filter(hasSummaryImage)
+  ).slice(0, limit);
+}
+
+function normalizeVenueCity(city?: string) {
+  return city?.trim() || "Vị trí khác";
+}
+
+function getVenueImageUrls(venues: Venue[], city: string) {
+  const fallbackImage =
+    venueCityFallbackImages[city.toLowerCase()] || defaultVenueFallbackImage;
+  const images = venues
+    .flatMap((venue) => venue.imageUrls || [])
+    .filter((url): url is string => Boolean(url && url.trim()));
+
+  return Array.from(new Set(images)).slice(0, 4).concat(fallbackImage).slice(0, 4);
+}
+
+function buildVenueDestinations(venues: Venue[]): HomeVenueDestination[] {
+  const cityMap = new Map<string, Venue[]>();
+
+  venues.forEach((venue) => {
+    const city = normalizeVenueCity(venue.city);
+    cityMap.set(city, [...(cityMap.get(city) || []), venue]);
+  });
+
+  const groupedCities = Array.from(cityMap.entries()).sort((left, right) => {
+    if (right[1].length !== left[1].length) {
+      return right[1].length - left[1].length;
+    }
+    return left[0].localeCompare(right[0], "vi");
+  });
+
+  const primaryCities = groupedCities.slice(0, 3);
+  const otherCities = groupedCities.slice(3);
+  const destinations = primaryCities.map(([city, cityVenues]) => ({
+    title: city,
+    to: "/venues",
+    images: getVenueImageUrls(cityVenues, city).slice(0, 1),
+  }));
+
+  const otherVenues = otherCities.flatMap(([, cityVenues]) => cityVenues);
+  destinations.push({
+    title: "Vị trí khác",
+    to: "/venues",
+    images:
+      otherVenues.length > 0
+        ? getVenueImageUrls(otherVenues, "Vị trí khác")
+        : otherVenueFallbackImages,
+  });
+
+  return destinations;
 }
 
 function getEventLocation(event?: Partial<EventSummary>) {
@@ -355,12 +518,42 @@ function readHomeContentConfig(): HomeContentConfig {
   }
 }
 
+function renderTitleWithHighlight(title: string, highlight: string) {
+  const normalizedTitle = title.toLowerCase();
+  const normalizedHighlight = highlight.toLowerCase();
+  const highlightIndex = normalizedTitle.lastIndexOf(normalizedHighlight);
+
+  if (highlightIndex < 0) return title;
+
+  const beforeHighlight = title.slice(0, highlightIndex);
+  const highlightedText = title.slice(
+    highlightIndex,
+    highlightIndex + highlight.length,
+  );
+  const afterHighlight = title.slice(highlightIndex + highlight.length);
+
+  return (
+    <>
+      {beforeHighlight}
+      <span className="home-title-accent">{highlightedText}</span>
+      {afterHighlight}
+    </>
+  );
+}
+
 export default function HomePage() {
   const { keycloak, initialized } = useKeycloak();
   const location = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [featuredEvents, setFeaturedEvents] = useState<EventSummary[]>([]);
   const [otherEvents, setOtherEvents] = useState<EventSummary[]>([]);
+  const [pastEvents, setPastEvents] = useState<EventSummary[]>([]);
+  const [venueDestinations, setVenueDestinations] = useState<
+    HomeVenueDestination[]
+  >([]);
+  const [categoryEventSections, setCategoryEventSections] = useState<
+    CategoryEventSection[]
+  >([]);
   const [activeFaq, setActiveFaq] = useState(0);
   const [heroOverrides, setHeroOverrides] = useState<HeroEventOverrides>({});
   const [homeContent, setHomeContent] = useState<HomeContentConfig>(
@@ -391,19 +584,107 @@ export default function HomePage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [featRes, eventRes] = await Promise.all([
-          eventService.getFeaturedEvents(5),
-          eventService.getEvents({ size: 8 }),
+        const today = new Date().toISOString().slice(0, 10);
+        const [heroCandidateRes, eventRes, pastEventRes] = await Promise.all([
+          eventService.getEvents({
+            size: EVENT_MEDIA_CANDIDATE_LIMIT,
+            sort: "startDatetime,asc",
+            startDate: today,
+          }),
+          eventService.getEvents({
+            size: EVENT_MEDIA_CANDIDATE_LIMIT,
+            sort: "startDatetime,asc",
+            startDate: today,
+          }),
+          eventService.getEvents({
+            size: EVENT_MEDIA_CANDIDATE_LIMIT,
+            sort: "startDatetime,desc",
+            endDate: today,
+          }),
         ]);
+        const heroEventsWithMedia = getNearestEventsWithPosterAndBanner(
+          heroCandidateRes.content || [],
+          5,
+        );
+        const upcomingEventsWithMedia = getNearestEventsWithPosterAndBanner(
+          eventRes.content || [],
+          8,
+        );
+        const pastEventsWithMedia = getNearestEventsWithPosterAndBanner(
+          pastEventRes.content || [],
+          8,
+          "desc",
+        );
 
-        if (Array.isArray(featRes)) setFeaturedEvents(featRes);
-        if (eventRes?.content) setOtherEvents(eventRes.content);
+        setFeaturedEvents(heroEventsWithMedia);
+        setOtherEvents(upcomingEventsWithMedia);
+        setPastEvents(pastEventsWithMedia);
       } catch (error) {
         console.error("Lỗi fetch HomePage API", error);
       }
     };
 
     void loadData();
+  }, []);
+
+  useEffect(() => {
+    const loadCategoryEvents = async () => {
+      try {
+        const categories = await categoryService.getCategories();
+        const sections = await Promise.all(
+          categories.map(async (category) => {
+            const today = new Date().toISOString().slice(0, 10);
+            const eventsPage = await eventService.getEvents({
+              category: category.slug || category.id,
+              size: EVENT_MEDIA_CANDIDATE_LIMIT,
+              sort: "startDatetime,asc",
+              startDate: today,
+            });
+            const nearestEventsWithMedia =
+              getNearestEventsWithPosterAndBanner(
+                eventsPage.content || [],
+                4,
+              );
+
+            return {
+              category,
+              events: nearestEventsWithMedia,
+              totalEvents: eventsPage.totalElements || 0,
+            };
+          }),
+        );
+
+        setCategoryEventSections(
+          sections
+            .filter((section) => section.totalEvents > 0 && section.events.length > 0)
+            .sort((left, right) => {
+              if (right.totalEvents !== left.totalEvents) {
+                return right.totalEvents - left.totalEvents;
+              }
+              return left.category.displayOrder - right.category.displayOrder;
+            })
+            .slice(0, 3)
+            .map(({ category, events }) => ({ category, events })),
+        );
+      } catch (error) {
+        console.error("Lỗi fetch event theo danh mục", error);
+      }
+    };
+
+    void loadCategoryEvents();
+  }, []);
+
+  useEffect(() => {
+    const loadVenueDestinations = async () => {
+      try {
+        const venues = await venueService.getVenues();
+        setVenueDestinations(buildVenueDestinations(venues));
+      } catch (error) {
+        console.error("Lỗi fetch venue cho HomePage", error);
+      }
+    };
+
+    void loadVenueDestinations();
   }, []);
 
   useEffect(() => {
@@ -426,6 +707,18 @@ export default function HomePage() {
   const primaryHeroEvent = heroEvents[currentSlide] || heroEvents[0];
   const upcomingEvents = otherEvents.length > 0 ? otherEvents : heroEvents;
   const primaryHeroKey = getHeroEventKey(primaryHeroEvent);
+  const visiblePastEventGallery =
+    pastEvents.length > 0
+      ? pastEvents.map((event) => ({
+          image: getEventImage(event),
+          title: event.title,
+          to: `/event/${event.slug || event.id}`,
+        }))
+      : pastEventGallery.map((image, index) => ({
+          image,
+          title: `Past event ${index + 1}`,
+          to: "",
+        }));
 
   useEffect(() => {
     if (heroEvents.length <= 1) return undefined;
@@ -673,10 +966,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section" id="home-features" style={{ order: getSectionOrder("features") }}>
+        <section className="home-section" id="home-features" style={{ order: getSectionOrder("features") + 1 }}>
           <div className="section-heading section-heading-center">
             <h2 className="home-features-title">
-              {homeContent.featuresTitle}
+              {renderTitleWithHighlight(homeContent.featuresTitle, "Features")}
             </h2>
             <p>
               It is a long established fact that a reader content of a page when
@@ -701,6 +994,77 @@ export default function HomePage() {
           </div>
         </section>
 
+        {categoryEventSections.length > 0 ? (
+          <section
+            className="home-category-events-section"
+            style={{ order: getSectionOrder("features") }}
+          >
+            {categoryEventSections.map((section, index) => (
+              <div
+                className="home-category-event-group"
+                key={section.category.id || section.category.slug}
+              >
+                <div className="home-category-event-block">
+                  <div className="home-category-event-header">
+                    <h2>
+                      {(() => {
+                        const CategoryIcon = categoryTitleIcons[index];
+                        return CategoryIcon ? (
+                          <CategoryIcon className="home-category-title-icon" />
+                        ) : null;
+                      })()}
+                      <span>{section.category.name}</span>
+                    </h2>
+                    <Link
+                      to={`/search?category=${section.category.slug || section.category.id}`}
+                      className="home-category-event-more"
+                    >
+                      <span>Xem thêm</span>
+                      <ChevronRight size={18} />
+                    </Link>
+                  </div>
+
+                  <div className="home-category-event-grid">
+                    {section.events.map((event) => (
+                      <article className="home-category-event-card" key={event.id}>
+                        <Link
+                          to={`/event/${event.slug || event.id}`}
+                          className="home-category-event-image"
+                        >
+                          <img src={getEventImage(event)} alt={event.title} />
+                        </Link>
+
+                        <div className="home-category-event-body">
+                          <h3>
+                            <Link to={`/event/${event.slug || event.id}`}>
+                              {event.title}
+                            </Link>
+                          </h3>
+                          <p className="home-category-event-price">
+                            {formatPrice(event)}
+                          </p>
+                          <p className="home-category-event-date">
+                            <Calendar size={15} />
+                            <span>
+                              {formatCategoryEventDate(event.startDatetime)}
+                            </span>
+                          </p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+
+                {index === 0 && categoryEventSections.length > 1 ? (
+                  <div className="home-category-events-banner">
+                    <img src={HOME_CATEGORY_BANNER_URL} alt="Event banner" />
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </section>
+        ) : null}
+
         <section
           className="home-section home-upcoming-section"
           style={{
@@ -711,7 +1075,7 @@ export default function HomePage() {
           <div className="section-heading">
             <div>
               <h2 className="home-upcoming-title">
-                {homeContent.upcomingTitle}
+                {renderTitleWithHighlight(homeContent.upcomingTitle, "Events")}
               </h2>
               <p>
                 {" "}
@@ -793,9 +1157,44 @@ export default function HomePage() {
           </div>
         </section>
 
+        {venueDestinations.length > 0 ? (
+          <section
+            className="home-venue-destinations-section"
+            style={{ order: getSectionOrder("upcoming") + 1 }}
+          >
+            <h2>
+              <FaMapMarkedAlt className="home-venue-destinations-title-icon" />
+              <span>Điểm đến thú vị</span>
+            </h2>
+            <div className="home-venue-destination-grid">
+              {venueDestinations.map((destination) => (
+                <Link
+                  to={destination.to}
+                  className={`home-venue-destination-card${
+                    destination.images.length > 1 ? " is-collage" : ""
+                  }`}
+                  key={destination.title}
+                >
+                  <div className="home-venue-destination-media">
+                    {destination.images.map((image, index) => (
+                      <img
+                        src={image}
+                        alt={destination.title}
+                        key={`${destination.title}-${index}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="home-venue-destination-overlay" />
+                  <h3>{destination.title}</h3>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <section className="home-section" id="how-it-works-section" style={{ order: getSectionOrder("how") }}>
           <div className="section-heading section-heading-center">
-            <h2 style={{ fontWeight: 600 }}>{homeContent.howTitle}</h2>
+            <h2>{homeContent.howTitle}</h2>
             <p>
               It is a long established fact that a reader content of a page when
               Ipsum is that it has a more-or- this is simple less normal
@@ -819,7 +1218,7 @@ export default function HomePage() {
         <section className="home-section home-pricing-section" style={{ order: getSectionOrder("pricing") }}>
           <div className="section-heading section-heading-center">
             <h2 className="home-pricing-title">
-              {homeContent.pricingTitle}
+              {renderTitleWithHighlight(homeContent.pricingTitle, "Pricing")}
             </h2>
             <p>
               It is a long established fact that a reader content of a page when
@@ -928,7 +1327,7 @@ export default function HomePage() {
                 fontWeight: 800,
               }}
             >
-              {homeContent.pastTitle}
+              {renderTitleWithHighlight(homeContent.pastTitle, "Past Events")}
             </h2>
             <p>
               {" "}
@@ -938,9 +1337,18 @@ export default function HomePage() {
           </div>
 
           <div className="past-event-gallery">
-            {pastEventGallery.map((image, index) => (
-              <article className="past-event-thumb" key={`${image}-${index}`}>
-                <img src={image} alt={`Past event ${index + 1}`} />
+            {visiblePastEventGallery.map((item, index) => (
+              <article
+                className="past-event-thumb"
+                key={`${item.image}-${index}`}
+              >
+                {item.to ? (
+                  <Link to={item.to}>
+                    <img src={item.image} alt={item.title} />
+                  </Link>
+                ) : (
+                  <img src={item.image} alt={item.title} />
+                )}
               </article>
             ))}
           </div>

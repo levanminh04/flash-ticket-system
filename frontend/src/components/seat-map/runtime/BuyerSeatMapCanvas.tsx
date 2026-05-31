@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Group,
   Layer,
+  Path,
   Rect,
   Stage,
   Text,
@@ -77,6 +78,7 @@ export default function BuyerSeatMapCanvas({
 }: BuyerSeatMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 620 });
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
 
   const maxSectorRight = Math.max(0, ...(seatMap.sectors ?? []).map(s => getSectorBounds(s).x + getSectorBounds(s).width));
   const maxSectorBottom = Math.max(0, ...(seatMap.sectors ?? []).map(s => getSectorBounds(s).y + getSectorBounds(s).height));
@@ -122,28 +124,30 @@ export default function BuyerSeatMapCanvas({
   }, []);
 
   const fitZoom = clamp(
-    Math.min(viewportSize.width / documentWidth, viewportSize.height / documentHeight) * 0.85,
+    Math.min(viewportSize.width / documentWidth, viewportSize.height / documentHeight) * 1.15,
     0.1,
     3,
   );
   const effectiveZoom = zoom > 0 ? zoom : fitZoom;
   const baseX = (viewportSize.width - documentWidth * effectiveZoom) / 2;
-  const baseY = (viewportSize.height - documentHeight * effectiveZoom) / 2;
+  const baseY = 72;
 
   useEffect(() => {
     if (zoom <= 0) {
+      setPanOffset({ x: 0, y: 0 });
       onZoomChange(fitZoom);
     }
   }, [fitZoom, onZoomChange, zoom]);
 
   const worldStyle = useMemo(
     () => ({
-      x: baseX,
-      y: baseY,
+      x: baseX + panOffset.x,
+      y: baseY + panOffset.y,
       scaleX: effectiveZoom,
       scaleY: effectiveZoom,
+      draggable: true,
     }),
-    [baseX, baseY, effectiveZoom],
+    [baseX, baseY, effectiveZoom, panOffset.x, panOffset.y],
   );
 
   const handleWheel = (event: any) => {
@@ -166,16 +170,23 @@ export default function BuyerSeatMapCanvas({
         onWheel={handleWheel}
       >
         <Layer>
-          <Group {...worldStyle}>
+          <Group
+            {...worldStyle}
+            onDragEnd={(event) => {
+              setPanOffset({
+                x: event.target.x() - baseX,
+                y: event.target.y() - baseY,
+              });
+            }}
+          >
             <Rect
               x={0}
               y={0}
               width={documentWidth}
               height={documentHeight}
-              cornerRadius={24}
-              fill="#0f172a"
-              stroke="rgba(148, 163, 184, 0.34)"
-              strokeWidth={1}
+              cornerRadius={0}
+              fill="#000000"
+              strokeWidth={0}
             />
 
             <Rect
@@ -185,18 +196,14 @@ export default function BuyerSeatMapCanvas({
               height={documentHeight}
               fillLinearGradientStartPoint={{ x: 0, y: 0 }}
               fillLinearGradientEndPoint={{ x: documentWidth, y: documentHeight }}
-              fillLinearGradientColorStops={[0, "#0b1220", 0.5, "#102231", 1, "#0d1d2b"]}
-              cornerRadius={24}
-              opacity={0.98}
+              fillLinearGradientColorStops={[0, "#000000", 0.55, "#000000", 1, "#000000"]}
+              cornerRadius={0}
+              opacity={1}
               listening={false}
             />
 
-            <Rect
-              x={documentWidth / 2 - Math.min(documentWidth * 0.4, 250)}
-              y={40}
-              width={Math.min(documentWidth * 0.8, 500)}
-              height={80}
-              cornerRadius={16}
+            <Path
+              data={`M ${documentWidth / 2 - Math.min(documentWidth * 0.42, 260)} 42 Q ${documentWidth / 2} 235 ${documentWidth / 2 + Math.min(documentWidth * 0.42, 260)} 42 Z`}
               fill="#1e293b"
               stroke="#334155"
               strokeWidth={2}
@@ -204,13 +211,13 @@ export default function BuyerSeatMapCanvas({
             />
             <Text
               x={documentWidth / 2 - Math.min(documentWidth * 0.4, 250)}
-              y={64}
+              y={72}
               width={Math.min(documentWidth * 0.8, 500)}
               align="center"
               text="SÂN KHẤU"
               fontSize={32}
               fontStyle="700"
-              fill="#94a3b8"
+              fill="#ffffff"
               listening={false}
               shadowColor="rgba(0, 0, 0, 0.5)"
               shadowBlur={4}

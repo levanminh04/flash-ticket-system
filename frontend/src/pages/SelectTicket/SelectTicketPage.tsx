@@ -3,11 +3,10 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
 import { LuTicketsPlane } from "react-icons/lu";
-import { categoryService } from "../../services/categoryService";
+import { FaCalendarCheck, FaMapLocationDot } from "react-icons/fa6";
 import { eventService } from "../../services/eventService";
 import { bookingService } from "../../services/bookingService";
 import {
-  Category,
   EventSummary,
   PublicSeat,
   PublicSeatMap,
@@ -15,13 +14,10 @@ import {
   TicketInventoryMode,
   TicketType,
 } from "../../types/api";
-import BookingStepIndicator from "../../components/common/BookingStepIndicator";
 import BuyerSeatMapCanvas from "../../components/seat-map/runtime/BuyerSeatMapCanvas";
 import {
-  MapPin,
-  Calendar,
+  ArrowLeft,
   ChevronRight,
-  Home,
   LoaderCircle,
   ZoomIn,
   ZoomOut,
@@ -78,11 +74,11 @@ export default function SelectTicketPage() {
   const [seatMap, setSeatMap] = useState<PublicSeatMap | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [allCategories, setAllCategories] = useState<Category[]>([]);
 
   const [quantities, setQuantities] = useState<TicketSelection>({});
   const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([]);
   const [selectedStandingSectorId, setSelectedStandingSectorId] = useState<string | null>(null);
+  const [standingPopupSectorId, setStandingPopupSectorId] = useState<string | null>(null);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -93,6 +89,8 @@ export default function SelectTicketPage() {
   const [modalNote, setModalNote] = useState("");
   const [modalErrors, setModalErrors] = useState<Record<string, string>>({});
   const [isBookingInProgress, setIsBookingInProgress] = useState(false);
+
+  const [zoom, setZoom] = useState(0);
 
   useEffect(() => {
     if (keycloak?.authenticated && keycloak?.tokenParsed) {
@@ -108,17 +106,6 @@ export default function SelectTicketPage() {
       if (phone) setModalPhone(phone);
     }
   }, [keycloak?.authenticated, keycloak?.tokenParsed]);
-
-  const [zoom, setZoom] = useState(0);
-
-  useEffect(() => {
-    categoryService
-      .getCategories()
-      .then((res) => {
-        if (res && Array.isArray(res)) setAllCategories(res);
-      })
-      .catch((err) => console.error("Failed to load categories", err));
-  }, []);
 
   useEffect(() => {
     if (!slug) {
@@ -245,9 +232,15 @@ export default function SelectTicketPage() {
     [ticketTypes],
   );
 
-  const selectedStandingSector = selectedStandingSectorId
-    ? sectorById.get(selectedStandingSectorId)
+  const standingPopupSector = standingPopupSectorId
+    ? sectorById.get(standingPopupSectorId)
     : null;
+  const standingPopupTicketTypes = standingPopupSector
+    ? standingSectorTicketTypes.filter(
+        (ticketType) => getTicketTypeSectorId(ticketType) === standingPopupSector.id,
+      )
+    : [];
+  const standingPopupPrimaryTicket = standingPopupTicketTypes[0] ?? null;
 
   const availableSeatCount = useMemo(
     () =>
@@ -327,6 +320,7 @@ export default function SelectTicketPage() {
       }
 
       setSelectedStandingSectorId(sector.id);
+      setStandingPopupSectorId(sector.id);
     },
     [standingSectorTicketTypes],
   );
@@ -573,9 +567,6 @@ export default function SelectTicketPage() {
     0,
   );
 
-  const bannerUrl =
-    (event as any)?.images?.find((i: any) => i.type === "BANNER")?.url ||
-    (event as any)?.bannerUrl;
   const startStr =
     (event as any)?.schedule?.startDatetime ||
     (event as any)?.startDatetime ||
@@ -584,40 +575,9 @@ export default function SelectTicketPage() {
   const venueName = (event as any)?.venue?.name || (event as any)?.venueName || "";
   const venueAddress = (event as any)?.venue?.address || (event as any)?.venueAddress || "";
 
-  const categoryNav = (
-    <nav className="category-nav">
-      <div className="container">
-        <ul className="category-list">
-          <li className="category-item">
-            <Link to="/search" className="category-link">
-              Tất cả
-            </Link>
-          </li>
-          {allCategories.length > 0 ? (
-            allCategories.map((category) => (
-              <li className="category-item" key={category.id}>
-                <Link
-                  to={`/search?category=${category.slug || category.id}`}
-                  className="category-link"
-                >
-                  {category.name}
-                </Link>
-              </li>
-            ))
-          ) : (
-            <li className="category-item">
-              <span className="category-link">Đang tải</span>
-            </li>
-          )}
-        </ul>
-      </div>
-    </nav>
-  );
-
   if (isLoading) {
     return (
       <div className="select-ticket-page">
-        {categoryNav}
         <div className="select-ticket-loading" role="status" aria-live="polite">
           <LoaderCircle className="select-ticket-loading-icon" size={24} />
           <span>Loading</span>
@@ -629,7 +589,6 @@ export default function SelectTicketPage() {
   if (error || !event) {
     return (
       <div className="select-ticket-page">
-        {categoryNav}
         <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
           <p>{error || "Không tìm thấy sự kiện"}</p>
           <Link
@@ -643,69 +602,39 @@ export default function SelectTicketPage() {
     );
   }
 
-  const breadcrumbEventName =
-    event.title.length > 24 ? `${event.title.slice(0, 24)}...` : event.title;
-
   return (
     <div className="select-ticket-page">
-      <div className="booking-focus-header">
-        <div className="container">
-          <nav className="focus-breadcrumb" aria-label="Breadcrumb">
-            <ol className="breadcrumb-list">
-              <li className="breadcrumb-item">
-                <Link to="/" className="breadcrumb-home">
-                  <Home size={15} />
-                  Home
-                </Link>
-              </li>
-              <li className="breadcrumb-separator" aria-hidden="true">
-                <ChevronRight size={14} />
-              </li>
-              <li className="breadcrumb-item">
-                <Link to="/search" className="breadcrumb-event">
-                  Events
-                </Link>
-              </li>
-              <li className="breadcrumb-separator" aria-hidden="true">
-                <ChevronRight size={14} />
-              </li>
-              <li className="breadcrumb-item">
-                <Link
-                  to={`/event/${slug || ""}`}
-                  className="breadcrumb-event-name"
-                  title={event.title}
-                  aria-label={event.title}
-                >
-                  {breadcrumbEventName}
-                </Link>
-              </li>
-              <li className="breadcrumb-separator" aria-hidden="true">
-                <ChevronRight size={14} />
-              </li>
-              <li className="breadcrumb-item">
-                <span className="breadcrumb-current" aria-current="page">Book</span>
-              </li>
-            </ol>
-          </nav>
+      <div className="select-ticket-layout">
+        <div className="select-ticket-map-panel">
+          <button
+            type="button"
+            className="select-ticket-back-button"
+            onClick={() => navigate(-1)}
+          >
+            <ArrowLeft size={22} />
+            <span>Trở về</span>
+          </button>
 
-          <BookingStepIndicator currentStep={1} />
-        </div>
-      </div>
-
-      <div className="container">
-        <div className="select-ticket-layout">
-          <div className="seat-map-section">
-            <div className="section-header">
-              <h2>{hasInteractiveSeatMap ? "Sơ đồ chọn vé" : "Chọn số lượng vé"}</h2>
-              <span className="hint">
-                {hasAssignedSeatTickets
-                  ? "Click ghế để chọn"
-                  : hasStandingSectorTickets
-                    ? "Click khu đứng trên sơ đồ để chọn số lượng vé"
-                    : "Dùng nút tăng giảm trong danh sách seat type"}
-              </span>
+          {hasInteractiveSeatMap ? (
+            <div className="select-ticket-floating-zoom" aria-label="Điều khiển sơ đồ">
+              <button type="button" className="zoom-btn" onClick={() => setZoom((z) => Math.min(3, z + 0.25))}>
+                <ZoomIn size={18} />
+              </button>
+              <button type="button" className="zoom-btn" onClick={resetView}>
+                <RotateCcw size={18} />
+              </button>
+              <button type="button" className="zoom-btn" onClick={() => setZoom((z) => Math.max(0.1, z - 0.25))}>
+                <ZoomOut size={18} />
+              </button>
             </div>
+          ) : null}
 
+          <div className="select-ticket-map-heading">
+            <h1>Chọn khu vực</h1>
+            <p>Bấm vào khu vực để chọn vé</p>
+          </div>
+
+          <div className="seat-map-section">
             <div className={`seat-map-container ${hasInteractiveSeatMap ? "has-interactive-map" : ""}`}>
               {hasInteractiveSeatMap && seatMap ? (
                 <BuyerSeatMapCanvas
@@ -746,52 +675,17 @@ export default function SelectTicketPage() {
               )}
             </div>
 
-            {hasInteractiveSeatMap ? (
-              <div className="seat-map-bottom">
-                <div className="seat-legend">
-                  <div className="legend-item">
-                    <div className="legend-dot legend-dot-available" />
-                    Trống
-                  </div>
-                  <div className="legend-item">
-                    <div className="legend-dot legend-dot-selected" />
-                    Đang chọn
-                  </div>
-                  <div className="legend-item">
-                    <div className="legend-dot legend-dot-reserved" />
-                    Đã giữ
-                  </div>
-                  <div className="legend-item">
-                    <div className="legend-dot legend-dot-sold" />
-                    Đã bán
-                  </div>
-                </div>
-
-                <div className="zoom-controls">
-                  <button className="zoom-btn" onClick={() => setZoom((z) => Math.min(3, z + 0.25))}>
-                    <ZoomIn size={14} />
-                  </button>
-                  <button className="zoom-btn" onClick={() => setZoom((z) => Math.max(0.1, z - 0.25))}>
-                    <ZoomOut size={14} />
-                  </button>
-                  <button className="zoom-btn" onClick={resetView}>
-                    <RotateCcw size={14} />
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </div>
+        </div>
           <div className="booking-sidebar">
             <div className="sidebar-event-card">
-              {bannerUrl && (
-                <img src={bannerUrl} alt={event.title} className="event-poster" />
-              )}
-              <div className="event-details">
+              <div className="sidebar-event-title-bar">
                 <div className="event-title">{event.title}</div>
-
+              </div>
+              <div className="event-details">
                 {startDate && (
                   <div className="event-meta-row">
-                    <Calendar size={14} />
+                    <FaCalendarCheck size={14} />
                     <span>
                       {startDate.toLocaleDateString("vi-VN", {
                         weekday: "long",
@@ -810,7 +704,7 @@ export default function SelectTicketPage() {
 
                 {(venueName || venueAddress) && (
                   <div className="event-meta-row">
-                    <MapPin size={14} />
+                    <FaMapLocationDot size={14} />
                     <span>
                       {venueName}
                       {venueAddress ? `, ${venueAddress}` : ""}
@@ -821,34 +715,24 @@ export default function SelectTicketPage() {
             </div>
 
             <div className="sidebar-tiers">
-              <h3>Seat type</h3>
-              {selectedStandingSector ? (
-                <div className="ticket-notice" style={{ marginBottom: 12 }}>
-                  <Info size={14} />
-                  <span>
-                    {`Đang chọn khu ${selectedStandingSector.name}.`}
-                  </span>
-                </div>
-              ) : null}
+              <h3>Giá vé</h3>
               {visibleTicketTypes.length === 0 ? (
                 <div className="selected-empty">Chưa có loại vé phù hợp với khu đang chọn.</div>
               ) : (
                 visibleTicketTypes.map((ticketType) => {
                   const isSoldOut = ticketType.status === "SOLD_OUT" || ticketType.quantityAvailable === 0;
-                  const hasSelection = (quantities[ticketType.id] || 0) > 0;
                   const isQuantityMode = getInventoryMode(ticketType) === "QUANTITY";
                   const sectorId = getTicketTypeSectorId(ticketType);
                   const isStandingQuantityTicket =
                     isQuantityMode &&
                     sectorId &&
                     getSectorType(sectorById.get(sectorId)) === "STANDING";
-                  const isLockedByStandingSector =
-                    Boolean(isStandingQuantityTicket) && sectorId !== selectedStandingSectorId;
+                  const showQuantityControls = isQuantityMode && !isStandingQuantityTicket;
 
                   return (
                     <div
                       key={ticketType.id}
-                      className={`tier-item ${isQuantityMode ? "tier-item-quantity" : ""} ${isSoldOut ? "sold-out" : ""} ${hasSelection ? "active" : ""} ${isLockedByStandingSector ? "sold-out" : ""}`}
+                      className={`tier-item ${showQuantityControls ? "tier-item-quantity" : ""} ${isSoldOut ? "sold-out" : ""}`}
                     >
                       <div className="tier-left">
                         <span
@@ -857,25 +741,18 @@ export default function SelectTicketPage() {
                         />
                         <span className="tier-copy">
                           <span className="tier-name">{ticketType.name}</span>
-                          {isQuantityMode ? (
-                            <span className="tier-price tier-price-inline">
-                              {isSoldOut ? "Hết vé" : `${ticketType.price.toLocaleString("vi-VN")} ₫`}
-                            </span>
-                          ) : null}
                         </span>
                       </div>
-                      {!isQuantityMode ? (
-                        <span className="tier-price">
-                          {isSoldOut ? "Hết vé" : `${ticketType.price.toLocaleString("vi-VN")} ₫`}
-                        </span>
-                      ) : null}
-                      {isQuantityMode ? (
+                      <span className="tier-price">
+                        {isSoldOut ? "Hết vé" : `${ticketType.price.toLocaleString("vi-VN")} ₫`}
+                      </span>
+                      {showQuantityControls ? (
                         <div className="quantity-selector" aria-label={`Chọn số lượng ${ticketType.name}`}>
                           <button
                             type="button"
                             className="quantity-btn"
                             onClick={() => updateQuantity(ticketType, -1)}
-                            disabled={isLockedByStandingSector || (quantities[ticketType.id] || 0) <= 0}
+                            disabled={(quantities[ticketType.id] || 0) <= 0}
                           >
                             -
                           </button>
@@ -884,7 +761,7 @@ export default function SelectTicketPage() {
                             type="button"
                             className="quantity-btn"
                             onClick={() => updateQuantity(ticketType, 1)}
-                            disabled={isLockedByStandingSector || isSoldOut}
+                            disabled={isSoldOut}
                           >
                             +
                           </button>
@@ -921,6 +798,7 @@ export default function SelectTicketPage() {
                     .filter((ticketType) => (quantities[ticketType.id] || 0) > 0)
                     .map((ticketType) => {
                       const colorCode = ticketType.colorCode || "var(--primary, #16a34a)";
+                      const selectedQuantity = quantities[ticketType.id] || 0;
                       return (
                         <span
                           key={ticketType.id}
@@ -931,7 +809,10 @@ export default function SelectTicketPage() {
                             borderColor: colorCode,
                           }}
                         >
-                          {ticketType.name} x{quantities[ticketType.id]}
+                          {ticketType.name} x{selectedQuantity}
+                          <span className="remove-seat" onClick={() => updateQuantity(ticketType, -selectedQuantity)}>
+                            <X size={12} />
+                          </span>
                         </span>
                       );
                     })}
@@ -977,7 +858,60 @@ export default function SelectTicketPage() {
             </div>
           </div>
         </div>
-      </div>
+      {standingPopupSector && standingPopupPrimaryTicket ? (
+        <div className="standing-ticket-popup-overlay" role="dialog" aria-modal="true">
+          <div className="standing-ticket-popup">
+            <button
+              type="button"
+              className="standing-ticket-popup-close"
+              onClick={() => setStandingPopupSectorId(null)}
+              aria-label="Đóng"
+            >
+              <X size={22} />
+            </button>
+            <h3>Khu {standingPopupSector.name}</h3>
+            <p className="standing-ticket-popup-note">Lưu ý: Bạn chỉ có thể chọn vé trong 1 khu vực</p>
+            <div className="standing-ticket-popup-row">
+              <span className="standing-ticket-popup-name">
+                {standingPopupPrimaryTicket.name} (Standing)
+              </span>
+              <div className="standing-ticket-popup-quantity">
+                <button
+                  type="button"
+                  onClick={() => updateQuantity(standingPopupPrimaryTicket, -1)}
+                  disabled={(quantities[standingPopupPrimaryTicket.id] || 0) <= 0}
+                >
+                  -
+                </button>
+                <span>{quantities[standingPopupPrimaryTicket.id] || 0}</span>
+                <button
+                  type="button"
+                  onClick={() => updateQuantity(standingPopupPrimaryTicket, 1)}
+                  disabled={standingPopupPrimaryTicket.status === "SOLD_OUT" || standingPopupPrimaryTicket.quantityAvailable === 0}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="standing-ticket-popup-switch"
+              onClick={() => setStandingPopupSectorId(null)}
+            >
+              Chọn khu vực khác
+            </button>
+            <button
+              type="button"
+              className="standing-ticket-popup-continue"
+              onClick={() => setStandingPopupSectorId(null)}
+            >
+              <span>Tiếp tục</span>
+              <span>- {((quantities[standingPopupPrimaryTicket.id] || 0) * Number(standingPopupPrimaryTicket.price || 0)).toLocaleString("vi-VN")} ₫</span>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      ) : null}
       {isModalOpen && (
         <div className="booking-info-modal-overlay" role="dialog" aria-modal="true">
           <form className="booking-info-modal" onSubmit={handleModalSubmit}>

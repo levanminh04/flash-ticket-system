@@ -1,19 +1,27 @@
-.home-page,
+.home-page {
+  min-height: calc(100vh - 56px);
+  background: linear-gradient(180deg, #282828 0%, #202020 34%, #171717 68%, #0d0d0d 100%);
+  color: #0f172a;
+  overflow-x: clip;
+}
+
 .event-detail-page {
   min-height: calc(100vh - 56px);
-  background:
-    radial-gradient(circle at top, rgba(15, 23, 42, 0.04), transparent 28%),
-    linear-gradient(180deg, #f7f8fc 0%, #eef2f7 100%);
+  background: linear-gradient(180deg, #282828 0%, #202020 34%, #171717 68%, #0d0d0d 100%);
   color: #0f172a;
   overflow-x: clip;
 }
 
 .event-search-page {
   min-height: calc(100vh - 56px);
-  background: var(--page-gradient-booking);
+  background: linear-gradient(180deg, #282828 0%, #202020 34%, #171717 68%, #0d0d0d 100%);
   background-repeat: no-repeat;
   color: #0f172a;
   overflow-x: clip;
+}
+
+.event-search-page .pagination__link--break {
+  color: #ffffff;
 }
 
 .home-page > .container,
@@ -1393,10 +1401,249 @@
   border-radius: 0;
 }
 
+#how-it-works-section .section-heading h2 {
+  font-size: 54px;
+  font-weight: 800;
+}
+
+.home-category-events-section {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  margin-bottom: 18px;
+}
+
+.home-category-event-block {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.home-category-event-group {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+.home-category-events-banner {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #111827;
+}
+
+.home-category-events-banner img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 1200 / 260;
+  object-fit: cover;
+}
+
+.home-category-event-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.home-category-event-header h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.home-category-title-icon {
+  flex: 0 0 auto;
+  color: #CC9900;
+  font-size: 20px;
+}
+
+.home-category-event-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.18s ease;
+}
+
+.home-category-event-more:hover {
+  color: #ffffff;
+}
+
+.home-category-event-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-category-event-card {
+  min-width: 0;
+}
+
+.home-category-event-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #111827;
+}
+
+.home-category-event-image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: transform 0.24s ease;
+}
+
+.home-category-event-card:hover .home-category-event-image img {
+  transform: scale(1.035);
+}
+
+.home-category-event-body {
+  padding-top: 14px;
+}
+
+.home-category-event-body h3 {
+  margin: 0;
+  min-height: 44px;
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 800;
+}
+
+.home-category-event-body h3 a {
+  color: inherit;
+  display: -webkit-box;
+  overflow: hidden;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.home-category-event-price {
+  margin: 7px 0 0;
+  color: #CC9900;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.home-category-event-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 0;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.home-category-event-date svg {
+  flex: 0 0 auto;
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.home-venue-destinations-section {
+  margin: 0 0 34px;
+}
+
+.home-venue-destinations-section h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 16px;
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.home-venue-destinations-title-icon {
+  flex: 0 0 auto;
+  color: #CC9900;
+  font-size: 20px;
+}
+
+.home-venue-destination-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-venue-destination-card {
+  position: relative;
+  display: block;
+  min-height: 296px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #111827;
+  color: #ffffff;
+  isolation: isolate;
+}
+
+.home-venue-destination-media {
+  position: absolute;
+  inset: 0;
+  display: grid;
+}
+
+.home-venue-destination-media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: transform 0.28s ease;
+}
+
+.home-venue-destination-card.is-collage .home-venue-destination-media {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.home-venue-destination-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.04) 12%, rgba(42, 164, 24, 0.86) 100%),
+    linear-gradient(180deg, transparent 38%, rgba(29, 177, 20, 0.72) 100%);
+}
+
+.home-venue-destination-card h3 {
+  position: absolute;
+  left: 17px;
+  right: 17px;
+  bottom: 54px;
+  z-index: 2;
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.6rem, 2.2vw, 2rem);
+  line-height: 1.1;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.home-venue-destination-card:hover .home-venue-destination-media img {
+  transform: scale(1.035);
+}
+
 .home-blog-title {
   margin: 0;
   font-size: clamp(2.2rem, 3.6vw, 3.4rem);
   font-weight: 800;
+  color: #ffffff;
 }
 
 .home-blog-title-highlight {
@@ -1480,7 +1727,7 @@
   font-size: 18px;
   line-height: 1.7;
   font-weight: 600;
-  color: #475569;
+  color: #ffffff;
 }
 
 .section-heading {
@@ -1505,6 +1752,22 @@
   line-height: 1.75;
 }
 
+.home-page #home-features .section-heading h2,
+.home-page #home-features .section-heading p,
+.home-page .home-upcoming-section .section-heading p,
+.home-page #how-it-works-section .section-heading h2,
+.home-page #how-it-works-section .section-heading p,
+.home-page .home-past-events-section .section-heading h2,
+.home-page .home-past-events-section .section-heading p,
+.home-page .faq-title,
+.home-page .faq-copy p {
+  color: #ffffff;
+}
+
+.home-title-accent {
+  color: #CC9900;
+}
+
 .section-heading-center {
   flex-direction: column;
   align-items: center;
@@ -1526,7 +1789,7 @@
 .home-blog-link:hover,
 .home-blog-link:active,
 .home-blog-link:focus-visible {
-  color: #111111;
+  color: #ffffff;
   text-decoration: none;
 }
 
@@ -1542,7 +1805,7 @@
   align-items: center;
   justify-content: center;
   background: #cc9900;
-  color: #111111;
+  color: #ffffff;
 }
 
 .home-upcoming-cta {
@@ -2366,26 +2629,24 @@
 }
 
 .home-footer-social {
-  width: 42px;
-  height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #ffffff;
-  border-radius: 50%;
-  background: #ffffff;
-  color: #111111;
+  background: transparent;
+  color: inherit;
   transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease,
     transform 0.2s ease;
 }
 
+.home-footer-social img {
+  width: 38px;
+  height: 38px;
+  display: block;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
 .home-footer-social:hover {
-  background: #cc9900;
-  border-color: #cc9900;
-  color: #111111;
   transform: translateY(-2px);
 }
 
@@ -2535,6 +2796,11 @@
   display: flex !important;
   flex-direction: column;
   min-height: 100%;
+  border-radius: 12px;
+}
+
+.event-search-card .upcoming-card-image-wrapper {
+  border-radius: 8px;
 }
 
 .event-search-thumb {
@@ -2633,6 +2899,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .home-category-event-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-venue-destination-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .past-event-gallery {
     grid-auto-columns: minmax(200px, 220px);
   }
@@ -2680,6 +2954,14 @@
   .home-partner-grid,
   .home-footer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .home-category-event-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-venue-destination-card {
+    min-height: 240px;
   }
 
   .home-editor-section {
@@ -2735,6 +3017,22 @@
   .section-heading h2,
   .pricing-copy h3 {
     font-size: 2rem;
+  }
+
+  .home-category-event-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-venue-destination-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-venue-destination-card {
+    min-height: 220px;
+  }
+
+  .home-category-event-header {
+    align-items: flex-start;
   }
 
   .hero-event-media {

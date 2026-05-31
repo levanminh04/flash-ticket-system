@@ -192,6 +192,7 @@ export default function OrganizerProfilePage() {
     <OrganizerLayout
       title="Hồ sơ ban tổ chức"
       description="Thông tin chi tiết về ban tổ chức."
+      className="organizer-profile-page"
     >
       {loading ? (
         <section className="organizer-panel organizer-empty-state">

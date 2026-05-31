@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { FaHome, FaUserAlt } from "react-icons/fa";
 import { CgLogOut } from "react-icons/cg";
 import {
@@ -240,6 +240,11 @@ export default function OrganizerTopBar() {
               <strong>{displayName}</strong>
               <span>{email}</span>
             </div>
+            <ChevronDown
+              className="organizer-topbar-user-chevron"
+              size={16}
+              aria-hidden="true"
+            />
           </button>
 
           <div className="organizer-topbar-dropdown" role="menu">

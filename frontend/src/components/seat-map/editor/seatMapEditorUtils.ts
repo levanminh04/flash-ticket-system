@@ -1102,6 +1102,8 @@ export function buildSeatMapPublishPayload(
           sectorType === "STANDING"
             ? Math.max(0, Math.round(asNumber(shape.totalCapacity) ?? 0))
             : getVisibleSeatCount(shape.seats),
+        ticketTypeId: sectorType === "STANDING" ? shape.ticketTypeId : undefined,
+        ticketTypeName: sectorType === "STANDING" ? shape.ticketTypeName : undefined,
         zIndex: shape.zIndex,
         visible: shape.visible,
         locked: shape.locked,

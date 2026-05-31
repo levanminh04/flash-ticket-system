@@ -1,12 +1,13 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
 
 // https://vitejs.dev/config/
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '')
+const fromConfigDir = (relativePath: string) =>
+    decodeURIComponent(new URL(relativePath, import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1')
 
 export default defineConfig(({ mode }) => {
-    const repoRoot = path.resolve(__dirname, '.')
+    const repoRoot = fromConfigDir('.')
     const env = loadEnv(mode, repoRoot, '')
 
     const apiGatewayUrl = trimTrailingSlash(env.VITE_API_GATEWAY_URL || 'http://localhost:8080')
@@ -19,7 +20,7 @@ export default defineConfig(({ mode }) => {
         plugins: [react()],
         resolve: {
             alias: {
-                '@': path.resolve(__dirname, './src'),
+                '@': fromConfigDir('./src'),
             },
         },
         server: {

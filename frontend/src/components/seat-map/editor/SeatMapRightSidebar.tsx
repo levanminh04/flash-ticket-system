@@ -91,11 +91,13 @@ interface SeatMapRightSidebarProps {
   onHideSelectedSeats: (shapeId: string, seatIds: string[]) => void;
   onRestoreSeat: (shapeId: string, seatId: string) => void;
   onRestoreSelectedSeats: (shapeId: string, seatIds: string[]) => void;
+  onClearDraft: () => void;
+  canClearDraft: boolean;
   onCreateSeatTypeForShape?: (shapeId: string) => void;
 }
 
 const sectorTypeOptions: Array<{ value: SeatMapEditorSectorType; label: string }> = [
-  { value: "STANDING", label: "Khu tự do / khu đứng" },
+  { value: "STANDING", label: "khu đứng" },
   { value: "SEATED", label: "Khu ghế ngồi" },
 ];
 
@@ -118,16 +120,12 @@ function getTicketTypeColor(ticketType?: OrganizerPublicTicketType) {
   return ticketType?.colorCode || "#16a34a";
 }
 
-function getMatchingTicketTypes(ticketTypes: OrganizerPublicTicketType[], shapeId?: string) {
-  if (!shapeId) {
+function getSectorTicketTypes(ticketTypes: OrganizerPublicTicketType[], shape?: SeatMapEditorShape | null) {
+  if (!shape) {
     return [];
   }
 
-  return ticketTypes.filter((ticketType) => getTicketTypeSectorId(ticketType) === shapeId);
-}
-
-function getEventLevelTicketTypes(ticketTypes: OrganizerPublicTicketType[]) {
-  return ticketTypes.filter((ticketType) => !getTicketTypeSectorId(ticketType));
+  return ticketTypes.filter((ticketType) => getTicketTypeSectorId(ticketType) === shape.id);
 }
 
 function isAssignedSeatTicketType(ticketType: OrganizerPublicTicketType) {
@@ -209,6 +207,8 @@ export default function SeatMapRightSidebar({
   onHideSelectedSeats,
   onRestoreSeat,
   onRestoreSelectedSeats,
+  onClearDraft,
+  canClearDraft,
   onCreateSeatTypeForShape,
 }: SeatMapRightSidebarProps) {
   void onCreateSeatTypeForShape;
@@ -216,8 +216,8 @@ export default function SeatMapRightSidebar({
   const [layersOpen, setLayersOpen] = useState(true);
   const [seatGenerationOpen, setSeatGenerationOpen] = useState(false);
   const [selectedSeatOpen, setSelectedSeatOpen] = useState(false);
+  const selectedSectorTicketTypes = getSectorTicketTypes(ticketTypes, selectedShape);
   const selectedSeatAssignableTicketTypes = getSeatAssignableTicketTypes(ticketTypes, selectedShape);
-  const eventLevelTicketTypes = getEventLevelTicketTypes(ticketTypes);
 
   const otherSectorTicketTypes = selectedShape
     ? ticketTypes.filter((ticketType) => {
@@ -301,11 +301,6 @@ export default function SeatMapRightSidebar({
               <div className="seat-map-layer-list-modern">
                 {document.shapes.map((shape) => {
                   const active = selectedShapeIds.includes(shape.id);
-                  const shapeTicketTypes = getMatchingTicketTypes(ticketTypes, shape.id);
-                  const shapeAssignableTicketTypes = getSeatAssignableTicketTypes(ticketTypes, shape);
-                  const incompatibleShapeTicketTypes = shapeTicketTypes.filter(
-                    (ticketType) => !isAssignedSeatTicketType(ticketType),
-                  );
 
                   return (
                     <div key={shape.id} className={`seat-map-layer-row-modern ${active ? "is-active" : ""}`}>
@@ -340,63 +335,14 @@ export default function SeatMapRightSidebar({
                                   type="number"
                                   min={1}
                                   value={shape.totalCapacity ?? ""}
-                                  onChange={(event) =>
+                                  onChange={(event) => {
+                                    const val = event.target.value;
                                     onShapeMetaChange(shape.id, {
-                                      totalCapacity: Math.max(1, Number(event.target.value || 1)),
-                                    })
-                                  }
+                                      totalCapacity: val === "" ? undefined : Math.max(0, parseInt(val, 10) || 0),
+                                    });
+                                  }}
                                 />
                               </label>
-                              <label>
-                                <span>Loại vé của khu đứng</span>
-                                <select value="" disabled>
-                                  <option value="">
-                                    {shapeTicketTypes.length
-                                      ? shapeTicketTypes.map((ticketType) => ticketType.name).join(", ")
-                                      : "Chưa có loại vé gắn với khu này"}
-                                  </option>
-                                </select>
-                              </label>
-                              {!shapeTicketTypes.length ? (
-                                <p className="seat-map-editor-empty">
-                                  Tạo hoặc sửa loại vé ở trang Loại vé và chọn đúng khu đứng này.
-                                  {eventLevelTicketTypes.length
-                                    ? ` Loại vé chưa gắn khu: ${eventLevelTicketTypes.map((ticketType) => ticketType.name).join(", ")}.`
-                                    : ""}
-                                </p>
-                              ) : null}
-                            </>
-                          ) : null}
-                          {shape.sectorType === "SEATED" ? (
-                            <>
-                              {!shapeAssignableTicketTypes.length ? (
-                                <div className="seat-map-editor-guidance">
-                                  <strong>Chưa có loại vé để gán cho khu ghế</strong>
-                                  <p>
-                                    Cần loại vé thuộc đúng sector "{shape.name}" và bật chọn ghế trước khi gán cho ghế.
-                                  </p>
-                                  {eventLevelTicketTypes.length ? (
-                                    <p>
-                                      Loại vé chưa gắn sector: {eventLevelTicketTypes.map((ticketType) => ticketType.name).join(", ")}.
-                                    </p>
-                                  ) : null}
-                                  {incompatibleShapeTicketTypes.length ? (
-                                    <p>
-                                      Loại vé trong sector nhưng chưa bật chọn ghế: {incompatibleShapeTicketTypes.map((ticketType) => ticketType.name).join(", ")}.
-                                    </p>
-                                  ) : null}
-                                  {onCreateSeatTypeForShape ? (
-                                    <button
-                                      type="button"
-                                      className="seat-map-editor-button primary compact"
-                                      onClick={() => onCreateSeatTypeForShape(shape.id)}
-                                    >
-                                      <Plus size={15} />
-                                      Tạo loại vé cho khu này
-                                    </button>
-                                  ) : null}
-                                </div>
-                              ) : null}
                             </>
                           ) : null}
                         </div>
@@ -467,7 +413,38 @@ export default function SeatMapRightSidebar({
 
         {selectedSeatOpen ? (
           <div className="seat-map-selected-seat-panel-body">
-            {!selectedShape || !selectedSeat ? (
+            {!selectedShape ? (
+              <p className="seat-map-editor-empty">Select a sector or seat to edit details.</p>
+            ) : selectedShape.sectorType === "STANDING" ? (
+              <div className="seat-map-seat-panel">
+                <label><span>Sector</span><input value={selectedShape.name} readOnly /></label>
+                <label>
+                  <span>Loại vé khu đứng</span>
+                  <select
+                    value={selectedShape.ticketTypeId || ""}
+                    disabled={!selectedSectorTicketTypes.length}
+                    onChange={(event) => {
+                      onShapeMetaChange(selectedShape.id, { ticketTypeId: event.target.value });
+                    }}
+                  >
+                    <option value="">Chọn loại vé</option>
+                    {!selectedSectorTicketTypes.length ? (
+                      <option value="" disabled>Chưa có loại vé hợp lệ cho khu này</option>
+                    ) : null}
+                    {selectedSectorTicketTypes.map((ticketType) => (
+                      <option key={ticketType.id} value={ticketType.id}>{ticketType.name}</option>
+                    ))}
+                    {!selectedSectorTicketTypes.length && otherSectorTicketTypes.length ? (
+                      <optgroup label="Loại vé thuộc khu khác">
+                        {otherSectorTicketTypes.map((ticketType) => (
+                          <option key={ticketType.id} value="" disabled>{ticketType.name}</option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                </label>
+              </div>
+            ) : !selectedSeat ? (
               <p className="seat-map-editor-empty">Select a seat to edit seat details.</p>
             ) : (
               <div className="seat-map-seat-panel">
@@ -585,6 +562,17 @@ export default function SeatMapRightSidebar({
           </div>
         ) : null}
       </section>
+
+      <div className="seat-map-action-grid seat-map-publish-actions">
+        <button
+          type="button"
+          className="seat-map-editor-button danger compact"
+          onClick={onClearDraft}
+          disabled={!canClearDraft}
+        >
+          Restore
+        </button>
+      </div>
     </aside>
   );
 }

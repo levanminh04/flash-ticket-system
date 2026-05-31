@@ -4,7 +4,7 @@
 
 .checkout-page {
   min-height: calc(100vh - 56px);
-  background: var(--page-gradient-booking);
+  background: linear-gradient(180deg, #282828 0%, #202020 34%, #171717 68%, #0d0d0d 100%);
   background-repeat: no-repeat;
 }
 
@@ -251,6 +251,12 @@
 .form-group label .required {
   color: var(--error);
   margin-left: 2px;
+}
+
+.checkout-required-star {
+  color: #ef4444;
+  margin-right: 4px;
+  font-weight: 800;
 }
 
 .form-row {
@@ -800,5 +806,43 @@
 .payment-strategy-item.active {
   border-color: var(--primary) !important;
   background: rgba(45, 194, 117, 0.04) !important;
+}
+
+.payment-strategy-radio-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.payment-strategy-radio {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #ffffff;
+}
+
+.payment-strategy-radio-input:checked + .payment-strategy-radio {
+  background: var(--primary);
+}
+
+.payment-strategy-radio svg {
+  opacity: 0;
+}
+
+.payment-strategy-radio-input:checked + .payment-strategy-radio svg {
+  opacity: 1;
+}
+
+.payment-strategy-logo {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  object-fit: contain;
 }
 

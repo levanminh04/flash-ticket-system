@@ -4,7 +4,6 @@ import { toast } from "react-toastify";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
-import OrganizerEventWorkspaceNav from "../../components/organizer/OrganizerEventWorkspaceNav";
 import { confirmDestructiveAction } from "../../lib/swal";
 import {
   organizerService,
@@ -13,7 +12,6 @@ import {
 import {
   LayoutSourceType,
   organizerWorkspaceService,
-  OrganizerEventDetail,
   OrganizerEventLayout,
   OrganizerLayoutPayload,
 } from "../../services/organizerWorkspaceService";
@@ -124,7 +122,6 @@ function toPayload(formState: LayoutFormState): OrganizerLayoutPayload | null {
 export default function OrganizerLayoutPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const { ready } = useOrganizerGate();
-  const [eventDetail, setEventDetail] = useState<OrganizerEventDetail | null>(null);
   const [layout, setLayout] = useState<OrganizerEventLayout | null>(null);
   const [formState, setFormState] = useState<LayoutFormState>(defaultFormState);
   const [loading, setLoading] = useState(true);
@@ -155,15 +152,13 @@ export default function OrganizerLayoutPage() {
 
       setLoading(true);
       try {
-        const [nextEvent, nextLayout, nextImages] = await Promise.all([
-          organizerWorkspaceService.getMyEvent(eventId),
+        const [nextLayout, nextImages] = await Promise.all([
           organizerWorkspaceService.getLayout(eventId),
           organizerService.getEventImages(eventId).catch(() => []),
         ]);
 
         if (!cancelled) {
           const seatMapImage = nextImages.find((image) => image.imageType === "SEAT_MAP");
-          setEventDetail(nextEvent);
           setLayout(nextLayout);
           setFormState(
             nextLayout
@@ -203,7 +198,7 @@ export default function OrganizerLayoutPage() {
 
   const handleSubmit = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault();
-    if (!eventId) return;
+    if (!eventId || saving) return;
 
     const payload = toPayload(formState);
     if (!payload) {
@@ -231,6 +226,17 @@ export default function OrganizerLayoutPage() {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    const handleSave = () => {
+      const mockEvent = { preventDefault: () => {} } as FormEvent<HTMLFormElement>;
+      void handleSubmit(mockEvent);
+    };
+    document.addEventListener("organizer-save-event", handleSave);
+    return () => {
+      document.removeEventListener("organizer-save-event", handleSave);
+    };
+  }, [formState, layout, eventId, saving]);
 
   const handleDelete = async () => {
     if (!eventId || !layout) return;
@@ -263,8 +269,10 @@ export default function OrganizerLayoutPage() {
       description="Thiết lập sơ đồ và ảnh nền."
       actions={null}
       hideTopBar
+      showWorkflowNav={Boolean(eventId)}
+      eventId={eventId}
+      className="organizer-layout-page"
     >
-      {eventId ? <OrganizerEventWorkspaceNav eventId={eventId} /> : null}
 
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
@@ -274,19 +282,11 @@ export default function OrganizerLayoutPage() {
       ) : (
         <section className="organizer-grid organizer-layout-editor-single">
           <form className="organizer-panel organizer-event-form" onSubmit={handleSubmit}>
-            <div className="organizer-panel-heading">
-              <h2 style={{ marginBottom: "4px" }}><strong>Tên sự kiện: </strong>{eventDetail?.title || "Sự kiện chưa xác định"}</h2>
-              <h2 style={{ marginTop: 0 }}><strong>Slug: </strong>{eventDetail?.slug || "Sự kiện chưa xác định"}</h2>
-              <p>
-                {layout
-                  ? "Event này đã có layout, có thể tiếp tục cập nhật trực tiếp."
-                  : "Event này chưa có layout. Tạo layout mới để chuẩn bị cho seat map."}
-              </p>
-            </div>
-
             <div className="organizer-form-grid">
               <label className="organizer-field organizer-form-span-2">
-                <span>Tên layout</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Tên layout
+                </span>
                 <input
                   className="organizer-input"
                   value={formState.name}
@@ -296,7 +296,9 @@ export default function OrganizerLayoutPage() {
               </label>
 
               <label className="organizer-field organizer-form-span-2">
-                <span>Background image URL</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Background image URL
+                </span>
                 <div className="organizer-layout-url-field">
                   {formState.backgroundImageUrl.trim() ? (
                     <button
@@ -324,7 +326,9 @@ export default function OrganizerLayoutPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Background public ID</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Background public ID
+                </span>
                 <input
                   className="organizer-input"
                   value={formState.backgroundPublicId}
@@ -333,7 +337,9 @@ export default function OrganizerLayoutPage() {
                 />
               </label>
               <label className="organizer-field">
-                <span>Source type</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Source type
+                </span>
                 <select
                   className="organizer-input"
                   value={formState.sourceType}
@@ -348,7 +354,9 @@ export default function OrganizerLayoutPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Width</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Width
+                </span>
                 <input
                   type="number"
                   className="organizer-input"
@@ -359,7 +367,9 @@ export default function OrganizerLayoutPage() {
               </label>
 
               <label className="organizer-field">
-                <span>Height</span>
+                <span>
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Height
+                </span>
                 <input
                   type="number"
                   className="organizer-input"
@@ -389,22 +399,18 @@ export default function OrganizerLayoutPage() {
                 />
               </label>
             </div>
-            <div className="organizer-form-actions" style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%", gap: "16px" }}>
-              {layout ? (
+            {layout ? (
+              <div className="organizer-form-actions">
                 <button
                   type="button"
                   className="btn btn-danger organizer-danger-button"
                   onClick={handleDelete}
                   disabled={deleting}
-                  style={{ flex: 1 }}
                 >
                   {deleting ? "Đang xóa" : "Xóa layout"}
                 </button>
-              ) : null}
-              <button type="submit" className="btn btn-primary organizer-action-button" disabled={saving} style={{ flex: 1, margin: 0 }}>
-                {saving ? "Đang lưu" : layout ? "Cập nhật layout" : "Tạo layout"}
-              </button>
-            </div>
+              </div>
+            ) : null}
           </form>
 
         </section>
