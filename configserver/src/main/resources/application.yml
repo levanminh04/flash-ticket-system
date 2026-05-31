@@ -5,7 +5,7 @@ spring:
   application:
     name: configserver
   profiles:
-    active: local,native
+    active: native,local
 
 ---
 # ------------------------------------------------------------------------------
@@ -16,17 +16,15 @@ spring:
     activate:
       on-profile: local
   rabbitmq:
-    host: localhost
+    host: 15.134.248.39
     port: 5672
     username: guest
     password: guest
   cloud:
-    bus:
-      enabled: false
     config:
       server:
         native:
-          search-locations: file:./src/main/resources/config/
+          search-locations: classpath:/config/
 
 ---
 # ------------------------------------------------------------------------------
