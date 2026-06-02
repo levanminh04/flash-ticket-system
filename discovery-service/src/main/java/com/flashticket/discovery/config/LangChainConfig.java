@@ -9,7 +9,9 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.googleai.GoogleAiEmbeddingModel;
+// [OLD — Google AI Studio] import dev.langchain4j.model.googleai.GoogleAiEmbeddingModel;
+import dev.langchain4j.model.vertexai.VertexAiEmbeddingModel;
+import dev.langchain4j.model.vertexai.VertexAiGeminiChatModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.EmbeddingStore;
@@ -25,23 +27,51 @@ import java.util.regex.Pattern;
 /**
  * LangChain4j bean configuration.
  *
- * EmbeddingModel: Google text-embedding-004 (768 dimensions).
+ * EmbeddingModel: Vertex AI gemini-embedding-001 (768 dimensions).
  * EmbeddingStore: PGVector (PostgreSQL) — table discovery_schema.event_embeddings.
  * DiscoveryAssistant: AiServices wiring LLM + RAG + ChatMemory + Tools.
  *
- * ChatModel is auto-configured by langchain4j-google-ai-gemini-spring-boot-starter
- * via application.yml properties (langchain4j.google-ai-gemini.chat-model.*).
+ * ChatModel is manually created via VertexAiGeminiChatModel.builder()
+ * reading GCP credentials directly from environment variables (discovery-service/.env).
  */
 @Configuration
 public class LangChainConfig {
 
 
-    // model xử lý text thành vector
+    // ── ChatModel (Gemini LLM) ────────────────────────────────────────────────
+    // Tự tạo thủ công thay vì dựa vào auto-configuration (cần Config Server chạy).
+    // Đọc trực tiếp từ biến môi trường trong discovery-service/.env
+    @Bean
+    VertexAiGeminiChatModel vertexAiGeminiChatModel(
+            @Value("${GCP_PROJECT_ID}") String project,
+            @Value("${GCP_LOCATION:us-central1}") String location,
+            @Value("${GEMINI_MODEL:gemini-2.5-flash}") String modelName) {
+        return VertexAiGeminiChatModel.builder()
+                .project(project)
+                .location(location)
+                .modelName(modelName)
+                .temperature(0.3f)
+                .build();
+    }
+
+    // ── EmbeddingModel (xử lý text thành vector) ─────────────────────────────
+    // [OLD — Google AI Studio]
+    // @Bean
+    // EmbeddingModel embeddingModel(
+    //         @Value("${langchain4j.google-ai-gemini.chat-model.api-key}") String apiKey) {
+    //     return GoogleAiEmbeddingModel.builder()
+    //             .apiKey(apiKey)
+    //             .modelName("gemini-embedding-001")
+    //             .build();
+    // }
     @Bean
     EmbeddingModel embeddingModel(
-            @Value("${langchain4j.google-ai-gemini.chat-model.api-key}") String apiKey) {
-        return GoogleAiEmbeddingModel.builder()
-                .apiKey(apiKey)
+            @Value("${GCP_PROJECT_ID}") String project,
+            @Value("${GCP_LOCATION:us-central1}") String location) {
+        return VertexAiEmbeddingModel.builder()
+                .project(project)
+                .location(location)
+                .publisher("google")
                 .modelName("gemini-embedding-001")
                 .build();
     }
@@ -61,7 +91,7 @@ public class LangChainConfig {
                 .user(user)
                 .password(password)
                 .table("discovery_schema.event_embeddings") // bảng event_embeddings do Langchain4j tự tạo với 4 cột mặc định
-                .dimension(768) // text-embedding-004 = 768 dims
+                .dimension(3072) // Vertex AI gemini-embedding-001 = 3072 dims (Google AI Studio = 768)
                 .createTable(true)
                 .build();
     }
@@ -77,7 +107,8 @@ public class LangChainConfig {
      */
     @Bean
     DiscoveryAssistant discoveryAssistant(
-            @Qualifier("googleAiGeminiChatModel") ChatModel chatModel,
+            // [OLD — Google AI Studio] @Qualifier("googleAiGeminiChatModel") ChatModel chatModel,
+            ChatModel chatModel,
             AdaptiveRagRouter adaptiveRagRouter,
             EventSearchTool eventSearchTool,
             BookingTool bookingTool,

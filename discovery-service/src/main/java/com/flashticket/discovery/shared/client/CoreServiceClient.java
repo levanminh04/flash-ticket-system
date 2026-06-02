@@ -73,6 +73,18 @@ public class CoreServiceClient {
                 .body(String.class);
     }
 
+    /** GET /api/events (public) — Lấy TẤT CẢ events (không filter) cho admin reindex */
+    public String searchAllEvents(int page, int size) {
+        return restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/events")
+                        .queryParam("page", page)
+                        .queryParam("size", size)
+                        .build())
+                .retrieve()
+                .body(String.class);
+    }
+
     /** GET /api/events/{id} (public) — Event detail */
     public String getEventDetail(String eventId) {
         return restClient.get()

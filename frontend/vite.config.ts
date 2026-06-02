@@ -15,6 +15,8 @@ export default defineConfig(({ mode }) => {
         env.VITE_KEYCLOAK_URL || env.KEYCLOAK_SERVER_URL || 'http://13.239.118.235:9090',
     )
 
+    const keycloakBaseUrl = keycloakUrl.replace(/\/auth$/, '')
+
     return {
         envDir: '.',
         plugins: [react()],
@@ -42,6 +44,10 @@ export default defineConfig(({ mode }) => {
                 },
                 '/realms': {
                     target: keycloakUrl,
+                    changeOrigin: true,
+                },
+                '/auth': {
+                    target: keycloakBaseUrl,
                     changeOrigin: true,
                 },
             },

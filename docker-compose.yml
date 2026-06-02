@@ -52,8 +52,8 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: admin
 
       KC_HTTP_RELATIVE_PATH: /auth
-      KC_HOSTNAME: 15.134.248.39/auth
-      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME: http://15.134.248.39/auth
+      KC_HOSTNAME_STRICT: "true"
       KC_HTTP_ENABLED: "true"
 #      KC_PROXY: "edge"
       KC_PROXY_HEADERS: xforwarded

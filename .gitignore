@@ -93,4 +93,6 @@ run-all-services.ps1
 package-lock.json
 /frontend/package-lock.json
 /docs/bug-discovery-service/metadata_analysis.md
-/docs/deployment_demo_analysis.md
+# GCP JSON Key Credentials
+*celtic-current-458114-n3*.json
+*.json
