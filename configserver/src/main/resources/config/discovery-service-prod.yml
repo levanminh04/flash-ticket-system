@@ -17,8 +17,15 @@ spring:
           issuer-uri: http://15.134.248.39/auth/realms/flash-ticket
           jwk-set-uri: http://keycloak-flash-ticket:8080/auth/realms/flash-ticket/protocol/openid-connect/certs
 
-# 4. Lưu vết API Key của Gemini để chạy AI chatbot
+# [OLD — Google AI Studio]
+#langchain4j:
+#  google-ai-gemini:
+#    chat-model:
+#      api-key: AIzaSyD3ZSe4oZYM6qmEolIJOP-aJMB-RUWJGGQ
+
+# 4. Vertex AI (GCP) — xác thực qua Service Account / ADC
 langchain4j:
-  google-ai-gemini:
+  vertex-ai-gemini:
     chat-model:
-      api-key: AIzaSyD3ZSe4oZYM6qmEolIJOP-aJMB-RUWJGGQ
+      project: ${GCP_PROJECT_ID}
+      location: ${GCP_LOCATION:us-central1}

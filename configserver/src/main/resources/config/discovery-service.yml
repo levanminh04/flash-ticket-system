@@ -49,10 +49,17 @@ eureka:
     instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}
 
 # LangChain4j Configuration
+# [OLD — Google AI Studio]
+#  google-ai-gemini:
+#    chat-model:
+#      api-key: ${GEMINI_API_KEY}
+#      model-name: ${GEMINI_MODEL:gemini-2.0-flash}
+#      temperature: 0.3
 langchain4j:
-  google-ai-gemini:
+  vertex-ai-gemini:
     chat-model:
-      api-key: ${GEMINI_API_KEY}
+      project: ${GCP_PROJECT_ID}
+      location: ${GCP_LOCATION:us-central1}
       model-name: ${GEMINI_MODEL:gemini-2.0-flash}
       temperature: 0.3
   open-ai:

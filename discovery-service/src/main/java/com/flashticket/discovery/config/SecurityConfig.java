@@ -33,6 +33,7 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/discovery/**").permitAll()
+                        .requestMatchers("/api/discovery/admin/**").permitAll() // TODO: Chuyển về hasRole('ADMIN') trước khi lên production
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().authenticated()
                 )
