@@ -109,6 +109,14 @@ services:
       RABBITMQ_HOST: rabbitmq_flash_ticket
       KEYCLOAK_ISSUER_URI: http://15.134.248.39/auth/realms/flash-ticket
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      # Vertex AI (GCP)
+      GCP_PROJECT_ID: celtic-current-458114-n3
+      GCP_LOCATION: us-central1
+      GEMINI_MODEL: gemini-2.5-flash
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
+    volumes:
+      # Mount GCP service account key — phải upload file lên EC2 trước
+      - /home/ubuntu/gcp-credentials.json:/app/gcp-credentials.json:ro
     networks:
       - ec2-db-network
     depends_on:
