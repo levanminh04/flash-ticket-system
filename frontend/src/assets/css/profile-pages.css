@@ -1046,6 +1046,10 @@
   color: #166534;
 }
 
+.order-detail-info .info-row .value.order-detail-status.status-pending {
+  color: #ffffff;
+}
+
 .order-detail-info .info-row.discount {
   color: #166534;
 }

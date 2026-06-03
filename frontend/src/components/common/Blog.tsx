@@ -1,17 +1,45 @@
-import { blogPosts } from "../../constants/blogs";
 import { ArrowRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { blogPosts } from "../../constants/blogs";
 
-export default function Blog() {
+type BlogProps = {
+  highlight?: string;
+  title?: string;
+};
+
+function renderTitleWithHighlight(title: string, highlight: string) {
+  const normalizedTitle = title.toLowerCase();
+  const normalizedHighlight = highlight.toLowerCase();
+  const highlightIndex = normalizedTitle.lastIndexOf(normalizedHighlight);
+
+  if (highlightIndex < 0) return title;
+
+  return (
+    <>
+      {title.slice(0, highlightIndex)}
+      <span className="home-blog-title-highlight">
+        {title.slice(highlightIndex, highlightIndex + highlight.length)}
+      </span>
+      {title.slice(highlightIndex + highlight.length)}
+    </>
+  );
+}
+
+export default function Blog({ highlight, title }: BlogProps) {
+  const { t } = useTranslation();
+  const resolvedTitle = title || `${t("blog.titleFirst")} ${t("blog.titleHighlight")}`;
+  const resolvedHighlight = highlight || t("blog.titleHighlight");
+
   return (
     <section className="home-section" id="home-blog">
       <div className="section-heading">
         <div>
           <h2 className="home-blog-title">
-            Our last <span className="home-blog-title-highlight">Blog</span>
+            {renderTitleWithHighlight(resolvedTitle, resolvedHighlight)}
           </h2>
         </div>
         <a href="#home-blog" className="section-link home-blog-link">
-          <span>See All Posts</span>
+          <span>{t("blog.seeAllPosts")}</span>
           <span className="home-blog-link-icon" aria-hidden="true">
             <ArrowRight size={16} />
           </span>
@@ -37,7 +65,7 @@ export default function Blog() {
                 </a>
               </h3>
               <a href={post.link} target="_blank" rel="noreferrer">
-                Read More
+                {t("blog.readMore")}
               </a>
             </div>
           </article>

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { Copy, Edit, Search, Ticket, Trash2, X } from "lucide-react";
@@ -18,6 +19,10 @@ import {
   toIsoString,
 } from "./organizerWorkspaceUtils";
 import { useOrganizerGate } from "./useOrganizerGate";
+import {
+  dispatchOrganizerWorkflowDirty,
+  dispatchOrganizerWorkflowSaveResult,
+} from "./organizerWorkflowEvents";
 
 type TicketTypeFormState = {
   name: string;
@@ -118,7 +123,23 @@ function toPayload(
   };
 }
 
+function validateTicketTypePayload(
+  payload: OrganizerTicketTypePayload,
+  isAssignedSeatTicket: boolean,
+  t: (key: string) => string,
+) {
+  const originalPrice = payload.originalPrice;
+  if (!Number.isFinite(payload.price) || payload.price < 0) return t("organizerTicketTypes.validation.priceNegative");
+  if (originalPrice !== undefined && originalPrice !== null && (!Number.isFinite(originalPrice) || originalPrice < 0)) return t("organizerTicketTypes.validation.originalPriceNegative");
+  if (originalPrice !== undefined && originalPrice !== null && originalPrice > 0 && originalPrice < payload.price) return t("organizerTicketTypes.validation.originalPriceLessThanPrice");
+  if (!isAssignedSeatTicket && (!Number.isFinite(payload.quantityTotal) || payload.quantityTotal < 1)) return t("organizerTicketTypes.validation.quantityMin");
+  if (payload.maxPerOrder !== undefined && (!Number.isFinite(payload.maxPerOrder) || payload.maxPerOrder < 1 || payload.maxPerOrder > 20)) return t("organizerTicketTypes.validation.maxPerOrderRange");
+  if (payload.displayOrder !== undefined && (!Number.isFinite(payload.displayOrder) || payload.displayOrder < 0)) return t("organizerTicketTypes.validation.displayOrderNegative");
+  return null;
+}
+
 export default function OrganizerTicketTypesPage() {
+  const { t } = useTranslation();
   const { eventId } = useParams<{ eventId: string }>();
   const [searchParams] = useSearchParams();
   const { ready } = useOrganizerGate();
@@ -161,6 +182,9 @@ export default function OrganizerTicketTypesPage() {
 
         setTicketTypes(nextTicketTypes);
         setSeatMap(nextSeatMap);
+        if (nextTicketTypes.length > 0) {
+          dispatchOrganizerWorkflowSaveResult(true);
+        }
 
         if (requestedSetupMode === "SEAT_MAP") {
           setSetupMode("SEAT_MAP");
@@ -188,7 +212,7 @@ export default function OrganizerTicketTypesPage() {
         );
       } catch {
         if (!cancelled) {
-          toast.error("Không thể tải danh sách loại vé.");
+          toast.error(t("organizerTicketTypes.loadFailed"));
         }
       } finally {
         if (!cancelled) {
@@ -209,6 +233,7 @@ export default function OrganizerTicketTypesPage() {
     requestedSetupMode,
     setupStorageKey,
     shouldOpenCreateForm,
+    t,
   ]);
 
   const handleChange = <K extends keyof TicketTypeFormState>(
@@ -284,12 +309,12 @@ export default function OrganizerTicketTypesPage() {
     }
 
     if (eventUsesSeatMap && !formState.eventSectorId.trim()) {
-      toast.error("Chọn khu vực áp dụng cho loại vé.");
+      toast.error(t("organizerTicketTypes.chooseSectorRequired"));
       return;
     }
 
     if (eventUsesSeatMap && !selectedSector) {
-      toast.error("Khu vực này chưa được publish. Hãy publish sector trước khi tạo loại vé.");
+      toast.error(t("organizerTicketTypes.sectorNotPublished"));
       return;
     }
 
@@ -302,9 +327,15 @@ export default function OrganizerTicketTypesPage() {
     if (!payload) {
       toast.error(
         isAssignedSeatTicket
-          ? "Điền đủ tên vé, giá và chọn khu ghế ngồi đã có ghế."
-          : "Điền đủ tên vé, giá và số lượng.",
+          ? t("organizerTicketTypes.assignedSeatMissingFields")
+          : t("organizerTicketTypes.quantityMissingFields"),
       );
+      return;
+    }
+
+    const validationMessage = validateTicketTypePayload(payload, isAssignedSeatTicket, t);
+    if (validationMessage) {
+      toast.error(validationMessage);
       return;
     }
 
@@ -313,7 +344,7 @@ export default function OrganizerTicketTypesPage() {
       payload.saleEndDatetime &&
       new Date(payload.saleEndDatetime) <= new Date(payload.saleStartDatetime)
     ) {
-      toast.error("Thời gian kết thúc bán phải lớn hơn thời gian bắt đầu.");
+      toast.error(t("organizerTicketTypes.saleEndAfterStart"));
       return;
     }
 
@@ -339,13 +370,14 @@ export default function OrganizerTicketTypesPage() {
       });
 
       invalidateSeatMapPublishedState();
+      dispatchOrganizerWorkflowDirty();
       resetForm();
       toast.success(
-        isEditing ? "Cập nhật loại vé thành công." : "Tạo loại vé thành công.",
+        isEditing ? t("organizerTicketTypes.updateSuccess") : t("organizerTicketTypes.createSuccess"),
       );
     } catch {
       toast.error(
-        editingId ? "Không thể cập nhật loại vé." : "Không thể tạo loại vé.",
+        editingId ? t("organizerTicketTypes.updateFailed") : t("organizerTicketTypes.createFailed"),
       );
     } finally {
       setSaving(false);
@@ -354,13 +386,19 @@ export default function OrganizerTicketTypesPage() {
 
   useEffect(() => {
     const handleSave = () => {
-      toast.success("Thông tin vé sự kiện đã được lưu thành công.");
+      if (ticketTypes.length === 0) {
+        dispatchOrganizerWorkflowSaveResult(false);
+        toast.error(t("organizerTicketTypes.createAtLeastOne"));
+        return;
+      }
+      dispatchOrganizerWorkflowSaveResult(true);
+      toast.success(t("organizerTicketTypes.saveSuccess"));
     };
     document.addEventListener("organizer-save-event", handleSave);
     return () => {
       document.removeEventListener("organizer-save-event", handleSave);
     };
-  }, []);
+  }, [ticketTypes.length, t]);
 
   const handleEdit = (ticketType: OrganizerTicketType) => {
     setEditingId(ticketType.id);
@@ -374,10 +412,10 @@ export default function OrganizerTicketTypesPage() {
     }
 
     const confirmed = await confirmDestructiveAction({
-      title: "Xóa loại vé này?",
-      text: "Loại vé sẽ bị gỡ khỏi sự kiện. Kiểm tra kỹ trước khi xóa nếu event đã mở bán.",
-      confirmButtonText: "Xóa loại vé",
-      cancelButtonText: "Giữ lại",
+      title: t("organizerTicketTypes.deleteTitle"),
+      text: t("organizerTicketTypes.deleteText"),
+      confirmButtonText: t("organizerTicketTypes.deleteConfirm"),
+      cancelButtonText: t("organizerTicketTypes.deleteCancel"),
     });
 
     if (!confirmed) {
@@ -391,12 +429,13 @@ export default function OrganizerTicketTypesPage() {
         current.filter((item) => item.id !== ticketType.id),
       );
       invalidateSeatMapPublishedState();
+      dispatchOrganizerWorkflowDirty();
       if (editingId === ticketType.id) {
         resetForm();
       }
-      toast.success("Đã xóa loại vé.");
+      toast.success(t("organizerTicketTypes.deleteSuccess"));
     } catch {
-      toast.error("Không thể xóa loại vé.");
+      toast.error(t("organizerTicketTypes.deleteFailed"));
     } finally {
       setDeletingId(null);
     }
@@ -418,8 +457,8 @@ export default function OrganizerTicketTypesPage() {
 
   return (
     <OrganizerLayout
-      title="Quản lý loại vé"
-      description="Quản lý các loại vé của sự kiện."
+      title={t("organizerTicketTypes.title")}
+      description={t("organizerTicketTypes.description")}
       hideTopBar
       showWorkflowNav={Boolean(eventId)}
       eventId={eventId}
@@ -428,13 +467,13 @@ export default function OrganizerTicketTypesPage() {
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải danh sách loại vé...</p>
+          <p>{t("organizerTicketTypes.loading")}</p>
         </section>
       ) : (
         <>
           {requestedSetupMode === "SEAT_MAP" && !requestedSectorExists ? (
             <section className="organizer-panel organizer-empty-state compact">
-              <p>Khu vực vừa chọn chưa được publish. Hãy publish sector trong Seat map trước khi tạo loại vé cho khu đó.</p>
+              <p>{t("organizerTicketTypes.requestedSectorNotPublished")}</p>
             </section>
           ) : null}
           {setupMode === null ? (
@@ -444,7 +483,7 @@ export default function OrganizerTicketTypesPage() {
               >
                 <div className="organizer-panel-heading">
                   <h2 id="organizer-ticket-setup-title">
-                    Bạn có cần sơ đồ khu vực hoặc ghế không?
+                    {t("organizerTicketTypes.setupTitle")}
                   </h2>
                 </div>
                 <div className="organizer-ticket-setup-actions">
@@ -455,8 +494,8 @@ export default function OrganizerTicketTypesPage() {
                   >
                     <span aria-hidden="true">○</span>
                     <div>
-                      <strong>Không dùng sơ đồ</strong>
-                      <p>Bán vé theo số lượng.</p>
+                      <strong>{t("organizerTicketTypes.noSeatMap")}</strong>
+                      <p>{t("organizerTicketTypes.noSeatMapDescription")}</p>
                     </div>
                   </button>
                   <button
@@ -466,9 +505,9 @@ export default function OrganizerTicketTypesPage() {
                   >
                     <span aria-hidden="true">○</span>
                     <div>
-                      <strong>Dùng sơ đồ</strong>
+                      <strong>{t("organizerTicketTypes.useSeatMap")}</strong>
                       <p>
-                        Tạo khu đứng, khu ghế ngồi hoặc kết hợp.
+                        {t("organizerTicketTypes.useSeatMapDescription")}
                       </p>
                     </div>
                   </button>
@@ -485,12 +524,12 @@ export default function OrganizerTicketTypesPage() {
               >
                 <div className="organizer-media-modal-header">
                   <h2 id="organizer-ticket-form-title">
-                    {editingId ? "Cập nhật vé sự kiện" : "Tạo vé sự kiện"}
+                    {editingId ? t("organizerTicketTypes.updateModalTitle") : t("organizerTicketTypes.createModalTitle")}
                   </h2>
                   <button
                     type="button"
                     className="organizer-media-modal-close"
-                    aria-label="Đóng popup tạo vé"
+                    aria-label={t("organizerTicketTypes.closeModal")}
                     onClick={resetForm}
                   >
                     <X size={20} />
@@ -502,31 +541,31 @@ export default function OrganizerTicketTypesPage() {
                 >
               <div className="organizer-form-grid">
                 <label className="organizer-field organizer-form-span-2">
-                  <RequiredFieldLabel>Tên loại vé</RequiredFieldLabel>
+                  <RequiredFieldLabel>{t("organizerTicketTypes.ticketName")}</RequiredFieldLabel>
                   <input
                     className="organizer-input"
                     value={formState.name}
                     onChange={(event) =>
                       handleChange("name", event.target.value)
                     }
-                    placeholder="Ví dụ: Early Bird, VIP, Standard"
+                    placeholder={t("organizerTicketTypes.ticketNamePlaceholder")}
                   />
                 </label>
 
                 <label className="organizer-field organizer-form-span-2">
-                  <RequiredFieldLabel>Mô tả</RequiredFieldLabel>
+                  <RequiredFieldLabel>{t("organizerTicketTypes.ticketDescription")}</RequiredFieldLabel>
                   <textarea
                     className="organizer-input organizer-textarea organizer-textarea-sm"
                     value={formState.description}
                     onChange={(event) =>
                       handleChange("description", event.target.value)
                     }
-                    placeholder="Mô tả chi tiết về loại vé"
+                    placeholder={t("organizerTicketTypes.ticketDescriptionPlaceholder")}
                   />
                 </label>
 
                 <label className="organizer-field">
-                  <RequiredFieldLabel>Giá bán</RequiredFieldLabel>
+                  <RequiredFieldLabel>{t("organizerTicketTypes.price")}</RequiredFieldLabel>
                   <input
                     type="number"
                     min={0}
@@ -535,12 +574,12 @@ export default function OrganizerTicketTypesPage() {
                     onChange={(event) =>
                       handleChange("price", event.target.value)
                     }
-                    placeholder="Giá bán của loại vé"
+                    placeholder={t("organizerTicketTypes.pricePlaceholder")}
                   />
                 </label>
 
                 <label className="organizer-field">
-                  <RequiredFieldLabel>Giá gốc</RequiredFieldLabel>
+                  <RequiredFieldLabel>{t("organizerTicketTypes.originalPrice")}</RequiredFieldLabel>
                   <input
                     type="number"
                     min={0}
@@ -549,15 +588,15 @@ export default function OrganizerTicketTypesPage() {
                     onChange={(event) =>
                       handleChange("originalPrice", event.target.value)
                     }
-                    placeholder="Giá gốc của loại vé"
+                    placeholder={t("organizerTicketTypes.originalPricePlaceholder")}
                   />
                 </label>
 
                 <label className="organizer-field">
-                  <RequiredFieldLabel>Số lượng</RequiredFieldLabel>
+                  <RequiredFieldLabel>{t("organizerTicketTypes.quantity")}</RequiredFieldLabel>
                   <input
                     type="number"
-                    min={0}
+                    min={isAssignedSeatTicket ? 0 : 1}
                     className="organizer-input"
                     value={isAssignedSeatTicket ? "0" : formState.quantityTotal}
                     readOnly={isAssignedSeatTicket}
@@ -566,19 +605,19 @@ export default function OrganizerTicketTypesPage() {
                     }
                     placeholder={
                       isAssignedSeatTicket
-                        ? "Tự tính từ số ghế active"
-                        : "Số lượng vé"
+                        ? t("organizerTicketTypes.assignedSeatQuantityPlaceholder")
+                        : t("organizerTicketTypes.quantityPlaceholder")
                     }
                   />
                   {isAssignedSeatTicket ? (
                     <small className="organizer-inline-help">
-                      Backend sẽ đồng bộ số lượng sau khi ghế được gán loại vé và publish seat map.
+                      {t("organizerTicketTypes.assignedSeatQuantityHelp")}
                     </small>
                   ) : null}
                 </label>
 
                 <label className="organizer-field">
-                  <RequiredFieldLabel>Tối đa mỗi đơn</RequiredFieldLabel>
+                  <RequiredFieldLabel>{t("organizerTicketTypes.maxPerOrder")}</RequiredFieldLabel>
                   <input
                     type="number"
                     min={1}
@@ -592,7 +631,7 @@ export default function OrganizerTicketTypesPage() {
 
 
                 <label className="organizer-field">
-                  <RequiredFieldLabel>Mở bán từ</RequiredFieldLabel>
+                  <RequiredFieldLabel>{t("organizerTicketTypes.saleStart")}</RequiredFieldLabel>
                   <input
                     type="datetime-local"
                     className="organizer-input"
@@ -604,7 +643,7 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <RequiredFieldLabel>Kết thúc bán</RequiredFieldLabel>
+                  <RequiredFieldLabel>{t("organizerTicketTypes.saleEnd")}</RequiredFieldLabel>
                   <input
                     type="datetime-local"
                     className="organizer-input"
@@ -616,7 +655,7 @@ export default function OrganizerTicketTypesPage() {
                 </label>
 
                 <label className="organizer-field">
-                  <span>Màu vé</span>
+                  <span>{t("organizerTicketTypes.ticketColor")}</span>
                   <div className="organizer-ticket-color-control">
                     <div className="organizer-ticket-color-value">
                       <input
@@ -626,7 +665,7 @@ export default function OrganizerTicketTypesPage() {
                         onChange={(event) =>
                           handleChange("colorCode", event.target.value)
                         }
-                        title="Chọn màu vé"
+                        title={t("organizerTicketTypes.chooseColor")}
                       />
                       <span
                         className="organizer-ticket-color-swatch"
@@ -639,7 +678,7 @@ export default function OrganizerTicketTypesPage() {
                     <button
                       type="button"
                       className="organizer-ticket-color-copy"
-                      aria-label="Sao chép mã màu vé"
+                      aria-label={t("organizerTicketTypes.copyColor")}
                       onClick={() => {
                         void navigator.clipboard?.writeText(formState.colorCode.toUpperCase());
                       }}
@@ -651,7 +690,7 @@ export default function OrganizerTicketTypesPage() {
 
                 {eventUsesSeatMap ? (
                   <label className="organizer-field">
-                    <RequiredFieldLabel>Thuộc khu vực nào?</RequiredFieldLabel>
+                    <RequiredFieldLabel>{t("organizerTicketTypes.appliedSector")}</RequiredFieldLabel>
                     <select
                       className="organizer-input"
                       value={formState.eventSectorId}
@@ -659,10 +698,10 @@ export default function OrganizerTicketTypesPage() {
                         handleChange("eventSectorId", event.target.value)
                       }
                     >
-                      <option value="">Chọn khu vực</option>
+                      <option value="">{t("organizerTicketTypes.chooseSector")}</option>
                       {activeSectors.map((sector) => (
                         <option key={sector.id} value={sector.id}>
-                          {sector.name} - {sector.sectorType === "SEATED" ? "khu ghế ngồi" : "khu đứng"}
+                          {sector.name} - {sector.sectorType === "SEATED" ? t("organizerTicketTypes.seatedSector") : t("organizerTicketTypes.standingSector")}
                         </option>
                       ))}
                     </select>
@@ -679,10 +718,9 @@ export default function OrganizerTicketTypesPage() {
                       }
                     />
                     <div>
-                      <strong>Hiển thị công khai</strong>
+                      <strong>{t("organizerTicketTypes.publicVisible")}</strong>
                       <p>
-                        Tắt nếu muốn ẩn loại vé trên storefront nhưng vẫn giữ dữ
-                        liệu.
+                        {t("organizerTicketTypes.publicVisibleDescription")}
                       </p>
                     </div>
                   </label>
@@ -697,10 +735,10 @@ export default function OrganizerTicketTypesPage() {
                   style={{ flex: 1, margin: 0 }}
                 >
                   {saving
-                    ? "Đang lưu"
+                    ? t("organizerTicketTypes.saving")
                     : editingId
-                      ? "Cập nhật loại vé"
-                      : "Tạo loại vé"}
+                      ? t("organizerTicketTypes.updateTicketType")
+                      : t("organizerTicketTypes.createTicketType")}
                 </button>
               </div>
                 </form>
@@ -717,7 +755,7 @@ export default function OrganizerTicketTypesPage() {
                     value={ticketSearch}
                     onChange={(event) => setTicketSearch(event.target.value)}
                     className="organizer-events-list-search-input"
-                    placeholder="Tìm loại vé..."
+                    placeholder={t("organizerTicketTypes.searchPlaceholder")}
                   />
                   <span
                     className="organizer-events-list-search-button organizer-ticket-search-icon"
@@ -731,36 +769,36 @@ export default function OrganizerTicketTypesPage() {
                   className="organizer-events-add-button organizer-ticket-create-button"
                   onClick={handleCreateClick}
                 >
-                  Tạo vé sự kiện
+                  {t("organizerTicketTypes.createEventTicket")}
                 </button>
               </div>
             </div>
             {ticketTypes.length === 0 ? (
               <div className="organizer-empty-state compact" style={{ background: "transparent", border: "none", boxShadow: "none" }}>
                 <Ticket size={48} style={{ color: "#16a34a", marginBottom: "12px" }} />
-                <p>Event này chưa có loại vé nào</p>
+                <p>{t("organizerTicketTypes.empty")}</p>
               </div>
             ) : filteredTicketTypes.length === 0 ? (
               <div className="organizer-empty-state compact" style={{ background: "transparent", border: "none", boxShadow: "none" }}>
                 <Search size={48} style={{ color: "#16a34a", marginBottom: "12px" }} />
-                <p>Không có loại vé nào phù hợp</p>
+                <p>{t("organizerTicketTypes.filterEmpty")}</p>
               </div>
             ) : (
               <div className="organizer-ticket-table-wrap">
                 <table className="organizer-ticket-table">
                   <thead>
                     <tr>
-                      <th>STT</th>
-                      <th>Tên loại vé</th>
-                      <th>Màu vé</th>
-                      <th>Giá bán</th>
-                      <th>Giá gốc</th>
-                      <th>Số lượng</th>
-                      <th>Còn lại</th>
-                      <th>Mở bán</th>
-                      <th>Kết thúc bán</th>
-                      <th>Trạng thái</th>
-                      <th>Thao tác</th>
+                      <th>{t("organizerTicketTypes.index")}</th>
+                      <th>{t("organizerTicketTypes.ticketName")}</th>
+                      <th>{t("organizerTicketTypes.ticketColor")}</th>
+                      <th>{t("organizerTicketTypes.price")}</th>
+                      <th>{t("organizerTicketTypes.originalPrice")}</th>
+                      <th>{t("organizerTicketTypes.quantity")}</th>
+                      <th>{t("organizerTicketTypes.remaining")}</th>
+                      <th>{t("organizerTicketTypes.saleStart")}</th>
+                      <th>{t("organizerTicketTypes.saleEnd")}</th>
+                      <th>{t("organizerTicketTypes.status")}</th>
+                      <th>{t("organizerTicketTypes.actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -775,7 +813,7 @@ export default function OrganizerTicketTypesPage() {
                           <td className="organizer-ticket-name-cell">
                             <strong>{ticketType.name}</strong>
                             <span>
-                              {ticketType.description || "Chưa có mô tả."}
+                              {ticketType.description || t("organizerTicketTypes.noDescription")}
                             </span>
                           </td>
                           <td className="organizer-ticket-color-cell">
@@ -805,7 +843,7 @@ export default function OrganizerTicketTypesPage() {
                             <span
                               className={`organizer-status-badge ${statusMeta.className}`}
                             >
-                              {statusMeta.label}
+                              {t(`organizerTicketTypes.statuses.${ticketType.status ?? "UNKNOWN"}`, { defaultValue: statusMeta.label })}
                             </span>
                           </td>
                           <td>
@@ -820,7 +858,7 @@ export default function OrganizerTicketTypesPage() {
                                   cursor: "pointer",
                                   color: "#19454F"
                                 }}
-                                title="Chỉnh sửa"
+                                title={t("organizerTicketTypes.edit")}
                                 onClick={() => handleEdit(ticketType)}
                               >
                                 <Edit size={16} />
@@ -836,7 +874,7 @@ export default function OrganizerTicketTypesPage() {
                                   color: "#ef4444",
                                   opacity: deletingId === ticketType.id ? 0.5 : 1
                                 }}
-                                title="Xóa"
+                                title={t("organizerTicketTypes.delete")}
                                 onClick={() => handleDelete(ticketType)}
                                 disabled={deletingId === ticketType.id}
                               >

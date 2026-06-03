@@ -58,6 +58,8 @@ export interface SeatMapEditorShape {
   code?: string;
   ticketTypeId?: string;
   ticketTypeName?: string;
+  ticketTypeIds?: string[];
+  ticketTypeNames?: string[];
   sectorType: SeatMapEditorSectorType;
   totalCapacity?: number;
   shapeType: SeatMapEditorShapeType;

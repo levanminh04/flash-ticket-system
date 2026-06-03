@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
+import { renderToStaticMarkup } from "react-dom/server";
 import Swal from "sweetalert2";
 import { toast } from "react-toastify";
+import { GiTicket } from "react-icons/gi";
+import { LuTicketsPlane } from "react-icons/lu";
+import { organizerService } from "../../services/organizerService";
 import { organizerWorkspaceService } from "../../services/organizerWorkspaceService";
+import {
+  ORGANIZER_WORKFLOW_DIRTY_EVENT,
+  ORGANIZER_WORKFLOW_SAVE_RESULT_EVENT,
+} from "../../pages/Organizer/organizerWorkflowEvents";
 
 type OrganizerEventWorkspaceNavProps = {
   eventId?: string;
@@ -11,6 +20,16 @@ type OrganizerEventWorkspaceNavProps = {
 type Step = {
   label: string;
   path: string;
+};
+
+type TicketSetupMode = "SEAT_MAP" | "QUANTITY";
+
+const isCurrentStep = (step: Step, pathname: string, search: string) => {
+  const [stepPathname, stepSearch = ""] = step.path.split("?");
+  return (
+    pathname.toLowerCase().endsWith(stepPathname.toLowerCase()) &&
+    (!stepSearch || search === `?${stepSearch}`)
+  );
 };
 
 const getOpenedWorkflowStepsKey = (eventId: string) =>
@@ -37,16 +56,22 @@ const readOpenedWorkflowSteps = (eventId: string) => {
 export default function OrganizerEventWorkspaceNav({
   eventId,
 }: OrganizerEventWorkspaceNavProps) {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [setupMode, setSetupMode] = useState<string | null>(null);
   const [openedStepPaths, setOpenedStepPaths] = useState<string[]>([]);
-  const [seatMapPublished, setSeatMapPublished] = useState(false);
   const [publishingEvent, setPublishingEvent] = useState(false);
   const [eventStatus, setEventStatus] = useState<string | null>(null);
   const [hasSavedCurrentStep, setHasSavedCurrentStep] = useState(false);
+  const [isCurrentStepDirty, setIsCurrentStepDirty] = useState(false);
   const [savingSeatMap, setSavingSeatMap] = useState(false);
   const [seatMapSaveElapsedSeconds, setSeatMapSaveElapsedSeconds] = useState(0);
+  const [isCheckingContinuePrerequisite, setIsCheckingContinuePrerequisite] = useState(false);
+  const [canContinueCurrentStep, setCanContinueCurrentStep] = useState(true);
+  const [continueBlockedMessage, setContinueBlockedMessage] = useState<string | null>(null);
+  const currentLocationKey = `${location.pathname}${location.search}`;
+  const isPublishedEvent = eventStatus === "PUBLISHED";
 
   // Sync setup mode from sessionStorage
   useEffect(() => {
@@ -57,23 +82,7 @@ export default function OrganizerEventWorkspaceNav({
     const key = `organizer-ticket-setup-mode:${eventId}`;
     const stored = sessionStorage.getItem(key);
     setSetupMode(stored);
-    setSeatMapPublished(sessionStorage.getItem(getSeatMapPublishedKey(eventId)) === "true");
   }, [eventId, location.pathname]);
-
-  useEffect(() => {
-    if (!eventId) return;
-
-    const handleSeatMapPublishedUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ eventId?: string; published?: boolean }>;
-      if (customEvent.detail?.eventId !== eventId) return;
-      setSeatMapPublished(Boolean(customEvent.detail.published));
-    };
-
-    document.addEventListener("organizer-seat-map-published-updated", handleSeatMapPublishedUpdate);
-    return () => {
-      document.removeEventListener("organizer-seat-map-published-updated", handleSeatMapPublishedUpdate);
-    };
-  }, [eventId]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -116,13 +125,46 @@ export default function OrganizerEventWorkspaceNav({
 
   useEffect(() => {
     if (!eventId) {
-      sessionStorage.removeItem(getSavedWorkflowStepKey(location.pathname));
+      sessionStorage.removeItem(getSavedWorkflowStepKey(currentLocationKey));
       setHasSavedCurrentStep(false);
       return;
     }
 
-    setHasSavedCurrentStep(sessionStorage.getItem(getSavedWorkflowStepKey(location.pathname)) === "true");
-  }, [eventId, location.pathname]);
+    setHasSavedCurrentStep(
+      isPublishedEvent ||
+        sessionStorage.getItem(getSavedWorkflowStepKey(currentLocationKey)) === "true",
+    );
+    setIsCurrentStepDirty(false);
+  }, [currentLocationKey, eventId, isPublishedEvent]);
+
+  useEffect(() => {
+    const handleDirty = (event: Event) => {
+      const detail = (event as CustomEvent<{ locationKey?: string; dirty?: boolean }>).detail;
+      if (detail?.locationKey !== currentLocationKey) return;
+      setIsCurrentStepDirty(Boolean(detail.dirty));
+      if (detail.dirty && !isPublishedEvent) {
+        setHasSavedCurrentStep(false);
+        sessionStorage.removeItem(getSavedWorkflowStepKey(currentLocationKey));
+      }
+    };
+    const handleSaveResult = (event: Event) => {
+      const detail = (event as CustomEvent<{ locationKey?: string; success?: boolean }>).detail;
+      if (detail?.locationKey !== currentLocationKey) return;
+      const success = Boolean(detail.success);
+      setHasSavedCurrentStep(success || isPublishedEvent);
+      if (success) {
+        setIsCurrentStepDirty(false);
+        sessionStorage.setItem(getSavedWorkflowStepKey(currentLocationKey), "true");
+      }
+    };
+
+    document.addEventListener(ORGANIZER_WORKFLOW_DIRTY_EVENT, handleDirty);
+    document.addEventListener(ORGANIZER_WORKFLOW_SAVE_RESULT_EVENT, handleSaveResult);
+    return () => {
+      document.removeEventListener(ORGANIZER_WORKFLOW_DIRTY_EVENT, handleDirty);
+      document.removeEventListener(ORGANIZER_WORKFLOW_SAVE_RESULT_EVENT, handleSaveResult);
+    };
+  }, [currentLocationKey, isPublishedEvent]);
 
   useEffect(() => {
     if (!eventId) {
@@ -153,48 +195,213 @@ export default function OrganizerEventWorkspaceNav({
     };
   }, [eventId]);
 
+  const eventPath = eventId ? `/organizer/events/${eventId}` : "";
+
   // Define steps dynamically based on selected setup mode
   const steps: Step[] = [
     {
-      label: "Thông tin sự kiện",
-      path: eventId ? `/organizer/events/${eventId}/edit` : "/organizer/events/new",
+      label: "workspaceNav.eventInfo",
+      path: eventId ? `${eventPath}/edit` : "/organizer/events/new",
     },
     {
-      label: "Ảnh sự kiện",
-      path: eventId ? `/organizer/events/${eventId}/media` : "",
+      label: "workspaceNav.eventImages",
+      path: eventId ? `${eventPath}/media` : "",
     },
   ];
 
   if (setupMode === "SEAT_MAP" && eventId) {
     steps.push(
-      { label: "Layout", path: `/organizer/events/${eventId}/layout` },
-      { label: "Sơ đồ ghế ngồi", path: `/organizer/events/${eventId}/seat-map` }
+      { label: "workspaceNav.layout", path: `${eventPath}/layout` },
+      { label: "workspaceNav.seatMap", path: `${eventPath}/seat-map?phase=sectors` },
     );
   }
 
   steps.push({
-    label: "Loại vé",
-    path: eventId ? `/organizer/events/${eventId}/ticket-types` : "",
+    label: "workspaceNav.ticketTypes",
+    path: eventId ? `${eventPath}/ticket-types` : "",
   });
+
+  if (setupMode === "SEAT_MAP" && eventId) {
+    steps.push({
+      label: "workspaceNav.finishSeatMap",
+      path: `${eventPath}/seat-map?phase=assignment`,
+    });
+  }
 
   // Determine current active step
   const currentStepIndex = steps.findIndex((step) =>
-    step.path && location.pathname.toLowerCase().endsWith(step.path.toLowerCase())
+    step.path && isCurrentStep(step, location.pathname, location.search)
   );
   const isSeatMapTicketTypesStep =
     setupMode === "SEAT_MAP" &&
-    currentStepIndex === steps.length - 1 &&
+    steps[currentStepIndex]?.label === "workspaceNav.ticketTypes" &&
     Boolean(eventId);
   const isSeatMapWorkflowStep =
     setupMode === "SEAT_MAP" &&
-    currentStepIndex === 3 &&
+    (steps[currentStepIndex]?.label === "workspaceNav.seatMap" ||
+      steps[currentStepIndex]?.label === "workspaceNav.finishSeatMap") &&
     Boolean(eventId);
   const isQuantityTicketTypesStep =
     setupMode === "QUANTITY" &&
-    currentStepIndex === steps.length - 1 &&
+    steps[currentStepIndex]?.label === "workspaceNav.ticketTypes" &&
     Boolean(eventId);
-  const shouldShowContinueButton =
-    !(isSeatMapTicketTypesStep && seatMapPublished && eventStatus === "PUBLISHED");
+  const isFinalSeatMapStep = steps[currentStepIndex]?.label === "workspaceNav.finishSeatMap";
+  const isLayoutStep = steps[currentStepIndex]?.label === "workspaceNav.layout";
+  const isMediaStep = Boolean(eventId && steps[currentStepIndex]?.path === `${eventPath}/media`);
+
+  const isUsableLayout = (layout: Awaited<ReturnType<typeof organizerWorkspaceService.getLayout>>) =>
+    Boolean(
+      layout?.backgroundImageUrl &&
+        Number(layout.backgroundWidth ?? 0) > 0 &&
+        Number(layout.backgroundHeight ?? 0) > 0,
+    );
+
+  const hasActiveSeatMapSectors = (seatMap: Awaited<ReturnType<typeof organizerWorkspaceService.getSeatMap>>) =>
+    Boolean(seatMap?.sectors?.some((sector) => sector.isActive !== false));
+
+  const hasActiveTicketTypes = async () => {
+    if (!eventId) return false;
+    const ticketTypes = await organizerWorkspaceService.getTicketTypes(eventId);
+    return ticketTypes.some((ticketType) => {
+      const status = String(ticketType.status ?? "").toUpperCase();
+      return status !== "HIDDEN" && status !== "INACTIVE";
+    });
+  };
+
+  const hasSeatMapImage = async () => {
+    if (!eventId) return false;
+    const images = await organizerService.getEventImages(eventId);
+    return images.some(
+      (image) =>
+        image.imageType === "SEAT_MAP" &&
+        image.isDeleted !== true &&
+        Boolean(image.imageUrl),
+    );
+  };
+
+  useEffect(() => {
+    if (!eventId || isPublishedEvent) {
+      setCanContinueCurrentStep(true);
+      setContinueBlockedMessage(null);
+      setIsCheckingContinuePrerequisite(false);
+      return;
+    }
+
+    let cancelled = false;
+    const currentLabel = steps[currentStepIndex]?.label;
+
+    const resolvePrerequisite = async () => {
+      if (setupMode !== "SEAT_MAP") {
+        return { allowed: true, message: null };
+      }
+
+      if (isMediaStep) {
+        const hasUploadedSeatMap = await hasSeatMapImage().catch(() => false);
+        return hasUploadedSeatMap
+          ? { allowed: true, message: null }
+          : {
+              allowed: false,
+              message: t("workspaceNav.requireSeatMapImage"),
+            };
+      }
+
+      if (currentLabel === "workspaceNav.layout") {
+        const layout = await organizerWorkspaceService.getLayout(eventId).catch(() => null);
+        return isUsableLayout(layout)
+          ? { allowed: true, message: null }
+          : {
+              allowed: false,
+              message: t("workspaceNav.requireValidLayout"),
+            };
+      }
+
+      if (currentLabel === "workspaceNav.seatMap") {
+        const seatMap = await organizerWorkspaceService.getSeatMap(eventId).catch(() => null);
+        return hasActiveSeatMapSectors(seatMap)
+          ? { allowed: true, message: null }
+          : {
+              allowed: false,
+              message: t("workspaceNav.requireSector"),
+            };
+      }
+
+      if (isSeatMapTicketTypesStep) {
+        const [seatMap, hasTickets] = await Promise.all([
+          organizerWorkspaceService.getSeatMap(eventId).catch(() => null),
+          hasActiveTicketTypes().catch(() => false),
+        ]);
+        if (!hasActiveSeatMapSectors(seatMap)) {
+          return {
+            allowed: false,
+            message: t("workspaceNav.requireSeatMapBeforeAssignment"),
+          };
+        }
+        if (!hasTickets) {
+          return {
+            allowed: false,
+            message: t("workspaceNav.requireTicketType"),
+          };
+        }
+      }
+
+      return { allowed: true, message: null };
+    };
+
+    setIsCheckingContinuePrerequisite(true);
+    resolvePrerequisite()
+      .then((result) => {
+        if (cancelled) return;
+        setCanContinueCurrentStep(result.allowed);
+        setContinueBlockedMessage(result.message);
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingContinuePrerequisite(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentStepIndex,
+    eventId,
+    hasSavedCurrentStep,
+    isPublishedEvent,
+    isMediaStep,
+    isSeatMapTicketTypesStep,
+    location.search,
+    setupMode,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (!eventId || !isPublishedEvent) return;
+
+    const openedPaths = steps.map((step) => step.path).filter(Boolean);
+    setOpenedStepPaths(openedPaths);
+    sessionStorage.setItem(getOpenedWorkflowStepsKey(eventId), JSON.stringify(openedPaths));
+  }, [eventId, isPublishedEvent, setupMode]);
+
+  useEffect(() => {
+    if (!eventId || !isPublishedEvent) return;
+
+    let cancelled = false;
+    Promise.all([
+      organizerWorkspaceService.getSeatMap(eventId).catch(() => null),
+      organizerWorkspaceService.getLayout(eventId).catch(() => null),
+    ]).then(([seatMap, layout]) => {
+      if (cancelled) return;
+      const resolvedMode = seatMap || layout ? "SEAT_MAP" : "QUANTITY";
+      sessionStorage.setItem(`organizer-ticket-setup-mode:${eventId}`, resolvedMode);
+      setSetupMode(resolvedMode);
+      if (seatMap) {
+        sessionStorage.setItem(getSeatMapPublishedKey(eventId), "true");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, isPublishedEvent]);
 
   useEffect(() => {
     if (!eventId || currentStepIndex === -1) return;
@@ -221,19 +428,19 @@ export default function OrganizerEventWorkspaceNav({
     const saveEvent = new CustomEvent("organizer-save-event");
     document.dispatchEvent(saveEvent);
     if (!eventId) {
-      sessionStorage.removeItem(getSavedWorkflowStepKey(location.pathname));
+      sessionStorage.removeItem(getSavedWorkflowStepKey(currentLocationKey));
       setHasSavedCurrentStep(false);
       return;
     }
 
-    setHasSavedCurrentStep(true);
-    sessionStorage.setItem(getSavedWorkflowStepKey(location.pathname), "true");
   };
 
   const saveButtonLabel =
     isSeatMapWorkflowStep && savingSeatMap
-      ? `Lưu..${String(seatMapSaveElapsedSeconds).padStart(2, "0")}`
-      : "Lưu";
+      ? t("workspaceNav.savingWithTimer", { seconds: String(seatMapSaveElapsedSeconds).padStart(2, "0") })
+      : isFinalSeatMapStep
+        ? t("workspaceNav.saveToDatabase")
+      : t("workspaceNav.save");
 
   const handlePublishEvent = async () => {
     if (!eventId || publishingEvent) return;
@@ -243,10 +450,10 @@ export default function OrganizerEventWorkspaceNav({
       const nextEvent = await organizerWorkspaceService.publishEvent(eventId);
       setEventStatus(nextEvent.status || null);
       document.dispatchEvent(new CustomEvent("organizer-event-status-updated", { detail: nextEvent }));
-      toast.success("Đã publish sự kiện");
+      toast.success(t("workspaceNav.publishSuccess"));
       navigate("/organizer/events");
     } catch {
-      toast.error("Không thể publish sự kiện.");
+      toast.error(t("workspaceNav.publishFailed"));
     } finally {
       setPublishingEvent(false);
     }
@@ -268,11 +475,77 @@ export default function OrganizerEventWorkspaceNav({
     }
   };
 
+  const chooseTicketSetupMode = async (): Promise<TicketSetupMode | null> => {
+    const seatMapIcon = renderToStaticMarkup(<GiTicket aria-hidden="true" />);
+    const quantityIcon = renderToStaticMarkup(<LuTicketsPlane aria-hidden="true" />);
+    const result = await Swal.fire<TicketSetupMode>({
+      title: t("workspaceNav.chooseSetupTitle"),
+      html: `
+        <p class="organizer-setup-mode-description">
+          ${t("workspaceNav.chooseSetupDescription")}
+        </p>
+        <div class="organizer-setup-mode-grid" role="radiogroup" aria-label="${t("workspaceNav.chooseSetupAria")}">
+          <button type="button" class="organizer-setup-mode-card is-selected" data-mode="SEAT_MAP" role="radio" aria-checked="true">
+            <span class="organizer-setup-mode-icon" aria-hidden="true">${seatMapIcon}</span>
+            <span class="organizer-setup-mode-content">
+              <strong>${t("workspaceNav.modeSeatMap")}</strong>
+              <small>${t("workspaceNav.modeSeatMapDescription")}</small>
+            </span>
+          </button>
+          <button type="button" class="organizer-setup-mode-card" data-mode="QUANTITY" role="radio" aria-checked="false">
+            <span class="organizer-setup-mode-icon" aria-hidden="true">${quantityIcon}</span>
+            <span class="organizer-setup-mode-content">
+              <strong>${t("workspaceNav.modeQuantity")}</strong>
+              <small>${t("workspaceNav.modeQuantityDescription")}</small>
+            </span>
+          </button>
+        </div>
+      `,
+      confirmButtonText: t("workspaceNav.continue"),
+      showCancelButton: true,
+      cancelButtonText: t("workspaceNav.later"),
+      confirmButtonColor: "#16a34a",
+      cancelButtonColor: "#64748b",
+      customClass: {
+        popup: "organizer-setup-mode-popup",
+        htmlContainer: "organizer-setup-mode-html",
+        actions: "organizer-setup-mode-actions",
+      },
+      heightAuto: false,
+      didOpen: (popup) => {
+        const cards = Array.from(
+          popup.querySelectorAll<HTMLButtonElement>(".organizer-setup-mode-card"),
+        );
+        cards.forEach((card) => {
+          card.addEventListener("click", () => {
+            cards.forEach((item) => {
+              const selected = item === card;
+              item.classList.toggle("is-selected", selected);
+              item.setAttribute("aria-checked", String(selected));
+            });
+          });
+        });
+      },
+      preConfirm: () => {
+        const selected = document.querySelector<HTMLButtonElement>(
+          ".organizer-setup-mode-card.is-selected",
+        );
+        return (selected?.dataset.mode as TicketSetupMode | undefined) ?? "SEAT_MAP";
+      },
+    });
+
+    return result.isConfirmed ? result.value ?? null : null;
+  };
+
   const handleContinue = async () => {
     if (currentStepIndex === -1) return;
+    if (!isPublishedEvent && !canContinueCurrentStep) {
+      toast.info(continueBlockedMessage || t("workspaceNav.finishCurrentStep"));
+      return;
+    }
 
     if (!eventId) {
-      toast.info("Vui lòng nhập đầy đủ thông tin để tạo sự kiện trước khi tiếp tục.");
+      toast.info(t("workspaceNav.createInfoRequired"));
       // Trigger save with nextStep: "media"
       const saveEvent = new CustomEvent("organizer-save-event", {
         detail: { nextStep: "media" },
@@ -296,32 +569,10 @@ export default function OrganizerEventWorkspaceNav({
       }
 
       if (!currentMode) {
-        // Show choice popup
-        const result = await Swal.fire({
-          title: "Cấu hình sơ đồ sự kiện",
-          text: "Bạn có cần sơ đồ khu vực hoặc ghế cho sự kiện này không?",
-          icon: "question",
-          showDenyButton: true,
-          confirmButtonText: "Dùng sơ đồ",
-          denyButtonText: "Không dùng sơ đồ",
-          confirmButtonColor: "#2dc275",
-          denyButtonColor: "#64748b",
-          heightAuto: false,
-        });
-
-        if (result.isConfirmed) {
-          currentMode = "SEAT_MAP";
-          sessionStorage.setItem(key, "SEAT_MAP");
-          setSetupMode("SEAT_MAP");
-          toast.success("Đã chọn chế độ: Dùng sơ đồ");
-        } else if (result.isDenied) {
-          currentMode = "QUANTITY";
-          sessionStorage.setItem(key, "QUANTITY");
-          setSetupMode("QUANTITY");
-          toast.success("Đã chọn chế độ: Không dùng sơ đồ");
-        } else {
-          return;
-        }
+        currentMode = await chooseTicketSetupMode();
+        if (!currentMode) return;
+        sessionStorage.setItem(key, currentMode);
+        setSetupMode(currentMode);
       }
       navigate(`/organizer/events/${eventId}/media`);
     } else if (currentStepIndex === 1) {
@@ -339,30 +590,13 @@ export default function OrganizerEventWorkspaceNav({
       }
 
       if (!currentMode) {
-        // Show choice popup fallback
-        const result = await Swal.fire({
-          title: "Cấu hình sơ đồ sự kiện",
-          text: "Bạn có cần sơ đồ khu vực hoặc ghế cho sự kiện này không?",
-          icon: "question",
-          showDenyButton: true,
-          confirmButtonText: "Dùng sơ đồ",
-          denyButtonText: "Không dùng sơ đồ",
-          confirmButtonColor: "#2dc275",
-          denyButtonColor: "#64748b",
-          heightAuto: false,
-        });
-
-        if (result.isConfirmed) {
-          currentMode = "SEAT_MAP";
-          sessionStorage.setItem(key, "SEAT_MAP");
-          setSetupMode("SEAT_MAP");
-          toast.success("Đã chọn chế độ: Dùng sơ đồ");
+        currentMode = await chooseTicketSetupMode();
+        if (!currentMode) return;
+        sessionStorage.setItem(key, currentMode);
+        setSetupMode(currentMode);
+        if (currentMode === "SEAT_MAP") {
           navigate(`/organizer/events/${eventId}/layout`);
-        } else if (result.isDenied) {
-          currentMode = "QUANTITY";
-          sessionStorage.setItem(key, "QUANTITY");
-          setSetupMode("QUANTITY");
-          toast.success("Đã chọn chế độ: Không dùng sơ đồ");
+        } else {
           navigate(`/organizer/events/${eventId}/ticket-types`);
         }
       } else {
@@ -372,25 +606,24 @@ export default function OrganizerEventWorkspaceNav({
           navigate(`/organizer/events/${eventId}/ticket-types`);
         }
       }
-    } else if (currentStepIndex === 2 && setupMode === "SEAT_MAP") {
-      // Layout -> Seat Map
-      navigate(`/organizer/events/${eventId}/seat-map`);
-    } else if (currentStepIndex === 3 && setupMode === "SEAT_MAP") {
-      // Seat Map -> Ticket Types
+    } else if (steps[currentStepIndex]?.label === "workspaceNav.layout") {
+      navigate(`/organizer/events/${eventId}/seat-map?phase=sectors`);
+    } else if (steps[currentStepIndex]?.label === "workspaceNav.seatMap") {
       navigate(`/organizer/events/${eventId}/ticket-types`);
+    } else if (isSeatMapTicketTypesStep) {
+      navigate(`/organizer/events/${eventId}/seat-map?phase=assignment`);
+    } else if (steps[currentStepIndex]?.label === "workspaceNav.finishSeatMap") {
+      navigate("/organizer/events");
     } else if (isQuantityTicketTypesStep) {
       await handlePublishEvent();
-    } else if (isSeatMapTicketTypesStep && seatMapPublished) {
-      await handlePublishEvent();
-    } else if (isSeatMapTicketTypesStep) {
-      navigate(`/organizer/events/${eventId}/seat-map`);
-    } else if (currentStepIndex === steps.length - 1) {
-      // Last step -> Finish
-      toast.success("Thiết lập sự kiện đã hoàn tất!");
     }
   };
 
   const handleStepClick = (index: number) => {
+    if (isPublishedEvent) {
+      if (index !== currentStepIndex && eventId) navigate(steps[index].path);
+      return;
+    }
     // Prevent navigating to layout/seat map if not chosen or disabled
     if (index > currentStepIndex) {
       if (!openedStepPaths.includes(steps[index].path)) return;
@@ -413,7 +646,7 @@ export default function OrganizerEventWorkspaceNav({
           const isCompleted = index < currentStepIndex && currentStepIndex !== -1;
           const isDisabled = !eventId
             ? index > 0
-            : index > 0 && !openedStepPaths.includes(step.path);
+            : !isPublishedEvent && index > 0 && !openedStepPaths.includes(step.path);
 
           return (
             <div key={step.label} style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
@@ -433,7 +666,7 @@ export default function OrganizerEventWorkspaceNav({
                 disabled={isDisabled || isActive}
               >
                 <span className="organizer-workflow-step-num">{index + 1}</span>
-                <span>{step.label}</span>
+                <span>{t(step.label)}</span>
               </button>
             </div>
           );
@@ -445,30 +678,26 @@ export default function OrganizerEventWorkspaceNav({
           type="button"
           onClick={handleSave}
           className="organizer-workflow-btn organizer-workflow-btn-save"
-          disabled={savingSeatMap}
+          disabled={savingSeatMap || (!isFinalSeatMapStep && !isLayoutStep && !isCurrentStepDirty)}
         >
           {saveButtonLabel}
         </button>
-        {shouldShowContinueButton ? (
+        {!isFinalSeatMapStep ? (
           <button
             type="button"
             onClick={handleContinue}
             className="organizer-workflow-btn organizer-workflow-btn-continue"
-            disabled={publishingEvent || !hasSavedCurrentStep}
+            disabled={
+              publishingEvent ||
+              isCheckingContinuePrerequisite ||
+              (!isPublishedEvent && (!hasSavedCurrentStep || !canContinueCurrentStep))
+            }
           >
-            {isSeatMapTicketTypesStep
-              ? seatMapPublished
-                ? publishingEvent
-                  ? "Đang publish"
-                  : "Publish"
-                : "Quay lại sơ đồ ghế"
-              : isQuantityTicketTypesStep
-                ? publishingEvent
-                  ? "Đang publish"
-                  : "Publish"
-              : currentStepIndex === steps.length - 1
-                ? "Hoàn tất"
-                : "Tiếp tục"}
+            {isQuantityTicketTypesStep
+              ? publishingEvent
+                ? t("workspaceNav.publishing")
+                : "Publish"
+              : t("workspaceNav.continue")}
           </button>
         ) : null}
       </div>

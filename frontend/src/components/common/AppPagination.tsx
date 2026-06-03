@@ -1,4 +1,5 @@
 import ReactPaginate from "react-paginate";
+import { useTranslation } from "react-i18next";
 
 type AppPaginationProps = {
   currentPage: number;
@@ -16,14 +17,16 @@ export default function AppPagination({
   pageRangeDisplayed = 3,
   marginPagesDisplayed = 1,
 }: AppPaginationProps) {
+  const { t } = useTranslation();
+
   if (pageCount <= 1) return null;
 
   return (
     <div className="pagination-block">
       <ReactPaginate
         breakLabel="..."
-        nextLabel="Sau"
-        previousLabel="Trước"
+        nextLabel={t("pagination.next")}
+        previousLabel={t("pagination.previous")}
         onPageChange={({ selected }) => onPageChange(selected)}
         pageRangeDisplayed={pageRangeDisplayed}
         marginPagesDisplayed={marginPagesDisplayed}

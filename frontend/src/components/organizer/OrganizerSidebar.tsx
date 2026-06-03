@@ -3,47 +3,41 @@ import { IconType } from "react-icons";
 import { BiSolidCategoryAlt } from "react-icons/bi";
 import {
   FaCalendarAlt,
-  FaMapMarkedAlt,
   FaUserAlt,
 } from "react-icons/fa";
 import { IoQrCodeSharp } from "react-icons/io5";
+import { useTranslation } from "react-i18next";
 
 const navItems: Array<{
   to: string;
-  label: string;
-  description: string;
+  labelKey: string;
+  descriptionKey: string;
   icon: IconType;
   end?: boolean;
 }> = [
   {
     to: "/organizer",
-    label: "Tổng quan",
-    description: "Dashboard",
+    labelKey: "organizer.overview",
+    descriptionKey: "organizer.dashboard",
     icon: BiSolidCategoryAlt,
     end: true,
   },
   {
     to: "/organizer/events",
-    label: "Quản lý sự kiện",
-    description: "Events",
+    labelKey: "organizer.eventManagement",
+    descriptionKey: "organizer.events",
     icon: FaCalendarAlt,
   },
   {
     to: "/organizer/profile",
-    label: "Hồ sơ ban tổ chức",
-    description: "Profile",
+    labelKey: "organizer.profile",
+    descriptionKey: "organizer.profile",
     icon: FaUserAlt,
   },
   {
-    to: "/venues",
-    label: "Địa điểm",
-    description: "Venues",
-    icon: FaMapMarkedAlt,
-  },
-  {
     to: "/organizer/check-in",
-    label: "Check-in",
-    description: "QR scanner",
+    labelKey: "organizer.checkIn",
+    descriptionKey: "organizer.checkIn",
     icon: IoQrCodeSharp,
   },
 ];
@@ -57,26 +51,26 @@ export default function OrganizerSidebar({
   isCollapsed,
   onToggle,
 }: OrganizerSidebarProps) {
+  const { t } = useTranslation();
+
   return (
     <aside
       className={`organizer-sidebar ${isCollapsed ? "is-collapsed" : ""}`}
-      aria-label="Organizer navigation"
+      aria-label={t("nav.organizer")}
     >
       <div className="organizer-sidebar-brand">
         <button
           type="button"
           className="organizer-sidebar-logo"
           onClick={onToggle}
-          aria-label={isCollapsed ? "Mở sidebar" : "Đóng sidebar"}
-          title={isCollapsed ? "Mở sidebar" : "Đóng sidebar"}
+          aria-label={isCollapsed ? t("organizer.openSidebar") : t("organizer.closeSidebar")}
+          title={isCollapsed ? t("organizer.openSidebar") : t("organizer.closeSidebar")}
         >
           O
         </button>
         <div>
-          <h1>
-            Organizer
-          </h1>
-          <p>Event operations</p>
+          <h1>Organizer</h1>
+          <p>{t("organizer.eventOperations")}</p>
         </div>
       </div>
 
@@ -95,8 +89,8 @@ export default function OrganizerSidebar({
             >
               <Icon size={20} />
               <span>
-                <strong>{item.label}</strong>
-                <small>{item.description}</small>
+                <strong>{t(item.labelKey)}</strong>
+                <small>{t(item.descriptionKey)}</small>
               </span>
             </NavLink>
           );

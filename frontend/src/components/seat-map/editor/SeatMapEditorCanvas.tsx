@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Ellipse,
   Group,
@@ -14,6 +15,13 @@ import {
 import { SeatMapEditorDocument, SeatMapEditorViewport } from "./seatMapEditorTypes";
 import { SectorRenderer } from "../shared/SectorRenderer";
 import { SeatRenderer } from "../shared/SeatRenderer";
+import {
+  asNumber,
+  createFanSectorPath,
+  createRingSectorPath,
+  BoundsLike,
+  polarToCartesian,
+} from "../shared/sectorPathUtils";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
@@ -56,7 +64,7 @@ export interface SeatMapEditorCanvasProps {
   selectedShapeIds: string[];
   selectedSeatId: string | null;
   selectedSeatIds: string[];
-  onClearSelection: () => void;
+  onClearSeatSelection: () => void;
   onSelectShape: (shapeId: string | null, additive?: boolean) => void;
   onSelectSeat: (shapeId: string, seatId: string | null, additive?: boolean) => void;
   onViewportChange: (viewport: SeatMapEditorViewport) => void;
@@ -65,6 +73,7 @@ export interface SeatMapEditorCanvasProps {
     nextBounds: { x: number; y: number; width: number; height: number },
     nextPoints?: number[],
   ) => void;
+  onSelectShapes: (shapeIds: string[]) => void;
   onTransformPolygon: (
     shapeId: string,
     nextBounds: { x: number; y: number; width: number; height: number },
@@ -72,6 +81,7 @@ export interface SeatMapEditorCanvasProps {
     scaleY: number,
   ) => void;
   onTranslateShape: (shapeId: string, deltaX: number, deltaY: number) => void;
+  onTranslateShapes: (shapeIds: string[], deltaX: number, deltaY: number) => void;
   onMoveSeat: (shapeId: string, seatId: string, nextX: number, nextY: number) => void;
   onMoveSeatBlock: (shapeId: string, deltaX: number, deltaY: number) => void;
   resetViewKey?: number;
@@ -103,6 +113,94 @@ function getSeatBlockBounds(seats: Array<{ x: number; y: number }>, seatRadius: 
   };
 }
 
+function getMapDataObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeAngle(angle: number) {
+  return ((angle % 360) + 360) % 360;
+}
+
+function isAngleInSweep(angle: number, startAngle: number, endAngle: number) {
+  const start = normalizeAngle(startAngle);
+  const end = normalizeAngle(endAngle);
+  const target = normalizeAngle(angle);
+
+  if (end >= start) {
+    return target >= start && target <= end;
+  }
+
+  return target >= start || target <= end;
+}
+
+function getBoundsFromCoordinates(points: Array<{ x: number; y: number }>): BoundsLike {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs);
+  const maxY = Math.max(...ys);
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(maxX - minX, 1),
+    height: Math.max(maxY - minY, 1),
+  };
+}
+
+function getRadialShapeConfig(shape: SeatMapEditorDocument["shapes"][number]) {
+  const mapData = getMapDataObject(shape.mapData);
+  const cx = asNumber(mapData.cx) ?? shape.bounds.x + shape.bounds.width / 2;
+  const cy = asNumber(mapData.cy) ?? shape.bounds.y + shape.bounds.height / 2;
+  const outerRadius = Math.max(asNumber(mapData.outerRadius) ?? Math.max(shape.bounds.width, shape.bounds.height) / 2, 1);
+  const innerRadius = Math.max(asNumber(mapData.innerRadius) ?? (shape.shapeType === "ringSection" ? outerRadius * 0.72 : 0), 0);
+  const startAngle = asNumber(mapData.startAngle) ?? -70;
+  const endAngle = asNumber(mapData.endAngle) ?? 70;
+
+  return { cx, cy, outerRadius, innerRadius, startAngle, endAngle };
+}
+
+function getRadialShapeBounds(shape: SeatMapEditorDocument["shapes"][number]): BoundsLike {
+  const config = getRadialShapeConfig(shape);
+  const sampleAngles = [config.startAngle, config.endAngle, -180, -90, 0, 90, 180]
+    .filter((angle) => isAngleInSweep(angle, config.startAngle, config.endAngle));
+  const points = sampleAngles.flatMap((angle) => [
+    polarToCartesian(config.cx, config.cy, config.outerRadius, angle),
+    polarToCartesian(config.cx, config.cy, config.innerRadius, angle),
+  ]);
+
+  return getBoundsFromCoordinates(points);
+}
+
+function getShapeSelectionBounds(shape: SeatMapEditorDocument["shapes"][number]): BoundsLike {
+  if (shape.shapeType === "ringSection" || shape.shapeType === "fan") {
+    return getRadialShapeBounds(shape);
+  }
+
+  return shape.bounds;
+}
+
+function rectsIntersect(a: BoundsLike, b: BoundsLike) {
+  return (
+    a.x <= b.x + b.width &&
+    a.x + a.width >= b.x &&
+    a.y <= b.y + b.height &&
+    a.y + a.height >= b.y
+  );
+}
+
+function getRadialPathData(shape: SeatMapEditorDocument["shapes"][number]) {
+  if (shape.shapeType !== "ringSection" && shape.shapeType !== "fan") {
+    return null;
+  }
+
+  const config = getRadialShapeConfig(shape);
+  return shape.shapeType === "ringSection"
+    ? createRingSectorPath(config)
+    : createFanSectorPath(config);
+}
+
 export default function SeatMapEditorCanvas({
   document,
   viewport,
@@ -110,18 +208,21 @@ export default function SeatMapEditorCanvas({
   selectedShapeIds,
   selectedSeatId,
   selectedSeatIds,
-  onClearSelection,
+  onClearSeatSelection,
   onSelectShape,
   onSelectSeat,
   onViewportChange,
   onResizeShape,
+  onSelectShapes,
   onTransformPolygon,
   onTranslateShape,
+  onTranslateShapes,
   onMoveSeat,
   onMoveSeatBlock,
   resetViewKey = 0,
   onResizeSeatBlock,
 }: SeatMapEditorCanvasProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const transformerRef = useRef<any>(null);
   const seatOverlayTransformerRef = useRef<any>(null);
@@ -139,8 +240,10 @@ export default function SeatMapEditorCanvas({
     viewportY: number;
     moved: boolean;
   } | null>(null);
+  const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 640 });
   const [isPanning, setIsPanning] = useState(false);
+  const [selectionBox, setSelectionBox] = useState<BoundsLike | null>(null);
   const [seatBlockGuide, setSeatBlockGuide] = useState<{
     shapeId: string;
     showVertical: boolean;
@@ -293,7 +396,39 @@ export default function SeatMapEditorCanvas({
     });
   };
 
+  const getWorldPointer = (event: any) => {
+    const stage = event.target.getStage();
+    const pointer = stage?.getPointerPosition();
+    if (!pointer) {
+      return null;
+    }
+
+    return {
+      x: (pointer.x - worldStyle.x) / viewport.scale,
+      y: (pointer.y - worldStyle.y) / viewport.scale,
+    };
+  };
+
+  const normalizeSelectionBox = (start: { x: number; y: number }, end: { x: number; y: number }): BoundsLike => ({
+    x: Math.min(start.x, end.x),
+    y: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y),
+  });
+
   const handleMouseDown = (event: any) => {
+    if (event.evt.button === 2) {
+      const pointer = getWorldPointer(event);
+      if (!pointer) {
+        return;
+      }
+
+      event.evt.preventDefault();
+      selectionStartRef.current = pointer;
+      setSelectionBox({ x: pointer.x, y: pointer.y, width: 0, height: 0 });
+      return;
+    }
+
     const targetName = event.target.attrs?.name;
     if (
       targetName === "shape-node" ||
@@ -324,6 +459,18 @@ export default function SeatMapEditorCanvas({
   };
 
   const handleMouseMove = (event: any) => {
+    const selectionStart = selectionStartRef.current;
+    if (selectionStart) {
+      const pointer = getWorldPointer(event);
+      if (!pointer) {
+        return;
+      }
+
+      event.evt.preventDefault();
+      setSelectionBox(normalizeSelectionBox(selectionStart, pointer));
+      return;
+    }
+
     const panStart = panStartRef.current;
     if (!panStart) {
       return;
@@ -351,6 +498,20 @@ export default function SeatMapEditorCanvas({
   };
 
   const handleMouseUp = () => {
+    const selectionStart = selectionStartRef.current;
+    if (selectionStart && selectionBox) {
+      const selectedIds = document.shapes
+        .filter((shape) => shape.visible !== false && shape.mapData?.decorative !== true)
+        .filter((shape) => shape.shapeType !== "stage" && shape.shapeType !== "foh")
+        .filter((shape) => rectsIntersect(selectionBox, getShapeSelectionBounds(shape)))
+        .map((shape) => shape.id);
+
+      selectionStartRef.current = null;
+      setSelectionBox(null);
+      onSelectShapes(selectedIds);
+      return;
+    }
+
     const panStart = panStartRef.current;
     if (!panStart) {
       return;
@@ -360,12 +521,23 @@ export default function SeatMapEditorCanvas({
     setIsPanning(false);
 
     if (!panStart.moved) {
-      onClearSelection();
+      onClearSeatSelection();
     }
   };
 
   const isAdditiveSelection = (nativeEvent: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) =>
     Boolean(nativeEvent.ctrlKey || nativeEvent.metaKey || nativeEvent.shiftKey);
+  const getShapeMoveTargetIds = (shapeId: string) =>
+    selectedShapeIds.length > 1 && selectedShapeIds.includes(shapeId) ? selectedShapeIds : [shapeId];
+  const orderedShapes = useMemo(() => {
+    const regularShapes = document.shapes.filter(
+      (shape) => shape.shapeType !== "stage" && shape.shapeType !== "foh" && shape.mapData?.decorative !== true,
+    );
+    const overlayShapes = document.shapes.filter(
+      (shape) => shape.shapeType === "stage" || shape.shapeType === "foh" || shape.mapData?.decorative === true,
+    );
+    return [...regularShapes, ...overlayShapes];
+  }, [document.shapes]);
   const stageBlockWidth = Math.min(document.width * 0.76, 620);
   const stageBlockHeight = 135;
   const stageBlockX = (document.width - stageBlockWidth) / 2;
@@ -384,6 +556,7 @@ export default function SeatMapEditorCanvas({
     <div
       ref={containerRef}
       className={`organizer-seat-map-canvas-shell${isPanning ? " is-panning" : ""}`}
+      onContextMenu={(event) => event.preventDefault()}
     >
       <Stage
         width={viewportSize.width}
@@ -396,6 +569,7 @@ export default function SeatMapEditorCanvas({
         onTouchStart={handleMouseDown}
         onTouchMove={handleMouseMove}
         onTouchEnd={handleMouseUp}
+        onContextMenu={(event: any) => event.evt.preventDefault()}
       >
         <Layer>
           <Rect
@@ -425,34 +599,6 @@ export default function SeatMapEditorCanvas({
 
         <Layer>
           <Group {...worldStyle}>
-
-            <Path
-              data={stageBlockPath}
-              fill="#1e293b"
-              stroke="#475569"
-              strokeWidth={2.5}
-              listening={false}
-              shadowColor="rgba(0, 0, 0, 0.45)"
-              shadowBlur={10}
-              shadowOffset={{ x: 0, y: 6 }}
-              shadowOpacity={0.65}
-            />
-            <Text
-              x={stageBlockX}
-              y={stageBlockY + 28}
-              width={stageBlockWidth}
-              align="center"
-              text="SÂN KHẤU"
-              fontSize={34}
-              fontStyle="700"
-              fill="#94a3b8"
-              listening={false}
-              shadowColor="rgba(0, 0, 0, 0.5)"
-              shadowBlur={4}
-              shadowOffset={{ x: 0, y: 2 }}
-              shadowOpacity={1}
-            />
-
             {referenceImageVisible && referenceImage ? (
               <KonvaImage
                 image={referenceImage}
@@ -465,7 +611,7 @@ export default function SeatMapEditorCanvas({
               />
             ) : null}
 
-            {document.shapes.map((shape) => {
+            {orderedShapes.map((shape) => {
               if (!shape.visible) {
                 return null;
               }
@@ -519,9 +665,19 @@ export default function SeatMapEditorCanvas({
                         }}
                         onDragEnd={(event) => {
                           const origin = dragOriginRef.current[shape.id];
+                          if (!origin) {
+                            return;
+                          }
                           const nextX = event.target.x();
                           const nextY = event.target.y();
-                          onTranslateShape(shape.id, nextX - origin.x, nextY - origin.y);
+                          const targetShapeIds = getShapeMoveTargetIds(shape.id);
+                          const deltaX = nextX - origin.x;
+                          const deltaY = nextY - origin.y;
+                          if (targetShapeIds.length > 1) {
+                            onTranslateShapes(targetShapeIds, deltaX, deltaY);
+                          } else {
+                            onTranslateShape(shape.id, deltaX, deltaY);
+                          }
                           event.target.position({ x: shape.bounds.x, y: shape.bounds.y });
                         }}
                         onTransformEnd={(event) => {
@@ -667,6 +823,46 @@ export default function SeatMapEditorCanvas({
                         );
                       })() : null}
                     </>
+                  ) : shape.shapeType === "ringSection" || shape.shapeType === "fan" ? (
+                    <Path
+                      ref={(node) => {
+                        nodeRefs.current[shape.id] = node;
+                      }}
+                      name="shape-node"
+                      data={getRadialPathData(shape) ?? ""}
+                      draggable={draggable}
+                      fill="rgba(0, 0, 0, 0.01)"
+                      stroke="rgba(0, 0, 0, 0)"
+                      strokeWidth={Math.max(isSelected ? 3 : 2, 12)}
+                      onClick={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
+                      onTap={(event) => onSelectShape(shape.id, isAdditiveSelection(event.evt as any))}
+                      onDragStart={() => {
+                        dragOriginRef.current[shape.id] = { x: 0, y: 0 };
+                      }}
+                      onDragEnd={(event) => {
+                        const origin = dragOriginRef.current[shape.id];
+                        if (!origin) {
+                          return;
+                        }
+                        const nextX = event.target.x();
+                        const nextY = event.target.y();
+                        const targetShapeIds = getShapeMoveTargetIds(shape.id);
+                        const deltaX = nextX - origin.x;
+                        const deltaY = nextY - origin.y;
+                        if (targetShapeIds.length > 1) {
+                          onTranslateShapes(targetShapeIds, deltaX, deltaY);
+                        } else {
+                          onTranslateShape(shape.id, deltaX, deltaY);
+                        }
+                        event.target.position({ x: 0, y: 0 });
+                      }}
+                      onTransformEnd={(event) => {
+                        const node = event.target as any;
+                        node.scaleX(1);
+                        node.scaleY(1);
+                        node.position({ x: 0, y: 0 });
+                      }}
+                    />
                   ) : shape.shapeType === "circle" || shape.shapeType === "ellipse" ? (
                     <>
                       <Ellipse
@@ -692,9 +888,19 @@ export default function SeatMapEditorCanvas({
                         }}
                         onDragEnd={(event) => {
                           const origin = dragOriginRef.current[shape.id];
+                          if (!origin) {
+                            return;
+                          }
                           const nextX = event.target.x();
                           const nextY = event.target.y();
-                          onTranslateShape(shape.id, nextX - origin.x, nextY - origin.y);
+                          const targetShapeIds = getShapeMoveTargetIds(shape.id);
+                          const deltaX = nextX - origin.x;
+                          const deltaY = nextY - origin.y;
+                          if (targetShapeIds.length > 1) {
+                            onTranslateShapes(targetShapeIds, deltaX, deltaY);
+                          } else {
+                            onTranslateShape(shape.id, deltaX, deltaY);
+                          }
                           event.target.position({
                             x: shape.bounds.x + shape.bounds.width / 2,
                             y: shape.bounds.y + shape.bounds.height / 2,
@@ -879,9 +1085,19 @@ export default function SeatMapEditorCanvas({
                         }}
                         onDragEnd={(event) => {
                           const origin = dragOriginRef.current[shape.id];
+                          if (!origin) {
+                            return;
+                          }
                           const nextX = event.target.x();
                           const nextY = event.target.y();
-                          onTranslateShape(shape.id, nextX - origin.x, nextY - origin.y);
+                          const targetShapeIds = getShapeMoveTargetIds(shape.id);
+                          const deltaX = nextX - origin.x;
+                          const deltaY = nextY - origin.y;
+                          if (targetShapeIds.length > 1) {
+                            onTranslateShapes(targetShapeIds, deltaX, deltaY);
+                          } else {
+                            onTranslateShape(shape.id, deltaX, deltaY);
+                          }
                           event.target.position({ x: shape.bounds.x, y: shape.bounds.y });
                         }}
                         onTransformEnd={(event) => {
@@ -1511,6 +1727,47 @@ export default function SeatMapEditorCanvas({
                 </Group>
               );
             })}
+
+            <Path
+              data={stageBlockPath}
+              fill="#1e293b"
+              stroke="#475569"
+              strokeWidth={2.5}
+              listening={false}
+              shadowColor="rgba(0, 0, 0, 0.45)"
+              shadowBlur={10}
+              shadowOffset={{ x: 0, y: 6 }}
+              shadowOpacity={0.65}
+            />
+            <Text
+              x={stageBlockX}
+              y={stageBlockY + 28}
+              width={stageBlockWidth}
+              align="center"
+              text={t("seatMap.stage")}
+              fontSize={34}
+              fontStyle="700"
+              fill="#94a3b8"
+              listening={false}
+              shadowColor="rgba(0, 0, 0, 0.5)"
+              shadowBlur={4}
+              shadowOffset={{ x: 0, y: 2 }}
+              shadowOpacity={1}
+            />
+
+            {selectionBox ? (
+              <Rect
+                x={selectionBox.x}
+                y={selectionBox.y}
+                width={selectionBox.width}
+                height={selectionBox.height}
+                fill="rgba(34, 197, 94, 0.12)"
+                stroke="rgba(255, 255, 255, 0.92)"
+                strokeWidth={1.5}
+                dash={[8, 6]}
+                listening={false}
+              />
+            ) : null}
 
             <Transformer
               ref={transformerRef}

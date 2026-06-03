@@ -22,7 +22,7 @@ interface SeatMapCanvasShellProps {
   selectedSeatIds: string[];
   canRedo: boolean;
   canUndo: boolean;
-  onClearSelection: () => void;
+  onClearSeatSelection: () => void;
   onMoveSeat: (shapeId: string, seatId: string, nextX: number, nextY: number) => void;
   onMoveSeatBlock: (shapeId: string, deltaX: number, deltaY: number) => void;
   onResizeSeatBlock: (
@@ -33,6 +33,7 @@ interface SeatMapCanvasShellProps {
   onResizeShape: (shapeId: string, nextBounds: { x: number; y: number; width: number; height: number }) => void;
   onSelectSeat: (shapeId: string, seatId: string | null, additive?: boolean) => void;
   onSelectShape: (shapeId: string | null, additive?: boolean) => void;
+  onSelectShapes: (shapeIds: string[]) => void;
   onTransformPolygon: (
     shapeId: string,
     nextBounds: { x: number; y: number; width: number; height: number },
@@ -40,6 +41,7 @@ interface SeatMapCanvasShellProps {
     scaleY: number,
   ) => void;
   onTranslateShape: (shapeId: string, deltaX: number, deltaY: number) => void;
+  onTranslateShapes: (shapeIds: string[], deltaX: number, deltaY: number) => void;
   onViewportChange: (viewport: SeatMapEditorViewport) => void;
   onDeleteSelected: () => void;
   onRedo: () => void;
@@ -58,15 +60,17 @@ export default function SeatMapCanvasShell({
   selectedSeatIds,
   canRedo,
   canUndo,
-  onClearSelection,
+  onClearSeatSelection,
   onMoveSeat,
   onMoveSeatBlock,
   onResizeSeatBlock,
   onResizeShape,
   onSelectSeat,
   onSelectShape,
+  onSelectShapes,
   onTransformPolygon,
   onTranslateShape,
+  onTranslateShapes,
   onViewportChange,
   onDeleteSelected,
   onRedo,
@@ -135,15 +139,17 @@ export default function SeatMapCanvasShell({
           selectedShapeIds={selectedShapeIds}
           selectedSeatId={selectedSeatId}
           selectedSeatIds={selectedSeatIds}
-          onClearSelection={onClearSelection}
+          onClearSeatSelection={onClearSeatSelection}
           onMoveSeat={onMoveSeat}
           onMoveSeatBlock={onMoveSeatBlock}
           onResizeSeatBlock={onResizeSeatBlock}
           onResizeShape={onResizeShape}
           onSelectSeat={onSelectSeat}
           onSelectShape={onSelectShape}
+          onSelectShapes={onSelectShapes}
           onTransformPolygon={onTransformPolygon}
           onTranslateShape={onTranslateShape}
+          onTranslateShapes={onTranslateShapes}
           onViewportChange={onViewportChange}
           resetViewKey={resetViewKey}
         />

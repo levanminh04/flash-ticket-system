@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Group,
   Layer,
@@ -76,6 +77,7 @@ export default function BuyerSeatMapCanvas({
   onSeatClick,
   onSectorClick,
 }: BuyerSeatMapCanvasProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 620 });
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -214,7 +216,7 @@ export default function BuyerSeatMapCanvas({
               y={72}
               width={Math.min(documentWidth * 0.8, 500)}
               align="center"
-              text="SÂN KHẤU"
+              text={t("seatMap.stage")}
               fontSize={32}
               fontStyle="700"
               fill="#ffffff"

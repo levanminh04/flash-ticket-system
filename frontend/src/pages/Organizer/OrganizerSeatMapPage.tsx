@@ -1,5 +1,6 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import SeatMapCanvasShell from "../../components/seat-map/editor/SeatMapCanvasShell";
@@ -9,6 +10,7 @@ import {
   createEditorDraftKey,
   exportEditorDocument,
   importEditorDocument,
+  translateShape,
 } from "../../components/seat-map/editor/seatMapEditorUtils";
 import { useSeatMapEditorState } from "../../components/seat-map/editor/useSeatMapEditorState";
 import {
@@ -18,9 +20,22 @@ import {
   OrganizerSeatMap,
   organizerWorkspaceService,
 } from "../../services/organizerWorkspaceService";
-import { SeatMapEditorSectorType } from "../../components/seat-map/editor/seatMapEditorTypes";
+import {
+  SeatMapEditorDocument,
+  SeatMapEditorBounds,
+  SeatMapEditorShape,
+  SeatMapEditorSectorType,
+} from "../../components/seat-map/editor/seatMapEditorTypes";
+import {
+  asNumber,
+  polarToCartesian,
+} from "../../components/seat-map/shared/sectorPathUtils";
 import { summarizeSeatMap } from "./organizerWorkspaceUtils";
 import { useOrganizerGate } from "./useOrganizerGate";
+import {
+  dispatchOrganizerWorkflowDirty,
+  dispatchOrganizerWorkflowSaveResult,
+} from "./organizerWorkflowEvents";
 
 function buildEditorSource(
   seatMap: OrganizerSeatMap | null,
@@ -65,6 +80,161 @@ const SEAT_LAYOUT_MINIMUMS: Record<SeatLayoutFieldKey, number> = {
   seatStartNumber: 1,
 };
 
+const SEAT_MAP_CONTENT_PADDING = 40;
+
+function normalizeAngle(angle: number) {
+  return ((angle % 360) + 360) % 360;
+}
+
+function isAngleInSweep(angle: number, startAngle: number, endAngle: number) {
+  const start = normalizeAngle(startAngle);
+  const end = normalizeAngle(endAngle);
+  const target = normalizeAngle(angle);
+
+  if (end >= start) {
+    return target >= start && target <= end;
+  }
+
+  return target >= start || target <= end;
+}
+
+function getBoundsFromPoints(points: Array<{ x: number; y: number }>): SeatMapEditorBounds {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs);
+  const maxY = Math.max(...ys);
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(maxX - minX, 1),
+    height: Math.max(maxY - minY, 1),
+  };
+}
+
+function getPublishValidationBounds(shape: SeatMapEditorShape): SeatMapEditorBounds {
+  if (shape.shapeType !== "ringSection" && shape.shapeType !== "fan") {
+    return shape.bounds;
+  }
+
+  const mapData = shape.mapData ?? {};
+  const cx = asNumber(mapData.cx) ?? shape.bounds.x + shape.bounds.width / 2;
+  const cy = asNumber(mapData.cy) ?? shape.bounds.y + shape.bounds.height / 2;
+  const outerRadius = Math.max(
+    asNumber(mapData.outerRadius) ?? Math.max(shape.bounds.width, shape.bounds.height) / 2,
+    1,
+  );
+  const innerRadius = Math.max(
+    asNumber(mapData.innerRadius) ?? (shape.shapeType === "ringSection" ? outerRadius * 0.72 : 0),
+    0,
+  );
+  const startAngle = asNumber(mapData.startAngle) ?? -70;
+  const endAngle = asNumber(mapData.endAngle) ?? 70;
+  const sampleAngles = [startAngle, endAngle, -180, -90, 0, 90, 180].filter((angle) =>
+    isAngleInSweep(angle, startAngle, endAngle),
+  );
+  const points = sampleAngles.flatMap((angle) => [
+    polarToCartesian(cx, cy, outerRadius, angle),
+    polarToCartesian(cx, cy, innerRadius, angle),
+  ]);
+
+  return getBoundsFromPoints(points);
+}
+
+function getDocumentContentBounds(document: SeatMapEditorDocument) {
+  const visibleShapes = document.shapes.filter((shape) => shape.visible !== false);
+  if (!visibleShapes.length) {
+    return null;
+  }
+
+  const bounds = visibleShapes.map(getPublishValidationBounds);
+  const minX = Math.min(...bounds.map((item) => item.x));
+  const minY = Math.min(...bounds.map((item) => item.y));
+  const maxX = Math.max(...bounds.map((item) => item.x + item.width));
+  const maxY = Math.max(...bounds.map((item) => item.y + item.height));
+
+  return { minX, minY, maxX, maxY };
+}
+
+function fitSeatMapDocumentToContent(document: SeatMapEditorDocument): SeatMapEditorDocument {
+  const contentBounds = getDocumentContentBounds(document);
+  if (!contentBounds) {
+    return document;
+  }
+
+  const deltaX =
+    contentBounds.minX < SEAT_MAP_CONTENT_PADDING
+      ? SEAT_MAP_CONTENT_PADDING - contentBounds.minX
+      : 0;
+  const deltaY =
+    contentBounds.minY < SEAT_MAP_CONTENT_PADDING
+      ? SEAT_MAP_CONTENT_PADDING - contentBounds.minY
+      : 0;
+  const fittedShapes =
+    deltaX || deltaY
+      ? document.shapes.map((shape) => translateShape(shape, deltaX, deltaY))
+      : document.shapes;
+  const maxX = contentBounds.maxX + deltaX;
+  const maxY = contentBounds.maxY + deltaY;
+
+  return {
+    ...document,
+    width: Math.ceil(Math.max(document.width, maxX + SEAT_MAP_CONTENT_PADDING)),
+    height: Math.ceil(Math.max(document.height, maxY + SEAT_MAP_CONTENT_PADDING)),
+    shapes: fittedShapes,
+  };
+}
+
+function validateSeatMapDocumentForPublish(document: SeatMapEditorDocument) {
+  if (!Number.isFinite(document.width) || document.width <= 0) {
+    return "Chiều rộng canvas phải lớn hơn 0.";
+  }
+  if (!Number.isFinite(document.height) || document.height <= 0) {
+    return "Chiều cao canvas phải lớn hơn 0.";
+  }
+
+  const visibleShapes = document.shapes.filter((shape) => shape.visible !== false);
+  const invalidSector = visibleShapes.find(
+    (shape) => {
+      const validationBounds = getPublishValidationBounds(shape);
+      return (
+        !shape.name.trim() ||
+        !Number.isFinite(validationBounds.width) ||
+        !Number.isFinite(validationBounds.height) ||
+        validationBounds.width <= 0 ||
+        validationBounds.height <= 0
+      );
+    },
+  );
+  if (invalidSector) {
+    return `Khu "${invalidSector.name || invalidSector.id}" phải có tên và nằm trong canvas với kích thước lớn hơn 0.`;
+  }
+
+  const invalidSeat = visibleShapes
+    .filter((shape) => shape.sectorType === "SEATED")
+    .flatMap((shape) =>
+      shape.seats
+        .filter((seat) => seat.hidden !== true)
+        .map((seat) => ({ shape, seat })),
+    )
+    .find(
+      ({ seat }) =>
+        !Number.isFinite(seat.x) ||
+        !Number.isFinite(seat.y) ||
+        seat.x < 0 ||
+        seat.y < 0 ||
+        seat.x > document.width ||
+        seat.y > document.height,
+    );
+  if (invalidSeat) {
+    return `Ghế "${invalidSeat.seat.label}" trong khu "${invalidSeat.shape.name}" phải nằm trong canvas.`;
+  }
+
+  return null;
+}
+
 const DEFAULT_LAYOUT_INPUTS: Record<SeatLayoutFieldKey, string> = {
   rows: "",
   seatsPerRow: "",
@@ -105,6 +275,10 @@ function getTicketTypeSectorId(ticketType: { eventSectorId?: string | null; sect
   return ticketType.eventSectorId || ticketType.sectorId || "";
 }
 
+function getStandingShapeTicketTypeIds(shape: { ticketTypeId?: string; ticketTypeIds?: string[] }) {
+  return shape.ticketTypeIds?.length ? shape.ticketTypeIds : shape.ticketTypeId ? [shape.ticketTypeId] : [];
+}
+
 function isProtectedSeatStatus(status?: string) {
   return status ? PROTECTED_SEAT_STATUSES.has(status.toUpperCase()) : false;
 }
@@ -132,6 +306,9 @@ function getRequestErrorMessage(error: unknown) {
 export default function OrganizerSeatMapPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const isSectorSetupPhase = searchParams.get("phase") === "sectors";
   const { ready } = useOrganizerGate();
   const [eventDetail, setEventDetail] = useState<OrganizerEventDetail | null>(null);
   const [organizerTicketTypes, setOrganizerTicketTypes] = useState<OrganizerPublicTicketType[]>([]);
@@ -143,6 +320,8 @@ export default function OrganizerSeatMapPage() {
   const [seatLayoutInputs, setSeatLayoutInputs] = useState<Record<SeatLayoutFieldKey, string>>(DEFAULT_LAYOUT_INPUTS);
   const [, setUnsavedChanges] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasInitializedDocumentRef = useRef(false);
+  const ignoreNextDocumentChangeRef = useRef(false);
 
   useEffect(() => {
     if (!ready || !eventId) {
@@ -167,6 +346,9 @@ export default function OrganizerSeatMapPage() {
           setLayout(nextLayout);
           setSeatMap(nextSeatMap);
           setUnsavedChanges(false);
+          if (isSectorSetupPhase && (nextSeatMap?.sectors?.length ?? 0) > 0) {
+            dispatchOrganizerWorkflowSaveResult(true);
+          }
         }
       } catch {
         if (!cancelled) {
@@ -184,7 +366,7 @@ export default function OrganizerSeatMapPage() {
     return () => {
       cancelled = true;
     };
-  }, [eventId, ready]);
+  }, [eventId, isSectorSetupPhase, ready]);
 
   const editorSource = useMemo(() => buildEditorSource(seatMap, layout), [layout, seatMap]);
   const ticketTypes = organizerTicketTypes.length ? organizerTicketTypes : eventDetail?.ticketTypes ?? [];
@@ -219,6 +401,7 @@ export default function OrganizerSeatMapPage() {
     selectedShapeIds,
     canRedo,
     canUndo,
+    clearSeatSelection,
     viewport,
     addTrapezoid,
     addDiamond,
@@ -226,6 +409,7 @@ export default function OrganizerSeatMapPage() {
     addCircle,
     addEllipse,
     addFanSection,
+    addConcertOvalTemplate,
     addRoundedBlock,
     addBottomRingSection,
     addLeftSideRing,
@@ -234,7 +418,6 @@ export default function OrganizerSeatMapPage() {
     addVipRightCurved,
     clearDraft,
     clearSeats,
-    clearSelection,
     hideSeat,
     hideSelectedSeats,
     moveSeat,
@@ -250,6 +433,7 @@ export default function OrganizerSeatMapPage() {
     redo,
     selectSeat,
     selectShape,
+    selectShapes,
     setActiveTool,
     setReferenceImageVisible,
     setViewport,
@@ -257,6 +441,7 @@ export default function OrganizerSeatMapPage() {
     toggleShapeVisibility,
     transformPolygon,
     translateShapeBy,
+    translateShapesBy,
     undo,
     updateSeatLayout,
     updateShape,
@@ -264,7 +449,19 @@ export default function OrganizerSeatMapPage() {
   } = useSeatMapEditorState(eventId, editorSource);
 
   useEffect(() => {
+    if (!document) {
+      return;
+    }
+    if (!hasInitializedDocumentRef.current) {
+      hasInitializedDocumentRef.current = true;
+      return;
+    }
+    if (ignoreNextDocumentChangeRef.current) {
+      ignoreNextDocumentChangeRef.current = false;
+      return;
+    }
     setUnsavedChanges(true);
+    dispatchOrganizerWorkflowDirty();
   }, [document]);
 
   useEffect(() => {
@@ -355,6 +552,7 @@ export default function OrganizerSeatMapPage() {
       name?: string;
       color?: string;
       ticketTypeId?: string;
+      ticketTypeIds?: string[];
       sectorType?: SeatMapEditorSectorType;
       totalCapacity?: number;
     },
@@ -374,6 +572,17 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
+    if (
+      patch.ticketTypeIds !== undefined &&
+      patch.ticketTypeIds.some((ticketTypeId) => {
+        const ticketType = ticketTypeById.get(ticketTypeId);
+        return !ticketType || getTicketTypeSectorId(ticketType) !== shapeId;
+      })
+    ) {
+      toast.error("Seat type không thuộc khu đang chọn.");
+      return;
+    }
+
     updateShape(shapeId, (shape) => ({
       ...shape,
       ...(patch.name !== undefined ? { name: patch.name, label: patch.name } : {}),
@@ -390,9 +599,35 @@ export default function OrganizerSeatMapPage() {
         ? {
             ticketTypeId: patch.ticketTypeId || undefined,
             ticketTypeName: ticketTypes.find((ticketType) => ticketType.id === patch.ticketTypeId)?.name ?? undefined,
+            ticketTypeIds: patch.ticketTypeId ? [patch.ticketTypeId] : [],
+            ticketTypeNames: patch.ticketTypeId
+              ? [ticketTypes.find((ticketType) => ticketType.id === patch.ticketTypeId)?.name ?? ""].filter(Boolean)
+              : [],
+          }
+        : {}),
+      ...(patch.ticketTypeIds !== undefined
+        ? {
+            ticketTypeIds: patch.ticketTypeIds,
+            ticketTypeNames: patch.ticketTypeIds
+              .map((ticketTypeId) => ticketTypes.find((ticketType) => ticketType.id === ticketTypeId)?.name ?? "")
+              .filter(Boolean),
+            ticketTypeId: patch.ticketTypeIds[0] || undefined,
+            ticketTypeName: patch.ticketTypeIds[0]
+              ? ticketTypes.find((ticketType) => ticketType.id === patch.ticketTypeIds?.[0])?.name ?? undefined
+              : undefined,
           }
         : {}),
     }));
+
+    if (patch.ticketTypeIds !== undefined && currentShape.sectorType === "STANDING") {
+      toast.success(`Đã gán ${patch.ticketTypeIds.length} loại vé cho khu đứng "${currentShape.name}".`);
+      return;
+    }
+
+    if (patch.ticketTypeId && currentShape.sectorType === "STANDING") {
+      const ticketType = ticketTypeById.get(patch.ticketTypeId);
+      toast.success(`Đã gán "${ticketType?.name ?? "loại vé"}" cho khu đứng "${currentShape.name}".`);
+    }
   };
 
   const handleAssignTicketTypeToSeats = (
@@ -589,6 +824,14 @@ export default function OrganizerSeatMapPage() {
     translateShapeBy(shapeId, deltaX, deltaY);
   };
 
+  const handleTranslateShapesBy = (shapeIds: string[], deltaX: number, deltaY: number) => {
+    if (shapeIds.some((shapeId) => hasProtectedSeats(shapeId))) {
+      toast.error("Không thể di chuyển nhóm sector có ghế đang được giữ hoặc đã bán.");
+      return;
+    }
+    translateShapesBy(shapeIds, deltaX, deltaY);
+  };
+
   const handleRegenerateSeats = (shapeId: string) => {
     if (hasProtectedSeats(shapeId)) {
       toast.error("Không thể tạo lại ghế cho sector có ghế đang được giữ hoặc đã bán.");
@@ -602,14 +845,21 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
+    const publishDocument = fitSeatMapDocumentToContent(document);
     const expectedSummary = {
-      sectorCount: document.shapes.filter((shape) => shape.visible !== false).length,
-      activeSeatCount: document.shapes
+      sectorCount: publishDocument.shapes.filter((shape) => shape.visible !== false).length,
+      activeSeatCount: publishDocument.shapes
         .filter((shape) => shape.visible !== false)
         .reduce((total, shape) => total + shape.seats.filter((seat) => seat.hidden !== true).length, 0),
     };
 
-    const invalidStandingSector = document.shapes.find(
+    const documentValidationMessage = validateSeatMapDocumentForPublish(publishDocument);
+    if (documentValidationMessage) {
+      toast.error(documentValidationMessage);
+      return;
+    }
+
+    const invalidStandingSector = publishDocument.shapes.find(
       (shape) =>
         shape.visible !== false &&
         shape.sectorType === "STANDING" &&
@@ -620,18 +870,37 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
-    const mismatchedStandingTicketTypeSector = document.shapes
-      .filter((shape) => shape.visible !== false && shape.sectorType === "STANDING" && shape.ticketTypeId)
-      .map((shape) => ({ shape, ticketType: ticketTypeById.get(shape.ticketTypeId || "") }))
+    const unassignedStandingSector = !isSectorSetupPhase
+      ? publishDocument.shapes.find(
+          (shape) =>
+            shape.visible !== false &&
+            shape.sectorType === "STANDING" &&
+            getStandingShapeTicketTypeIds(shape).length === 0,
+        )
+      : null;
+    if (unassignedStandingSector) {
+      toast.error(`Khu đứng "${unassignedStandingSector.name}" cần chọn loại vé trước khi publish.`);
+      return;
+    }
+
+    const mismatchedStandingTicketTypeSector = publishDocument.shapes
+      .filter((shape) => shape.visible !== false && shape.sectorType === "STANDING")
+      .flatMap((shape) =>
+        getStandingShapeTicketTypeIds(shape).map((ticketTypeId) => ({
+          shape,
+          ticketTypeId,
+          ticketType: ticketTypeById.get(ticketTypeId),
+        })),
+      )
       .find(({ shape, ticketType }) => !ticketType || getTicketTypeSectorId(ticketType) !== shape.id);
     if (mismatchedStandingTicketTypeSector) {
       toast.error(
-        `Loại vé "${mismatchedStandingTicketTypeSector.ticketType?.name ?? mismatchedStandingTicketTypeSector.shape.ticketTypeId}" không thuộc khu đứng "${mismatchedStandingTicketTypeSector.shape.name}".`,
+        `Loại vé "${mismatchedStandingTicketTypeSector.ticketType?.name ?? mismatchedStandingTicketTypeSector.ticketTypeId}" không thuộc khu đứng "${mismatchedStandingTicketTypeSector.shape.name}".`,
       );
       return;
     }
 
-    const unassignedSeat = document.shapes
+    const unassignedSeat = publishDocument.shapes
       .filter((shape) => shape.visible !== false && shape.sectorType === "SEATED")
       .flatMap((shape) =>
         shape.seats
@@ -645,7 +914,7 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
-    const mismatchedTicketTypeSector = document.shapes
+    const mismatchedTicketTypeSector = publishDocument.shapes
       .filter((shape) => shape.visible !== false && shape.sectorType === "SEATED")
       .flatMap((shape) =>
         shape.seats
@@ -688,16 +957,16 @@ export default function OrganizerSeatMapPage() {
 
     setPublishing(true);
     try {
-      const payload = buildSeatMapPublishPayload(document, {
+      const payload = buildSeatMapPublishPayload(publishDocument, {
         name: layout?.name ?? "Seat map",
         backgroundPublicId: layout?.backgroundPublicId,
         mapConfig: layout?.mapConfig,
       });
 
       const payloadSectorCount = payload.sectors?.length ?? 0;
-      if (document.shapes.length > 0 && payloadSectorCount === 0) {
+      if (publishDocument.shapes.length > 0 && payloadSectorCount === 0) {
         console.error("Seat map publish aborted because payload sectors are empty.", {
-          documentShapeCount: document.shapes.length,
+          documentShapeCount: publishDocument.shapes.length,
           expectedSummary,
           payload,
         });
@@ -706,7 +975,7 @@ export default function OrganizerSeatMapPage() {
       }
 
       console.info("Publishing seat map.", {
-        documentShapeCount: document.shapes.length,
+        documentShapeCount: publishDocument.shapes.length,
         visibleShapeCount: expectedSummary.sectorCount,
         payloadSectorCount,
         payloadActiveSeatCount: payload.sectors?.reduce(
@@ -744,16 +1013,27 @@ export default function OrganizerSeatMapPage() {
       }
 
       window.localStorage.removeItem(createEditorDraftKey(eventId));
-      sessionStorage.setItem(`organizer-seat-map-published:${eventId}`, "true");
+      const seatMapPublished = !isSectorSetupPhase;
+      if (seatMapPublished) {
+        sessionStorage.setItem(`organizer-seat-map-published:${eventId}`, "true");
+      } else {
+        sessionStorage.removeItem(`organizer-seat-map-published:${eventId}`);
+      }
       window.document.dispatchEvent(
         new CustomEvent("organizer-seat-map-published-updated", {
-          detail: { eventId, published: true },
+          detail: { eventId, published: seatMapPublished },
         }),
       );
+      ignoreNextDocumentChangeRef.current = true;
       setSeatMap(publishedSeatMap);
       setUnsavedChanges(false);
-      toast.success("Seat map published.");
+      dispatchOrganizerWorkflowSaveResult(true);
+      toast.success(seatMapPublished ? t("workspaceNav.saveToDatabaseSuccess") : "Seat map published.");
+      if (seatMapPublished) {
+        navigate("/organizer/events");
+      }
     } catch (error) {
+      dispatchOrganizerWorkflowSaveResult(false);
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status && status >= 400 && status < 500) {
         toast.error(getRequestErrorMessage(error));
@@ -779,7 +1059,7 @@ export default function OrganizerSeatMapPage() {
     return () => {
       window.document.removeEventListener("organizer-save-event", handleSave);
     };
-  }, [document, eventId, layout, publishedSectorIds, ticketTypeById, ticketTypes]);
+  }, [document, eventId, isSectorSetupPhase, layout, navigate, publishedSectorIds, t, ticketTypeById, ticketTypes]);
 
   const handleExportJson = () => {
     if (!document || !eventId) {
@@ -846,8 +1126,12 @@ export default function OrganizerSeatMapPage() {
 
   return (
     <OrganizerLayout
-      title="Seat map"
-      description="Design seating sections, manage seats, and publish the interactive map for buyers."
+      title={isSectorSetupPhase ? "Sơ đồ khu vực" : "Hoàn thiện sơ đồ"}
+      description={
+        isSectorSetupPhase
+          ? "Tạo các khu vực đứng hoặc ngồi trước khi cấu hình loại vé."
+          : "Sinh ghế, gán loại vé và publish sơ đồ hoàn thiện cho người mua."
+      }
       actions={null}
       hideTopBar
       showWorkflowNav={Boolean(eventId)}
@@ -875,15 +1159,16 @@ export default function OrganizerSeatMapPage() {
               selectedShapeIds={selectedShapeIds}
               selectedSeatId={selectedSeatId}
               selectedSeatIds={selectedSeatIds}
-              onClearSelection={clearSelection}
               onMoveSeat={handleMoveSeat}
               onMoveSeatBlock={handleMoveSeatBlock}
               onResizeSeatBlock={handleResizeSeatBlock}
               onResizeShape={handleResizeShape}
               onSelectSeat={selectSeat}
               onSelectShape={selectShape}
+              onSelectShapes={selectShapes}
               onTransformPolygon={handleTransformPolygon}
               onTranslateShape={handleTranslateShapeBy}
+              onTranslateShapes={handleTranslateShapesBy}
               onViewportChange={setViewport}
               onDeleteSelected={handleDeleteSelected}
               onSetActiveTool={setActiveTool}
@@ -892,9 +1177,11 @@ export default function OrganizerSeatMapPage() {
               onRedo={redo}
               canUndo={canUndo}
               canRedo={canRedo}
+              onClearSeatSelection={clearSeatSelection}
             />
 
             <SeatMapRightSidebar
+              assignmentEnabled={!isSectorSetupPhase}
               document={document}
               selectedShape={selectedShape}
               selectedSeat={selectedSeat}
@@ -915,6 +1202,7 @@ export default function OrganizerSeatMapPage() {
               onAddCircle={addCircle}
               onAddEllipse={addEllipse}
               onAddRoundedBlock={addRoundedBlock}
+              onAddConcertOvalTemplate={addConcertOvalTemplate}
               onAddVipLeftCurved={addVipLeftCurved}
               onAddVipRightCurved={addVipRightCurved}
               onAddBottomRingSection={addBottomRingSection}

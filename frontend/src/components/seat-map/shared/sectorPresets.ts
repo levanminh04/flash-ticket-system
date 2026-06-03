@@ -64,8 +64,212 @@ function createBaseShape(
   };
 }
 
+function createTemplateShape({
+  name,
+  code,
+  shapeType,
+  sectorType,
+  totalCapacity,
+  bounds,
+  color,
+  zIndex,
+  mapData,
+}: {
+  name: string;
+  code?: string;
+  shapeType: SeatMapEditorShape["shapeType"];
+  sectorType: SeatMapEditorShape["sectorType"];
+  totalCapacity?: number;
+  bounds: SeatMapEditorBounds;
+  color: string;
+  zIndex: number;
+  mapData: Record<string, unknown>;
+}): SeatMapEditorShape {
+  return {
+    id: crypto.randomUUID(),
+    sectorId: crypto.randomUUID(),
+    name,
+    code,
+    sectorType,
+    totalCapacity,
+    shapeType,
+    mapData: {
+      ...mapData,
+      code,
+      shapeType,
+      bounds,
+    },
+    color,
+    bounds,
+    points: [],
+    label: name,
+    seatCount: 0,
+    seats: [],
+    seatLayout: defaultSeatLayout(bounds),
+    visible: true,
+    locked: false,
+    zIndex,
+  };
+}
+
 function nextZIndex(document: SeatMapEditorDocument) {
   return document.shapes.length;
+}
+
+export function createConcertOvalTemplate(document: SeatMapEditorDocument): SeatMapEditorShape[] {
+  const width = Math.max(document.width || 1000, 640);
+  const height = Math.max(document.height || 760, 420);
+  const cx = width / 2;
+  const cy = height * 0.38;
+  const outerLarge = Math.min(width * 0.29, height * 0.36, 430);
+  const outerInner = Math.min(width * 0.21, height * 0.28, 310);
+  const outerBottom = Math.min(width * 0.27, height * 0.34, 410);
+  const innerLarge = outerLarge * 0.77;
+  const innerInner = outerInner * 0.79;
+  const innerBottom = outerBottom * 0.78;
+  let zIndex = nextZIndex(document);
+
+  const rounded = (
+    name: string,
+    code: string,
+    bounds: SeatMapEditorBounds,
+    color: string,
+    cornerRadius = 10,
+  ) =>
+    createTemplateShape({
+      name,
+      code,
+      shapeType: "roundedRect",
+      sectorType: "SEATED",
+      bounds,
+      color,
+      zIndex: zIndex++,
+      mapData: {
+        stylePreset: "cat2",
+        cornerRadius,
+        fill: color,
+        labelPosition: { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 },
+        labelWidth: bounds.width * 0.9,
+      },
+    });
+
+  const ring = (
+    name: string,
+    code: string,
+    startAngle: number,
+    endAngle: number,
+    innerRadius: number,
+    outerRadius: number,
+    color: string,
+    labelX: number,
+    labelY: number,
+  ) => {
+    const bounds = {
+      x: cx - outerRadius,
+      y: cy - outerRadius,
+      width: outerRadius * 2,
+      height: outerRadius * 2,
+    };
+
+    return createTemplateShape({
+      name,
+      code,
+      shapeType: "ringSection",
+      sectorType: "SEATED",
+      bounds,
+      color,
+      zIndex: zIndex++,
+      mapData: {
+        stylePreset: "cat2",
+        cx,
+        cy,
+        innerRadius,
+        outerRadius,
+        startAngle,
+        endAngle,
+        fill: color,
+        labelPosition: { x: labelX, y: labelY },
+        labelWidth: 130,
+      },
+    });
+  };
+
+  const decorative = (
+    name: string,
+    code: string,
+    shapeType: "stage" | "foh",
+    bounds: SeatMapEditorBounds,
+    color: string,
+    cornerRadius = 10,
+  ) =>
+    createTemplateShape({
+      name,
+      code,
+      shapeType,
+      sectorType: "SEATED",
+      bounds,
+      color,
+      zIndex: zIndex++,
+      mapData: {
+        stylePreset: shapeType,
+        cornerRadius,
+        fill: color,
+        labelPosition: { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 },
+        labelWidth: bounds.width,
+        decorative: true,
+      },
+    });
+
+  const blockWidth = Math.min(width * 0.1, height * 0.22, 150);
+  const blockHeight = Math.min(height * 0.13, 94);
+  const blockGap = Math.max(8, Math.min(width * 0.01, 14));
+  const blockStartX = cx - blockWidth - blockGap / 2;
+  const blockStartY = Math.min(cy + height * 0.08, height - blockHeight * 2 - blockGap - 40);
+
+  return [
+    ring("CAT 5", "CAT5", -118, -78, innerLarge, outerLarge, "#f472b6", cx - outerLarge * 1.18, cy),
+    ring("CAT 3", "CAT3", -102, -72, innerInner, outerInner, "#facc15", cx - outerInner * 1.08, cy),
+    ring("CAT 4", "CAT4", 72, 102, innerInner, outerInner, "#facc15", cx + outerInner * 1.08, cy),
+    ring("CAT 6", "CAT6", 78, 118, innerLarge, outerLarge, "#f472b6", cx + outerLarge * 1.18, cy),
+    ring("CAT 7", "CAT7", -172, -132, innerBottom, outerBottom, "#b36cf2", cx - outerBottom * 0.56, cy + outerBottom * 0.78),
+    ring("CAT 8", "CAT8", 132, 172, innerBottom, outerBottom, "#b36cf2", cx + outerBottom * 0.56, cy + outerBottom * 0.78),
+    rounded("VIP 1", "VIP1", {
+      x: blockStartX,
+      y: blockStartY - blockHeight - blockGap,
+      width: blockWidth,
+      height: blockHeight,
+    }, "#2563eb"),
+    rounded("VIP 2", "VIP2", {
+      x: blockStartX + blockWidth + blockGap,
+      y: blockStartY - blockHeight - blockGap,
+      width: blockWidth,
+      height: blockHeight,
+    }, "#2563eb"),
+    rounded("CAT 1", "CAT1", {
+      x: blockStartX,
+      y: blockStartY,
+      width: blockWidth,
+      height: blockHeight,
+    }, "#9cf312"),
+    rounded("CAT 2", "CAT2", {
+      x: blockStartX + blockWidth + blockGap,
+      y: blockStartY,
+      width: blockWidth,
+      height: blockHeight,
+    }, "#9cf312"),
+    decorative("STAGE", "STAGE", "stage", {
+      x: cx - blockWidth * 0.75,
+      y: Math.max(24, blockStartY - blockHeight * 2.25),
+      width: blockWidth * 1.5,
+      height: Math.min(74, height * 0.12),
+    }, "#a3a3a3", 4),
+    decorative("FOH", "FOH", "foh", {
+      x: cx - 24,
+      y: Math.min(height - 38, blockStartY + blockHeight + 14),
+      width: 48,
+      height: 28,
+    }, "#a3a3a3", 3),
+  ];
 }
 
 export function createStagePreset(document: SeatMapEditorDocument): SeatMapEditorShape {

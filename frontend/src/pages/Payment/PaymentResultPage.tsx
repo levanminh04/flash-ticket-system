@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, Home, LoaderCircle, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 import {
   paymentService,
@@ -20,7 +21,12 @@ function extractOrderNumber(orderInfo: string | null) {
   return orderInfo?.match(/ORD-[A-Z0-9-]+/i)?.[0];
 }
 
+function formatCurrency(value: number, language: string) {
+  return `${value.toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`;
+}
+
 export default function PaymentResultPage() {
+  const { i18n, t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { initialized, keycloak } = useKeycloak();
   const [result, setResult] = useState<DisplayResult | null>(null);
@@ -50,7 +56,7 @@ export default function PaymentResultPage() {
       if (!vnpResponseCode && !orderId) {
         setResult({
           success: false,
-          message: "Không có dữ liệu thanh toán.",
+          message: t("paymentResult.missingData"),
         });
         setIsLoading(false);
         return;
@@ -66,8 +72,8 @@ export default function PaymentResultPage() {
           transactionNumber,
           amount: quickAmount,
           message: quickSuccess
-            ? "Vui lòng kiểm tra lại trong Đơn hàng của tôi."
-            : "Thanh toán không thành công. Vui lòng thử lại.",
+            ? t("paymentResult.quickCheckOrders")
+            : t("paymentResult.quickFailure"),
         });
         setIsLoading(false);
         return;
@@ -78,8 +84,7 @@ export default function PaymentResultPage() {
           success: false,
           orderNumber: orderNumber || undefined,
           amount: quickAmount,
-          message:
-            "Phiên đăng nhập đã hết. Vui lòng đăng nhập lại để hệ thống xác nhận trạng thái thanh toán.",
+          message: t("paymentResult.loginExpired"),
         });
         setIsLoading(false);
         return;
@@ -106,8 +111,8 @@ export default function PaymentResultPage() {
               transactionNumber: latestTx?.transactionNumber || transactionNumber,
               amount: Number(status.totalAmount) || quickAmount,
               message: isConfirmed
-                ? "Thanh toán thành công!"
-                : `Thanh toán chưa được backend xác nhận (${status.orderStatus}). Vui lòng kiểm tra lại trong Đơn hàng của tôi.`,
+                ? t("paymentResult.successMessage")
+                : t("paymentResult.statusPending", { status: status.orderStatus }),
             });
             setIsLoading(false);
             sessionStorage.removeItem("lastOrderId");
@@ -124,10 +129,10 @@ export default function PaymentResultPage() {
           const statusCode = error?.response?.status;
           const message =
             statusCode === 401 || statusCode === 403
-              ? "Không thể xác nhận đơn hàng vì phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại và kiểm tra Đơn hàng của tôi."
+              ? t("paymentResult.pollAuthFailed")
               : statusCode === 503
-                ? "Hệ thống thanh toán đang xử lý chậm. Vui lòng kiểm tra lại trong Đơn hàng của tôi sau ít phút."
-                : "Không thể xác nhận trạng thái thanh toán lúc này. Vui lòng kiểm tra lại trong Đơn hàng của tôi.";
+                ? t("paymentResult.pollDelayed")
+                : t("paymentResult.pollFailed");
 
           setResult({
             success: false,
@@ -151,7 +156,7 @@ export default function PaymentResultPage() {
       cancelled = true;
       clearInterval(pollRef.current);
     };
-  }, [initialized, keycloak.authenticated, paymentQuery]);
+  }, [initialized, keycloak.authenticated, paymentQuery, t]);
 
   if (isLoading) {
     return (
@@ -160,8 +165,8 @@ export default function PaymentResultPage() {
         <div className="payment-result-page payment-result-loading-page">
           <div className="payment-result-page-loading" role="status" aria-live="polite">
             <LoaderCircle className="payment-result-loading-icon" size={32} />
-            <h1>Đang xác nhận thanh toán</h1>
-            <p>Vui lòng chờ trong giây lát, hệ thống đang đối soát kết quả từ VNPay.</p>
+            <h1>{t("paymentResult.loadingTitle")}</h1>
+            <p>{t("paymentResult.loadingSubtitle")}</p>
           </div>
         </div>
       </>
@@ -174,9 +179,9 @@ export default function PaymentResultPage() {
         <AccountCategoryNav />
         <div className="payment-result-page">
           <div className="result-card">
-            <p>Không có thông tin kết quả thanh toán.</p>
+            <p>{t("paymentResult.noResult")}</p>
             <Link to="/" className="btn btn-primary" style={{ marginTop: 16 }}>
-              Về trang chủ
+              {t("paymentResult.home")}
             </Link>
           </div>
         </div>
@@ -201,35 +206,34 @@ export default function PaymentResultPage() {
           </div>
 
           <h1 className={`result-title ${result.success ? "success" : "failure"}`}>
-            {result.success ? "Thanh toán thành công!" : "Thanh toán thất bại"}
+            {result.success ? t("paymentResult.successTitle") : t("paymentResult.failureTitle")}
           </h1>
 
           <p className="result-subtitle">
             {result.success
-              ? "Chúng tôi đã gửi thông tin vé đến email của bạn."
-              : result.message ||
-                "Đã có lỗi xảy ra trong quá trình thanh toán. Vui lòng thử lại hoặc liên hệ hỗ trợ."}
+              ? t("paymentResult.successSubtitle")
+              : result.message || t("paymentResult.failureSubtitle")}
           </p>
 
           {result.orderNumber || result.amount !== undefined ? (
             <div className="result-order-info">
               {result.orderNumber ? (
                 <div className="info-row">
-                  <span className="label">Mã đơn hàng</span>
+                  <span className="label">{t("paymentResult.orderNumber")}</span>
                   <span className="value">{result.orderNumber}</span>
                 </div>
               ) : null}
               {result.transactionNumber ? (
                 <div className="info-row">
-                  <span className="label">Mã giao dịch</span>
+                  <span className="label">{t("paymentResult.transactionNumber")}</span>
                   <span className="value">{result.transactionNumber}</span>
                 </div>
               ) : null}
               {result.amount !== undefined ? (
                 <div className="info-row total">
-                  <span className="label">Số tiền</span>
+                  <span className="label">{t("paymentResult.amount")}</span>
                   <span className="value">
-                    {result.amount.toLocaleString("vi-VN")} đ
+                    {formatCurrency(result.amount, i18n.resolvedLanguage || "vi")}
                   </span>
                 </div>
               ) : null}
@@ -239,15 +243,15 @@ export default function PaymentResultPage() {
           <div className="result-actions">
             <Link to="/" className="btn btn-outline">
               <Home size={16} />
-              Về trang chủ
+              {t("paymentResult.home")}
             </Link>
             {result.success ? (
               <Link to="/my-tickets" className="btn btn-primary">
-                Xem vé của tôi
+                {t("paymentResult.viewTickets")}
               </Link>
             ) : (
               <Link to="/my-orders" className="btn btn-primary">
-                Kiểm tra đơn hàng
+                {t("paymentResult.checkOrders")}
               </Link>
             )}
           </div>

@@ -2,25 +2,26 @@ import { useEffect, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { Ticket, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import AccountSidebar from "../../components/account/AccountSidebar";
 import AppPagination from "../../components/common/AppPagination";
+import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 import {
   ticketService,
   TicketSummary,
   TicketsPageResponse,
 } from "../../services/ticketService";
-import { Ticket, X } from "lucide-react";
-import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 
 const PAGE_SIZE = 5;
 type TicketStatusFilter = "ALL" | "VALID" | "USED" | "CANCELLED";
 
-function formatDate(iso: string | null | undefined): string {
+function formatDate(iso: string | null | undefined, language: string): string {
   if (iso == null || iso === "") return "-";
   try {
     const date = new Date(iso);
     if (Number.isNaN(date.getTime())) return String(iso);
-    return date.toLocaleString("vi-VN", {
+    return date.toLocaleString(language === "en" ? "en-US" : "vi-VN", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -32,20 +33,25 @@ function formatDate(iso: string | null | undefined): string {
   }
 }
 
-function statusLabel(status: string) {
+function formatCurrency(value: number | string, language: string) {
+  return `${Number(value).toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`;
+}
+
+function statusLabel(status: string, t: (key: string) => string) {
   switch (status) {
     case "VALID":
-      return { text: "Hợp lệ", cls: "status-valid" };
+      return { text: t("status.valid"), cls: "status-valid" };
     case "USED":
-      return { text: "Đã sử dụng", cls: "status-used" };
+      return { text: t("status.used"), cls: "status-used" };
     case "CANCELLED":
-      return { text: "Đã hủy", cls: "status-cancelled" };
+      return { text: t("status.cancelled"), cls: "status-cancelled" };
     default:
       return { text: status, cls: "" };
   }
 }
 
 export default function MyTicketsPage() {
+  const { i18n, t } = useTranslation();
   const { keycloak, initialized } = useKeycloak();
   const [data, setData] = useState<TicketsPageResponse | null>(null);
   const [page, setPage] = useState(0);
@@ -54,6 +60,7 @@ export default function MyTicketsPage() {
   const [statusFilter, setStatusFilter] = useState<TicketStatusFilter>("ALL");
   const [selectedTicket, setSelectedTicket] = useState<TicketSummary | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const language = i18n.resolvedLanguage || "vi";
 
   useEffect(() => {
     if (!initialized) return;
@@ -72,7 +79,7 @@ export default function MyTicketsPage() {
         const res = await ticketService.getMyTickets(page, PAGE_SIZE);
         if (!cancelled) setData(res);
       } catch {
-        if (!cancelled) setError("Không thể tải danh sách vé.");
+        if (!cancelled) setError(t("ticketsPage.loadFailed"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -81,7 +88,7 @@ export default function MyTicketsPage() {
     return () => {
       cancelled = true;
     };
-  }, [initialized, keycloak, keycloak.authenticated, page]);
+  }, [initialized, keycloak, keycloak.authenticated, page, t]);
 
   const openTicketDetail = async (ticket: TicketSummary) => {
     setSelectedTicket(ticket);
@@ -91,9 +98,7 @@ export default function MyTicketsPage() {
       if (detail) {
         setSelectedTicket(detail);
       } else {
-        toast.warning(
-          "Không lấy được chi tiết vé mới nhất, đang hiển thị dữ liệu tóm tắt.",
-        );
+        toast.warning(t("ticketsPage.detailFallback"));
       }
     } finally {
       setDetailLoading(false);
@@ -116,10 +121,10 @@ export default function MyTicketsPage() {
     return true;
   });
   const ticketStatusTabs: Array<{ value: TicketStatusFilter; label: string }> = [
-    { value: "ALL", label: "Tất cả" },
-    { value: "VALID", label: "Thành công" },
-    { value: "USED", label: "Đã sử dụng" },
-    { value: "CANCELLED", label: "Đã hủy" },
+    { value: "ALL", label: t("status.all") },
+    { value: "VALID", label: t("status.success") },
+    { value: "USED", label: t("status.used") },
+    { value: "CANCELLED", label: t("status.cancelled") },
   ];
 
   if (!initialized || !keycloak.authenticated) return null;
@@ -131,26 +136,26 @@ export default function MyTicketsPage() {
         <AccountSidebar />
 
         <div className="account-main-content">
-          <h1 className="page-title">Vé của tôi</h1>
+          <h1 className="page-title">{t("ticketsPage.title")}</h1>
 
           {loading ? (
             <div className="list-loading">
               <div className="loading-spinner"></div>
-              <span>Đang tải</span>
+              <span>{t("ticketsPage.loading")}</span>
             </div>
           ) : error ? (
             <div className="list-error">{error}</div>
           ) : !data || tickets.length === 0 ? (
             <div className="list-empty">
               <Ticket size={48} />
-              <p>Bạn chưa có vé nào.</p>
+              <p>{t("ticketsPage.empty")}</p>
               <Link to="/search" className="btn btn-primary">
-                Khám phá sự kiện
+                {t("ticketsPage.exploreEvents")}
               </Link>
             </div>
           ) : (
             <>
-              <div className="my-ticket-status-tabs" aria-label="Lọc trạng thái vé">
+              <div className="my-ticket-status-tabs" aria-label={t("ticketsPage.filterLabel")}>
                 {ticketStatusTabs.map((tab) => (
                   <button
                     key={tab.value}
@@ -166,27 +171,29 @@ export default function MyTicketsPage() {
               {filteredTickets.length === 0 ? (
                 <div className="list-empty ticket-filter-empty">
                   <Ticket size={36} />
-                  <p>Không có vé nào phù hợp với bộ lọc hiện tại.</p>
+                  <p>{t("ticketsPage.filterEmpty")}</p>
                 </div>
               ) : (
                 <div className="ticket-list">
                   {filteredTickets.map((ticket) => {
-                    const sl = statusLabel(ticket.status);
+                    const sl = statusLabel(ticket.status, t);
                     return (
                       <div key={ticket.id} className="ticket-card" onClick={() => void openTicketDetail(ticket)}>
                         <div className="ticket-card-main">
                           <h3 className="ticket-event-title">{ticket.eventTitle}</h3>
                           <p className="ticket-meta">
-                            {formatDate(ticket.eventStartDatetime)}
+                            {formatDate(ticket.eventStartDatetime, language)}
                             {ticket.eventVenueName ? ` • ${ticket.eventVenueName}` : ""}
                           </p>
                           <div className="ticket-card-footer">
                             <span className="ticket-type">{ticket.ticketTypeName}</span>
-                            {ticket.seatLabel ? <span className="ticket-seat">Ghế: {ticket.seatLabel}</span> : null}
+                            {ticket.seatLabel ? <span className="ticket-seat">{t("ticketsPage.seat")}: {ticket.seatLabel}</span> : null}
                             <span className={`ticket-status ${sl.cls}`}>{sl.text}</span>
                           </div>
                         </div>
-                        <div className="ticket-card-action"><span className="view-detail">Xem chi tiết</span></div>
+                        <div className="ticket-card-action">
+                          <span className="view-detail">{t("ticketsPage.viewDetail")}</span>
+                        </div>
                       </div>
                     );
                   })}
@@ -211,29 +218,32 @@ export default function MyTicketsPage() {
           <div className="modal-content ticket-detail-modal" onClick={(event) => event.stopPropagation()}>
             <button className="modal-close" onClick={closeModal}><X size={24} /></button>
             {detailLoading ? (
-              <div className="modal-inline-loading"><div className="loading-spinner"></div><span>Đang tải chi tiết vé mới nhất...</span></div>
+              <div className="modal-inline-loading">
+                <div className="loading-spinner"></div>
+                <span>{t("ticketsPage.loadDetail")}</span>
+              </div>
             ) : null}
             <h2>{selectedTicket.eventTitle}</h2>
             <p className="modal-meta">
-              <span style={{ opacity: 0.8 }}>Thời gian sự kiện: </span>
-              {formatDate(selectedTicket.eventStartDatetime)}
+              <span style={{ opacity: 0.8 }}>{t("ticketsPage.eventTime")} </span>
+              {formatDate(selectedTicket.eventStartDatetime, language)}
               {selectedTicket.eventVenueName ? ` • ${selectedTicket.eventVenueName}` : ""}
             </p>
             <div className="ticket-detail-layout">
               <div className="ticket-detail-info">
-                <div className="info-row"><span className="label">Mã vé</span><span className="value">{selectedTicket.ticketCode}</span></div>
-                <div className="info-row"><span className="label">Thời gian mua</span><span className="value">{formatDate(selectedTicket.createdAt)}</span></div>
-                <div className="info-row"><span className="label">Loại vé</span><span className="value">{selectedTicket.ticketTypeName}</span></div>
-                {selectedTicket.seatLabel ? <div className="info-row"><span className="label">Ghế</span><span className="value">{selectedTicket.seatLabel}</span></div> : null}
-                {selectedTicket.holderName ? <div className="info-row"><span className="label">Người sở hữu</span><span className="value">{selectedTicket.holderName}</span></div> : null}
+                <div className="info-row"><span className="label">{t("ticketsPage.code")}</span><span className="value">{selectedTicket.ticketCode}</span></div>
+                <div className="info-row"><span className="label">{t("ticketsPage.purchaseTime")}</span><span className="value">{formatDate(selectedTicket.createdAt, language)}</span></div>
+                <div className="info-row"><span className="label">{t("ticketsPage.ticketType")}</span><span className="value">{selectedTicket.ticketTypeName}</span></div>
+                {selectedTicket.seatLabel ? <div className="info-row"><span className="label">{t("ticketsPage.seat")}</span><span className="value">{selectedTicket.seatLabel}</span></div> : null}
+                {selectedTicket.holderName ? <div className="info-row"><span className="label">{t("ticketsPage.holder")}</span><span className="value">{selectedTicket.holderName}</span></div> : null}
                 {selectedTicket.holderEmail ? <div className="info-row"><span className="label">Email</span><span className="value">{selectedTicket.holderEmail}</span></div> : null}
-                <div className="info-row"><span className="label">Giá</span><span className="value">{Number(selectedTicket.price).toLocaleString("vi-VN")} đ</span></div>
-                <div className="info-row"><span className="label">Trạng thái</span><span className={`value ${statusLabel(selectedTicket.status).cls}`}>{statusLabel(selectedTicket.status).text}</span></div>
-                {selectedTicket.checkedInAt ? <div className="info-row"><span className="label">Thời gian check-in</span><span className="value">{formatDate(selectedTicket.checkedInAt)}</span></div> : null}
+                <div className="info-row"><span className="label">{t("ticketsPage.price")}</span><span className="value">{formatCurrency(selectedTicket.price, language)}</span></div>
+                <div className="info-row"><span className="label">{t("ticketsPage.status")}</span><span className={`value ${statusLabel(selectedTicket.status, t).cls}`}>{statusLabel(selectedTicket.status, t).text}</span></div>
+                {selectedTicket.checkedInAt ? <div className="info-row"><span className="label">{t("ticketsPage.checkedInAt")}</span><span className="value">{formatDate(selectedTicket.checkedInAt, language)}</span></div> : null}
               </div>
               {selectedTicket.qrCodeData && selectedTicket.status === "VALID" ? (
                 <div className="qr-section">
-                  <p className="qr-label">Mã QR (quét tại cổng)</p>
+                  <p className="qr-label">{t("ticketsPage.qrLabel")}</p>
                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(selectedTicket.qrCodeData)}`} alt="QR Code" className="qr-image" />
                 </div>
               ) : null}

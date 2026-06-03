@@ -1,4 +1,5 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useKeycloak } from "@react-keycloak/web";
 import {
   BadgeCheck,
@@ -34,17 +35,17 @@ function formatRating(value?: number | null) {
   return Number(value).toFixed(1);
 }
 
-function statNumber(value?: number | null) {
+function statNumber(value: number | null | undefined, language: string) {
   if (value == null) return "-";
-  return Number(value).toLocaleString("vi-VN");
+  return Number(value).toLocaleString(language === "en" ? "en-US" : "vi-VN");
 }
 
-function formatCreatedAt(value?: string | null) {
-  if (!value) return "Chưa có dữ liệu";
+function formatCreatedAt(value: string | null | undefined, language: string, fallback: string) {
+  if (!value) return fallback;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Chưa có dữ liệu";
+  if (Number.isNaN(date.getTime())) return fallback;
 
-  return date.toLocaleString("vi-VN", {
+  return date.toLocaleString(language === "en" ? "en-US" : "vi-VN", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -93,6 +94,8 @@ function getOrganizerEventStats(events: OrganizerEventDetail[]): OrganizerEventS
 
 export default function OrganizerProfilePage() {
   const { keycloak } = useKeycloak();
+  const { i18n, t } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language;
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
   const [profile, setProfile] = useState<OrganizerProfile | null>(null);
@@ -127,8 +130,8 @@ export default function OrganizerProfilePage() {
         if (!cancelled) {
           setProfile(null);
           setEventStats(null);
-          setError("Không thể tải hồ sơ ban tổ chức.");
-          toast.error("Không thể tải hồ sơ ban tổ chức.");
+          setError(t("organizerProfile.loadFailed"));
+          toast.error(t("organizerProfile.loadFailed"));
         }
       } finally {
         if (!cancelled) {
@@ -142,7 +145,7 @@ export default function OrganizerProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [keycloak.authenticated]);
+  }, [keycloak.authenticated, t]);
 
   const handleLogoSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -157,9 +160,9 @@ export default function OrganizerProfilePage() {
           detail: updatedProfile,
         }),
       );
-      toast.success("Đã cập nhật logo ban tổ chức.");
+      toast.success(t("organizerProfile.logoUpdated"));
     } catch {
-      toast.error("Không thể cập nhật logo lúc này.");
+      toast.error(t("organizerProfile.logoFailed"));
     } finally {
       event.target.value = "";
       setLogoUploading(false);
@@ -179,9 +182,9 @@ export default function OrganizerProfilePage() {
           detail: updatedProfile,
         }),
       );
-      toast.success("Đã cập nhật banner ban tổ chức.");
+      toast.success(t("organizerProfile.bannerUpdated"));
     } catch {
-      toast.error("Không thể cập nhật banner lúc này.");
+      toast.error(t("organizerProfile.bannerFailed"));
     } finally {
       event.target.value = "";
       setBannerUploading(false);
@@ -190,19 +193,19 @@ export default function OrganizerProfilePage() {
 
   return (
     <OrganizerLayout
-      title="Hồ sơ ban tổ chức"
-      description="Thông tin chi tiết về ban tổ chức."
+      title={t("organizerProfile.title")}
+      description={t("organizerProfile.description")}
       className="organizer-profile-page"
     >
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải hồ sơ ban tổ chức...</p>
+          <p>{t("organizerProfile.loading")}</p>
         </section>
       ) : error || !profile ? (
         <section className="organizer-panel organizer-empty-state">
           <ShieldCheck size={28} />
-          <p>{error || "Không tìm thấy hồ sơ ban tổ chức"}</p>
+          <p>{error || t("organizerProfile.notFound")}</p>
         </section>
       ) : (
         <>
@@ -218,8 +221,8 @@ export default function OrganizerProfilePage() {
                 className="organizer-profile-banner-upload-btn"
                 onClick={() => bannerInputRef.current?.click()}
                 disabled={bannerUploading}
-                aria-label="Đổi banner ban tổ chức"
-                title="Đổi banner ban tổ chức"
+                aria-label={t("organizerProfile.changeBanner")}
+                title={t("organizerProfile.changeBanner")}
               >
                 {bannerUploading ? (
                   <LoaderCircle size={16} className="spin" />
@@ -249,8 +252,8 @@ export default function OrganizerProfilePage() {
                   className="organizer-profile-logo-upload-btn"
                   onClick={() => logoInputRef.current?.click()}
                   disabled={logoUploading}
-                  aria-label="Đổi logo ban tổ chức"
-                  title="Đổi logo ban tổ chức"
+                  aria-label={t("organizerProfile.changeLogo")}
+                  title={t("organizerProfile.changeLogo")}
                 >
                   {logoUploading ? (
                     <LoaderCircle size={16} className="spin" />
@@ -258,7 +261,7 @@ export default function OrganizerProfilePage() {
                     <IoCameraOutline size={20} />
                   )}
                 </button>
-                <span className="organizer-profile-avatar-status" aria-label="Đang hoạt động" title="Đang hoạt động" />
+                <span className="organizer-profile-avatar-status" aria-label={t("profile.active")} title={t("profile.active")} />
                 <input
                   ref={logoInputRef}
                   type="file"
@@ -278,7 +281,7 @@ export default function OrganizerProfilePage() {
 
                   <div className="organizer-profile-field organizer-profile-description">
                     <span className="organizer-profile-field-value">
-                      {profile.description || "Organizer chưa cập nhật mô tả."}
+                      {profile.description || t("organizerProfile.descriptionMissing")}
                     </span>
                   </div>
 
@@ -286,7 +289,7 @@ export default function OrganizerProfilePage() {
                     <div className="organizer-identity-row">
                       <span className="organizer-verified-pill">
                         <BadgeCheck size={14} />
-                        Đã xác minh
+                        {t("publicOrganizer.verified")}
                       </span>
                     </div>
                   ) : null}
@@ -296,19 +299,19 @@ export default function OrganizerProfilePage() {
               <div className="organizer-contact-grid">
                 <div className="organizer-contact-item">
                   <MdMarkEmailRead size={20} />
-                  <span>{profile.email || "Chưa cập nhật email"}</span>
+                  <span>{profile.email || t("organizerProfile.emailMissing")}</span>
                 </div>
                 <div className="organizer-contact-item">
                   <FaPhoneAlt size={20} />
-                  <span>{profile.phone || "Chưa cập nhật số điện thoại"}</span>
+                  <span>{profile.phone || t("organizerProfile.phoneMissing")}</span>
                 </div>
                 <div className="organizer-contact-item">
                   <TbWorldCheck size={20} />
-                  <span>{profile.websiteUrl || "Chưa cập nhật website"}</span>
+                  <span>{profile.websiteUrl || t("organizerProfile.websiteMissing")}</span>
                 </div>
                 <div className="organizer-contact-item">
                   <IoCalendarNumber size={20} />
-                  <span>{formatCreatedAt(profile.createdAt)}</span>
+                  <span>{formatCreatedAt(profile.createdAt, language, t("organizerProfile.noData"))}</span>
                 </div>
               </div>
             </div>
@@ -317,35 +320,35 @@ export default function OrganizerProfilePage() {
           <section className="organizer-grid">
             <article className="organizer-panel organizer-stat-panel">
               <div className="organizer-panel-heading">
-                <p className="organizer-badge">Chỉ số hiện có</p>
+                <p className="organizer-badge">{t("organizerProfile.currentStats")}</p>
               </div>
 
               <div className="organizer-stats-grid">
                 <div className="organizer-stat-card">
                   <FaCalendarCheck className="organizer-profile-stat-icon-events" size={32} />
                   <span>
-                    <span className="organizer-stat-label">Tổng sự kiện</span>
-                    <strong>{statNumber(eventStats?.totalEvents)}</strong>
+                    <span className="organizer-stat-label">{t("organizerProfile.totalEvents")}</span>
+                    <strong>{statNumber(eventStats?.totalEvents, language)}</strong>
                   </span>
                 </div>
                 <div className="organizer-stat-card">
                   <IoTicketSharp className="organizer-profile-stat-icon-tickets" size={32} />
                   <span>
-                    <span className="organizer-stat-label">Vé đã bán</span>
-                    <strong>{statNumber(eventStats?.totalTicketsSold)}</strong>
+                    <span className="organizer-stat-label">{t("publicOrganizer.ticketsSold")}</span>
+                    <strong>{statNumber(eventStats?.totalTicketsSold, language)}</strong>
                   </span>
                 </div>
                 <div className="organizer-stat-card">
                   <HiUserGroup className="organizer-profile-stat-icon-followers" size={32} />
                   <span>
-                    <span className="organizer-stat-label">Người theo dõi</span>
-                    <strong>{statNumber(profile.followerCount)}</strong>
+                    <span className="organizer-stat-label">{t("publicOrganizer.followers")}</span>
+                    <strong>{statNumber(profile.followerCount, language)}</strong>
                   </span>
                 </div>
                 <div className="organizer-stat-card">
                   <FaThumbsUp className="organizer-profile-stat-icon-rating" size={32} />
                   <span>
-                    <span className="organizer-stat-label">Đánh giá trung bình</span>
+                    <span className="organizer-stat-label">{t("organizerProfile.averageRating")}</span>
                     <strong>{formatRating(profile.averageRating)}</strong>
                   </span>
                 </div>
@@ -354,7 +357,7 @@ export default function OrganizerProfilePage() {
 
             <article className="organizer-panel">
               <div className="organizer-panel-heading">
-                <p className="organizer-badge">Thông tin định danh</p>
+                <p className="organizer-badge">{t("organizerProfile.identityInfo")}</p>
               </div>
 
               <div className="organizer-profile-meta-list">
@@ -367,7 +370,7 @@ export default function OrganizerProfilePage() {
                   <span className="organizer-profile-meta-value">{profile.userId}</span>
                 </div>
                 <div className="organizer-profile-meta-row">
-                  <strong>Trạng thái xác minh</strong>
+                  <strong>{t("organizerProfile.verificationStatus")}</strong>
                   <span className="organizer-profile-meta-value">
                     {profile.isVerified == null
                       ? "Unknown"

@@ -18,21 +18,17 @@ import { HiTicket } from "react-icons/hi2";
 import { RiAccountCircleFill, RiShoppingBag3Fill } from "react-icons/ri";
 import { Link, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
+import { useTranslation } from "react-i18next";
 import { confirmDestructiveAction } from "../../lib/swal";
 import { hasRealmRole } from "../../lib/auth";
 import { eventService } from "../../services/eventService";
 import { userService, UserProfile } from "../../services/userService";
 import { EventSummary } from "../../types/api";
 import { CHATBOT_PROMPT_EVENT } from "../chatbot/FloatingChatbot";
+import LanguageSwitcher from "../common/LanguageSwitcher";
 
 const LOGIN_TOAST_KEY = "flashTicket:pendingLoginToast";
 export const PROFILE_UPDATED_EVENT = "flashTicket:profileUpdated";
-const defaultQuickPrompt = "Các sự kiện nổi bật sắp diễn ra";
-const quickPrompts = [
-  "Sự kiện âm nhạc sắp diễn ra",
-  "Gợi ý sự kiện cuối tuần tại TP.HCM",
-  "Sự kiện thể thao đang mở bán",
-];
 
 function getSuggestionImage(event: EventSummary) {
   return (
@@ -48,12 +44,12 @@ function getSuggestionStartDate(event: EventSummary) {
   return new Date(event.schedule?.startDatetime || event.startDatetime);
 }
 
-function formatSuggestionDate(event: EventSummary) {
+function formatSuggestionDate(event: EventSummary, language: string, fallback: string) {
   const date = getSuggestionStartDate(event);
-  if (Number.isNaN(date.getTime())) return "Đang cập nhật";
+  if (Number.isNaN(date.getTime())) return fallback;
 
   return date
-    .toLocaleDateString("vi-VN", {
+    .toLocaleDateString(language === "en" ? "en-US" : "vi-VN", {
       day: "numeric",
       month: "long",
       year: "numeric",
@@ -111,6 +107,7 @@ function getUpcomingSuggestions(events: EventSummary[], keyword: string) {
 
 const Navbar = () => {
   const { keycloak, initialized } = useKeycloak();
+  const { i18n, t } = useTranslation();
   const location = useLocation();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
@@ -134,6 +131,14 @@ const Navbar = () => {
     hasRealmRole(keycloak?.tokenParsed, "adim") ||
     hasRealmRole(keycloak?.tokenParsed, "organizer");
   const isOrganizerWorkspace = isOrganizer && location.pathname.startsWith("/organizer");
+  const quickPrompts = useMemo(
+    () => [
+      t("nav.chatbotPromptMusic"),
+      t("nav.chatbotPromptWeekend"),
+      t("nav.chatbotPromptSport"),
+    ],
+    [t],
+  );
 
   const accountName = (
     profile?.displayName ||
@@ -163,10 +168,10 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     const confirmed = await confirmDestructiveAction({
-      title: "Đăng xuất khỏi phiên hiện tại?",
-      text: "Bạn sẽ cần đăng nhập lại để tiếp tục mua vé hoặc xem thông tin tài khoản.",
-      confirmButtonText: "Đăng xuất",
-      cancelButtonText: "Ở lại",
+      title: t("swal.logoutTitle"),
+      text: t("swal.logoutText"),
+      confirmButtonText: t("swal.logoutConfirm"),
+      cancelButtonText: t("swal.logoutCancel"),
     });
     if (!confirmed) return;
 
@@ -198,9 +203,9 @@ const Navbar = () => {
     const shouldNotify = sessionStorage.getItem(LOGIN_TOAST_KEY) === "1";
     if (!shouldNotify) return;
 
-    toast.success("Đăng nhập thành công");
+    toast.success(t("auth.loginSuccess"));
     sessionStorage.removeItem(LOGIN_TOAST_KEY);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, t]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -305,11 +310,11 @@ const Navbar = () => {
               name="search"
               type="text"
               className="search-input"
-              placeholder="Search..."
+              placeholder={t("nav.searchPlaceholder")}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
-            <button type="submit" className="search-submit" aria-label="Search">
+            <button type="submit" className="search-submit" aria-label={t("common.search")}>
               <Search className="search-icon" size={18} />
             </button>
 
@@ -328,14 +333,14 @@ const Navbar = () => {
                       />
                       <span className="search-suggestion-copy">
                         <strong>{event.title}</strong>
-                        <small>{formatSuggestionDate(event)}</small>
+                        <small>{formatSuggestionDate(event, i18n.resolvedLanguage || "vi", t("common.updating"))}</small>
                       </span>
                     </Link>
                     <Link
                       to={`/event/${event.slug || event.id}`}
                       className="search-suggestion-view"
                     >
-                      View
+                      {t("common.view")}
                     </Link>
                   </div>
                 ))}
@@ -344,7 +349,7 @@ const Navbar = () => {
                   to={`/search?search=${encodeURIComponent(searchTerm.trim())}`}
                   className="search-suggestion-more"
                 >
-                  Xem thêm sự kiện
+                  {t("nav.searchMoreEvents")}
                 </Link>
               </div>
             ) : null}
@@ -352,7 +357,7 @@ const Navbar = () => {
 
           <div className="nav-prompt-dropdown">
             <button type="button" className="nav-prompt-trigger">
-              <span>{defaultQuickPrompt}</span>
+              <span>{t("nav.chatbotPrompt")}</span>
               <ChevronDown size={15} />
             </button>
             <div className="nav-prompt-menu">
@@ -382,8 +387,8 @@ const Navbar = () => {
           >
             <HiTicket size={20} />
             <span>
-              <strong>Tickets</strong>
-              <small>My Tickets</small>
+              <strong>{t("nav.tickets")}</strong>
+              <small>{t("nav.myTickets")}</small>
             </span>
           </Link>
 
@@ -398,8 +403,8 @@ const Navbar = () => {
           >
             <RiShoppingBag3Fill size={20} />
             <span>
-              <strong>Orders</strong>
-              <small>History</small>
+              <strong>{t("nav.orders")}</strong>
+              <small>{t("nav.history")}</small>
             </span>
           </Link>
 
@@ -416,8 +421,8 @@ const Navbar = () => {
               >
                 <RiAccountCircleFill size={20} />
                 <span>
-                  <strong>Sign In</strong>
-                  <small>Account</small>
+                  <strong>{t("auth.signIn")}</strong>
+                  <small>{t("auth.account")}</small>
                 </span>
               </button>
             </>
@@ -437,46 +442,46 @@ const Navbar = () => {
               <div className="dropdown-menu">
                 <Link to="/profile" className="dropdown-item">
                   <UserRound size={17} />
-                  Hồ sơ cá nhân
+                  {t("nav.personalProfile")}
                 </Link>
                 {!isOrganizerWorkspace ? (
                   <>
                     <Link to="/my-tickets" className="dropdown-item">
                       <HiTicket size={17} />
-                      Vé của tôi
+                      {t("nav.myTickets")}
                     </Link>
                     <Link to="/my-orders" className="dropdown-item">
                       <ShoppingBag size={17} />
-                      Đơn hàng của tôi
+                      {t("nav.myOrders")}
                     </Link>
                   </>
                 ) : null}
                 {isOrganizer ? (
                   <Link to="/organizer" className="dropdown-item">
                     <LayoutDashboard size={17} />
-                    Quản lý sự kiện
+                    {t("nav.organizerWorkspace")}
                   </Link>
                 ) : hasOrganizerApplication ? (
                   <div className="dropdown-item dropdown-item-muted">
                     <Clock3 size={17} />
-                    Hồ sơ organizer đang chờ duyệt
+                    {t("nav.organizerPending")}
                   </div>
                 ) : (
                   <Link to="/organizers/apply" className="dropdown-item">
                     <UserPlus size={17} />
-                    Đăng ký nhà tổ chức
+                    {t("nav.organizerApply")}
                   </Link>
                 )}
                 {isAdmin ? (
                   <Link to="/admin/organizers" className="dropdown-item">
                     <LayoutDashboard size={17} />
-                    Duyệt hồ sơ organizer
+                    {t("nav.adminOrganizerReview")}
                   </Link>
                 ) : null}
                 {canEditHomePage ? (
                   <Link to="/?editHome=1" className="dropdown-item">
                     <Home size={17} />
-                    Sửa giao diện trang chủ
+                    {t("nav.editHome")}
                   </Link>
                 ) : null}
                 <hr />
@@ -485,11 +490,12 @@ const Navbar = () => {
                   className="dropdown-item logout w-full text-left"
                 >
                   <LogOut size={17} />
-                  Đăng xuất
+                  {t("organizer.logout")}
                 </button>
               </div>
             </div>
           )}
+          <LanguageSwitcher className="language-switcher-nav" />
         </div>
       </div>
     </nav>
@@ -510,7 +516,7 @@ const Navbar = () => {
             <button
               type="button"
               className="auth-popup-close"
-              aria-label="Close sign in popup"
+              aria-label={t("common.close")}
               onClick={() => setShowAuthPopup(false)}
             >
               <X size={18} />
@@ -518,8 +524,8 @@ const Navbar = () => {
             <div className="auth-popup-user-icon" aria-hidden="true">
               <UserRound size={32} />
             </div>
-            <h2 id="auth-popup-title">Welcome back</h2>
-            <p>Sign in to continue booking tickets and manage your orders</p>
+            <h2 id="auth-popup-title">{t("auth.welcomeBack")}</h2>
+            <p>{t("auth.signInPrompt")}</p>
           </div>
 
           <div className="auth-popup-body">
@@ -529,7 +535,7 @@ const Navbar = () => {
               onClick={handleLogin}
             >
               <LogIn size={18} />
-              Sign in
+              {t("auth.signIn")}
             </button>
             <button
               type="button"
@@ -537,7 +543,7 @@ const Navbar = () => {
               onClick={handleRegister}
             >
               <UserPlus size={18} />
-              Create account
+              {t("auth.createAccount")}
             </button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { categoryService } from "../../services/categoryService";
 import { Category } from "../../types/api";
 
@@ -16,6 +17,7 @@ type AccountCategoryNavProps = {
 export default function AccountCategoryNav({
   items,
 }: AccountCategoryNavProps = {}) {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<Category[]>([]);
   const shouldUseCustomItems = Array.isArray(items) && items.length > 0;
 
@@ -72,7 +74,7 @@ export default function AccountCategoryNav({
             <>
               <li className="category-item">
                 <Link to="/search" className="category-link">
-                  Tất cả
+                  {t("common.all")}
                 </Link>
               </li>
               {categories.map((category) => (

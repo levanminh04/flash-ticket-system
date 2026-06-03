@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Building2, CircleAlert, UsersRound } from "lucide-react";
 import { BsFillBuildingsFill } from "react-icons/bs";
 import { FaMapSigns } from "react-icons/fa";
+import { useTranslation } from "react-i18next";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import { venueService } from "../../services/venueService";
 import { Venue } from "../../types/api";
@@ -11,10 +12,12 @@ const fallbackImage =
   "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80";
 
 export default function VenuesPage() {
+  const { i18n, t } = useTranslation();
   const { data, isLoading, isError, error } = useQuery<Venue[], Error>({
     queryKey: ["venues"],
     queryFn: venueService.getVenues,
   });
+  const language = i18n.resolvedLanguage || "vi";
 
   const venues = data ?? [];
 
@@ -28,33 +31,33 @@ export default function VenuesPage() {
 
   return (
     <OrganizerLayout
-      title="Địa điểm"
-      description="Theo dõi danh sách địa điểm và sức chứa."
+      title={t("venues.title")}
+      description={t("venues.description")}
       requireOrganizer={false}
     >
       <section className="organizer-events-stat-grid">
         <article className="organizer-events-stat-card">
           <BsFillBuildingsFill className="organizer-events-stat-icon-total" size={30} />
           <div className="organizer-events-stat-copy">
-            <span>Tổng venue</span>
-            <strong>{venues.length.toLocaleString("vi-VN")}</strong>
+            <span>{t("venues.totalVenue")}</span>
+            <strong>{venues.length.toLocaleString(language === "en" ? "en-US" : "vi-VN")}</strong>
           </div>
         </article>
         <article className="organizer-events-stat-card">
           <FaMapSigns className="organizer-events-stat-icon-published" size={30} />
           <div className="organizer-events-stat-copy">
-            <span>Thành phố</span>
-            <strong>{uniqueCities.length.toLocaleString("vi-VN")}</strong>
+            <span>{t("venues.city")}</span>
+            <strong>{uniqueCities.length.toLocaleString(language === "en" ? "en-US" : "vi-VN")}</strong>
           </div>
         </article>
         <article className="organizer-events-stat-card">
           <UsersRound className="organizer-events-stat-icon-tickets" size={30} />
           <div className="organizer-events-stat-copy">
-            <span>Tổng sức chứa</span>
+            <span>{t("venues.totalCapacity")}</span>
             <strong>
               {venues
                 .reduce((sum, venue) => sum + Number(venue.totalCapacity ?? 0), 0)
-                .toLocaleString("vi-VN")}
+                .toLocaleString(language === "en" ? "en-US" : "vi-VN")}
             </strong>
           </div>
         </article>
@@ -64,17 +67,17 @@ export default function VenuesPage() {
         {isLoading ? (
           <div className="organizer-empty-state">
             <div className="loading-spinner" />
-            <p>Đang tải danh sách địa điểm.</p>
+            <p>{t("venues.loading")}</p>
           </div>
         ) : isError ? (
           <div className="organizer-empty-state organizer-empty-state-error">
             <CircleAlert size={32} />
-            <p>{error?.message || "Yêu cầu GET /api/venues không thành công."}</p>
+            <p>{error?.message || t("venues.loadFailed")}</p>
           </div>
         ) : venues.length === 0 ? (
           <div className="organizer-empty-state">
             <Building2 size={32} />
-            <p>Chưa có địa điểm nào.</p>
+            <p>{t("venues.empty")}</p>
           </div>
         ) : (
           <div className="organizer-media-table-wrap organizer-event-table-wrap organizer-venues-table-wrap">
@@ -82,12 +85,12 @@ export default function VenuesPage() {
               <thead>
                 <tr>
                   <th>STT</th>
-                  <th>Ảnh</th>
-                  <th>Tên địa điểm</th>
-                  <th>Thành phố</th>
-                  <th>Địa chỉ</th>
-                  <th>Sức chứa</th>
-                  <th>Tiện ích</th>
+                  <th>{t("venues.image")}</th>
+                  <th>{t("venues.name")}</th>
+                  <th>{t("venues.city")}</th>
+                  <th>{t("venues.address")}</th>
+                  <th>{t("venues.capacity")}</th>
+                  <th>{t("venues.facilities")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,21 +112,21 @@ export default function VenuesPage() {
                         {venue.name}
                         {venue.slug ? <small>/{venue.slug}</small> : null}
                       </td>
-                      <td>{venue.city || "Chưa cập nhật"}</td>
+                      <td>{venue.city || t("venues.missing")}</td>
                       <td className="organizer-event-location-cell" title={fullAddress}>
                         <span className="venues-admin-address">
-                          {fullAddress || "Chưa cập nhật địa chỉ"}
+                          {fullAddress || t("venues.missingAddress")}
                         </span>
                       </td>
                       <td>
                         {venue.totalCapacity
-                          ? `${venue.totalCapacity.toLocaleString("vi-VN")} chỗ`
-                          : "Chưa cập nhật"}
+                          ? `${venue.totalCapacity.toLocaleString(language === "en" ? "en-US" : "vi-VN")} ${t("venues.capacityUnit")}`
+                          : t("venues.missing")}
                       </td>
                       <td className="organizer-event-ticket-types-cell">
                         {venue.facilities && venue.facilities.length > 0
                           ? venue.facilities.join(", ")
-                          : "Chưa cấu hình"}
+                          : t("venues.configuredMissing")}
                       </td>
                     </tr>
                   );

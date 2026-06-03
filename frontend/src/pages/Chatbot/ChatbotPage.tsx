@@ -1,7 +1,8 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Bot, LoaderCircle, SendHorizontal, Sparkles, User } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import AccountCategoryNav from "../../components/common/AccountCategoryNav";
 import AccountSidebar from "../../components/account/AccountSidebar";
 import { chatService } from "../../services/chatService";
@@ -19,13 +20,6 @@ type ChatMessage = {
   discovery?: DiscoverySearchResponse | null;
 };
 
-const starterPrompts = [
-  "Gợi ý sự kiện nhạc rock cuối tuần tại TP.HCM",
-  "Tư vấn chọn vé phù hợp cho nhóm 4 người",
-  "Cho mình biết cách hoàn vé khi không tham gia được",
-  "Concert ngoài trời ở HCM cuối tuần",
-];
-
 function generateSessionId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -33,33 +27,175 @@ function generateSessionId() {
   return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function buildDiscoverySummary(discovery: DiscoverySearchResponse | null) {
+function buildDiscoverySummary(
+  discovery: DiscoverySearchResponse | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (!discovery) {
     return "";
   }
 
   if (discovery.resultCount <= 0) {
-    return "Discovery không tìm thấy sự kiện phù hợp với yêu cầu này.";
+    return t("chatbot.discoveryEmpty");
   }
 
-  return `Discovery tìm thấy ${discovery.resultCount} kết quả liên quan.`;
+  return t("chatbot.discoveryFound", { count: discovery.resultCount });
+}
+
+function renderInlineText(text: string) {
+  const parts: ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*)/g;
+  let lastIndex = 0;
+
+  text.replace(pattern, (match, _group, index) => {
+    if (index > lastIndex) {
+      parts.push(text.slice(lastIndex, index));
+    }
+
+    parts.push(<strong key={`${match}-${index}`}>{match.slice(2, -2)}</strong>);
+    lastIndex = index + match.length;
+    return match;
+  });
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
+function ChatMessageText({ text }: { text: string }) {
+  const lines = text
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const blocks: ReactNode[] = [];
+  let listItems: string[] = [];
+  let orderedItems: string[] = [];
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      blocks.push(
+        <ul key={`ul-${blocks.length}`}>
+          {listItems.map((item, index) => (
+            <li key={`${item}-${index}`}>{renderInlineText(item)}</li>
+          ))}
+        </ul>,
+      );
+      listItems = [];
+    }
+
+    if (orderedItems.length > 0) {
+      blocks.push(
+        <ol key={`ol-${blocks.length}`}>
+          {orderedItems.map((item, index) => (
+            <li key={`${item}-${index}`}>{renderInlineText(item)}</li>
+          ))}
+        </ol>,
+      );
+      orderedItems = [];
+    }
+  };
+
+  lines.forEach((line, index) => {
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+
+    if (bullet) {
+      if (orderedItems.length > 0) {
+        flushList();
+      }
+      listItems.push(bullet[1]);
+      return;
+    }
+
+    if (ordered) {
+      if (listItems.length > 0) {
+        flushList();
+      }
+      orderedItems.push(ordered[1]);
+      return;
+    }
+
+    flushList();
+    blocks.push(
+      <p key={`p-${index}`}>
+        {renderInlineText(line)}
+      </p>,
+    );
+  });
+
+  flushList();
+
+  return <>{blocks.map((block, index) => <Fragment key={index}>{block}</Fragment>)}</>;
 }
 
 export default function ChatbotPage() {
+  const { t } = useTranslation();
   const { keycloak } = useKeycloak();
+  const navigate = useNavigate();
+  const pageContentRef = useRef<HTMLDivElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
   const [sessionId] = useState(generateSessionId);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "assistant",
-      text: "Xin chào, mình là trợ lý FlashTicket. Bạn cần tìm sự kiện, chọn vé hay hỗ trợ đơn hàng?",
+      text: t("chatbot.welcomeFullPage"),
     },
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [lastStrategy, setLastStrategy] = useState<string | null>(null);
 
+  const starterPrompts = useMemo(
+    () => [
+      t("chatbot.starterRock"),
+      t("chatbot.starterGroup"),
+      t("chatbot.starterRefund"),
+      t("chatbot.starterOutdoor"),
+    ],
+    [t],
+  );
+
   const canSend = useMemo(() => input.trim().length > 0 && !sending, [input, sending]);
+
+  useEffect(() => {
+    const messagesElement = messagesRef.current;
+    if (!messagesElement) return;
+
+    requestAnimationFrame(() => {
+      messagesElement.scrollTo({
+        top: messagesElement.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+  }, [messages, sending]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const contentElement = pageContentRef.current;
+      if (!contentElement || contentElement.contains(event.target as Node)) {
+        return;
+      }
+
+      if (window.history.state?.idx > 0) {
+        navigate(-1);
+        return;
+      }
+
+      navigate("/");
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [navigate]);
 
   const submitMessage = async (messageText: string) => {
     const trimmed = messageText.trim();
@@ -89,7 +225,7 @@ export default function ChatbotPage() {
 
       const chatResponse =
         chatResult.status === "fulfilled" ? chatResult.value : null;
-      const discoverySummary = buildDiscoverySummary(discovery);
+      const discoverySummary = buildDiscoverySummary(discovery, t);
 
       setMessages((current) => [
         ...current,
@@ -99,7 +235,7 @@ export default function ChatbotPage() {
           text:
             chatResponse?.message ||
             discoverySummary ||
-            "Mình chưa có phản hồi phù hợp.",
+            t("chatbot.fallbackMessage"),
           mood: chatResponse?.mood,
           discovery,
         },
@@ -111,7 +247,7 @@ export default function ChatbotPage() {
         {
           id: `a-${Date.now()}`,
           role: "assistant",
-          text: "Hiện tại hệ thống chat đang bận. Bạn vui lòng thử lại sau ít phút.",
+          text: t("chatbot.fullPageBusy"),
         },
       ]);
     } finally {
@@ -133,9 +269,9 @@ export default function ChatbotPage() {
           <section className="account-main-content">
             <div className="list-empty">
               <Bot size={44} />
-              <p>Vui lòng đăng nhập để sử dụng chatbot hỗ trợ đặt vé.</p>
+              <p>{t("chatbot.fullPageLoginRequired")}</p>
               <button className="btn btn-primary" onClick={() => keycloak.login()}>
-                Đăng nhập
+                {t("auth.signIn")}
               </button>
             </div>
           </section>
@@ -151,10 +287,11 @@ export default function ChatbotPage() {
         <AccountSidebar />
 
         <section className="account-main-content">
+          <div ref={pageContentRef}>
           <div className="chatbot-header-card">
             <div>
-              <h1 className="page-title">Chatbot hỗ trợ</h1>
-              <p>Tra cứu sự kiện, tư vấn vé và hỗ trợ đơn hàng ngay trong cuộc trò chuyện.</p>
+              <h1 className="page-title">{t("chatbot.fullPageTitle")}</h1>
+              <p>{t("chatbot.fullPageIntro")}</p>
             </div>
             {lastStrategy ? (
               <span className="chatbot-strategy-badge">
@@ -165,18 +302,20 @@ export default function ChatbotPage() {
           </div>
 
           <div className="chatbot-shell">
-            <div className="chatbot-messages">
+            <div className="chatbot-messages" ref={messagesRef}>
               {messages.map((message) => (
                 <article key={message.id} className={`chat-msg chat-msg--${message.role}`}>
                   <div className="chat-msg-icon">
                     {message.role === "assistant" ? <Bot size={15} /> : <User size={15} />}
                   </div>
                   <div className="chat-msg-bubble">
-                    <p>{message.text}</p>
+                    <div className="chat-msg-text">
+                      <ChatMessageText text={message.text} />
+                    </div>
                     {message.discovery && message.discovery.resultCount > 0 ? (
                       <div className="chat-msg-meta">
                         <span>
-                          Discovery: {message.discovery.resultCount} kết quả
+                          Discovery: {message.discovery.resultCount} {t("blog.titleHighlight").toLowerCase()}
                           {message.discovery.strategy ? ` - ${message.discovery.strategy}` : ""}
                         </span>
                         {message.discovery.results.slice(0, 3).map((result, index) => (
@@ -184,7 +323,7 @@ export default function ChatbotPage() {
                             key={`${result.eventId || index}-${index}`}
                             to={result.eventId ? `/event/${result.eventId}` : "/search"}
                           >
-                            {result.text || `Kết quả ${index + 1}`}
+                            {result.text || t("chatbot.result", { index: index + 1 })}
                           </Link>
                         ))}
                       </div>
@@ -203,7 +342,7 @@ export default function ChatbotPage() {
                   <div className="chat-msg-bubble">
                     <span className="chatbot-typing">
                       <LoaderCircle size={14} className="spin" />
-                      Đang phản hồi...
+                      {t("chatbot.replying")}
                     </span>
                   </div>
                 </div>
@@ -228,19 +367,20 @@ export default function ChatbotPage() {
               <input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder="Nhập nội dung cần hỗ trợ..."
+                placeholder={t("chatbot.fullPagePlaceholder")}
                 maxLength={2000}
               />
               <button type="submit" className="btn btn-primary" disabled={!canSend}>
                 {sending ? <LoaderCircle size={16} className="spin" /> : <SendHorizontal size={16} />}
-                Gửi
+                {t("chatbot.send")}
               </button>
             </form>
           </div>
 
           <p className="chatbot-note">
-            Cần xem sự kiện ngay? <Link to="/search">Đi tới trang tìm kiếm</Link>.
+            {t("chatbot.fullPageSearchHint")} <Link to="/search">{t("chatbot.fullPageSearchLink")}</Link>.
           </p>
+          </div>
         </section>
       </div>
     </div>

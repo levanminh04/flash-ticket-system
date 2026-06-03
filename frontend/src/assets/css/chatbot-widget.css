@@ -116,6 +116,43 @@
   line-height: 1.45;
 }
 
+.floating-msg-text {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.floating-msg-text p {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: inherit;
+}
+
+.floating-msg-text p + p {
+  margin-top: 6px;
+}
+
+.floating-msg-text ul,
+.floating-msg-text ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.floating-msg-text li + li {
+  margin-top: 3px;
+}
+
+.floating-msg-text strong {
+  font-weight: 800;
+}
+
 .floating-msg--user {
   justify-content: flex-end;
 }
@@ -127,6 +164,16 @@
 .floating-msg--user p {
   background: rgba(45, 194, 117, 0.14);
   border-color: rgba(45, 194, 117, 0.32);
+}
+
+.floating-msg--user .floating-msg-text {
+  background: rgba(45, 194, 117, 0.14);
+  border-color: rgba(45, 194, 117, 0.32);
+}
+
+.floating-msg--user .floating-msg-text p {
+  background: transparent;
+  border-color: transparent;
 }
 
 .floating-msg-icon {
@@ -374,6 +421,27 @@
 .chat-msg-bubble p {
   margin: 0;
   line-height: 1.55;
+}
+
+.chat-msg-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  line-height: 1.55;
+}
+
+.chat-msg-text ul,
+.chat-msg-text ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.chat-msg-text li + li {
+  margin-top: 4px;
+}
+
+.chat-msg-text strong {
+  font-weight: 800;
 }
 
 .chat-msg-meta {

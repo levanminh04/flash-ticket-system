@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import Lightbox from "yet-another-react-lightbox";
@@ -16,6 +17,10 @@ import {
   OrganizerLayoutPayload,
 } from "../../services/organizerWorkspaceService";
 import { useOrganizerGate } from "./useOrganizerGate";
+import {
+  dispatchOrganizerWorkflowDirty,
+  dispatchOrganizerWorkflowSaveResult,
+} from "./organizerWorkflowEvents";
 
 type LayoutFormState = {
   name: string;
@@ -61,7 +66,7 @@ function buildFormState(layout: OrganizerEventLayout): LayoutFormState {
 function buildFormStateFromSeatMapImage(image: OrganizerEventImage): LayoutFormState {
   return {
     ...defaultFormState,
-    name: "Sơ đồ ghế",
+    name: "Seat map",
     backgroundImageUrl: image.imageUrl || "",
     backgroundPublicId: image.publicId || "",
     backgroundWidth: String(image.width ?? ""),
@@ -119,9 +124,39 @@ function toPayload(formState: LayoutFormState): OrganizerLayoutPayload | null {
   }
 }
 
+function validateLayoutForm(formState: LayoutFormState, t: (key: string) => string) {
+  const name = formState.name.trim();
+  const backgroundImageUrl = formState.backgroundImageUrl.trim();
+  const backgroundPublicId = formState.backgroundPublicId.trim();
+  const width = Number(formState.backgroundWidth);
+  const height = Number(formState.backgroundHeight);
+
+  if (!name) {
+    return t("organizerLayout.nameRequired");
+  }
+  if (name.length > 120) {
+    return t("organizerLayout.nameTooLong");
+  }
+  if (!backgroundImageUrl) {
+    return t("organizerLayout.backgroundUrlRequired");
+  }
+  if (!backgroundPublicId) {
+    return t("organizerLayout.backgroundPublicIdRequired");
+  }
+  if (!formState.backgroundWidth || !Number.isFinite(width) || width <= 0) {
+    return t("organizerLayout.widthInvalid");
+  }
+  if (!formState.backgroundHeight || !Number.isFinite(height) || height <= 0) {
+    return t("organizerLayout.heightInvalid");
+  }
+
+  return null;
+}
+
 export default function OrganizerLayoutPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const { ready } = useOrganizerGate();
+  const { t } = useTranslation();
   const [layout, setLayout] = useState<OrganizerEventLayout | null>(null);
   const [formState, setFormState] = useState<LayoutFormState>(defaultFormState);
   const [loading, setLoading] = useState(true);
@@ -167,10 +202,13 @@ export default function OrganizerLayoutPage() {
                 ? buildFormStateFromSeatMapImage(seatMapImage)
                 : defaultFormState,
           );
+          if (nextLayout) {
+            dispatchOrganizerWorkflowSaveResult(true);
+          }
         }
       } catch {
         if (!cancelled) {
-          toast.error("Không thể tải layout của sự kiện.");
+          toast.error(t("organizerLayout.loadFailed"));
         }
       } finally {
         if (!cancelled) {
@@ -184,12 +222,13 @@ export default function OrganizerLayoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [eventId, ready]);
+  }, [eventId, ready, t]);
 
   const handleChange = <K extends keyof LayoutFormState>(
     key: K,
     value: LayoutFormState[K],
   ) => {
+    dispatchOrganizerWorkflowDirty();
     setFormState((current) => ({
       ...current,
       [key]: value,
@@ -200,9 +239,15 @@ export default function OrganizerLayoutPage() {
     submitEvent.preventDefault();
     if (!eventId || saving) return;
 
+    const validationMessage = validateLayoutForm(formState, t);
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
     const payload = toPayload(formState);
     if (!payload) {
-      toast.error("Map config hoặc Source ID chưa hợp lệ");
+      toast.error(t("organizerLayout.invalidMapConfig"));
       return;
     }
 
@@ -214,13 +259,15 @@ export default function OrganizerLayoutPage() {
 
       setLayout(nextLayout);
       setFormState(buildFormState(nextLayout));
-      toast.success(layout ? "Cập nhật layout thành công." : "Tạo layout thành công.");
+      dispatchOrganizerWorkflowSaveResult(true);
+      toast.success(layout ? t("organizerLayout.updateSuccess") : t("organizerLayout.createSuccess"));
     } catch (error) {
+      dispatchOrganizerWorkflowSaveResult(false);
       const message = getRequestErrorMessage(error);
       toast.error(
         layout
-          ? `Không thể cập nhật layout. ${message}`
-          : `Không thể tạo layout. ${message}`,
+          ? t("organizerLayout.updateFailed", { message })
+          : t("organizerLayout.createFailed", { message }),
       );
     } finally {
       setSaving(false);
@@ -242,10 +289,10 @@ export default function OrganizerLayoutPage() {
     if (!eventId || !layout) return;
 
     const confirmed = await confirmDestructiveAction({
-      title: "Xóa layout của sự kiện?",
-      text: "Layout hiện tại sẽ bị gỡ khỏi event. Dữ liệu seat-map liên quan có thể bị ảnh hưởng khi organizer tiếp tục cấu hình.",
-      confirmButtonText: "Xóa layout",
-      cancelButtonText: "Giữ lại",
+      title: t("organizerLayout.deleteTitle"),
+      text: t("organizerLayout.deleteText"),
+      confirmButtonText: t("organizerLayout.deleteConfirm"),
+      cancelButtonText: t("organizer.deleteEventKeep"),
     });
 
     if (!confirmed) return;
@@ -255,9 +302,9 @@ export default function OrganizerLayoutPage() {
       await organizerWorkspaceService.deleteLayout(eventId);
       setLayout(null);
       setFormState(defaultFormState);
-      toast.success("Đã xóa layout.");
+      toast.success(t("organizerLayout.deleteSuccess"));
     } catch {
-      toast.error("Không thể xóa layout.");
+      toast.error(t("organizerLayout.deleteFailed"));
     } finally {
       setDeleting(false);
     }
@@ -265,8 +312,8 @@ export default function OrganizerLayoutPage() {
 
   return (
     <OrganizerLayout
-      title="Quản lý layout"
-      description="Thiết lập sơ đồ và ảnh nền."
+      title={t("organizerLayout.title")}
+      description={t("organizerLayout.description")}
       actions={null}
       hideTopBar
       showWorkflowNav={Boolean(eventId)}
@@ -277,7 +324,7 @@ export default function OrganizerLayoutPage() {
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải layout sự kiện...</p>
+          <p>{t("organizerLayout.loading")}</p>
         </section>
       ) : (
         <section className="organizer-grid organizer-layout-editor-single">
@@ -285,13 +332,13 @@ export default function OrganizerLayoutPage() {
             <div className="organizer-form-grid">
               <label className="organizer-field organizer-form-span-2">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Tên layout
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("organizerLayout.name")}
                 </span>
                 <input
                   className="organizer-input"
                   value={formState.name}
                   onChange={(event) => handleChange("name", event.target.value)}
-                  placeholder="Nhập tên layout"
+                  placeholder={t("organizerLayout.namePlaceholder")}
                 />
               </label>
 
@@ -305,8 +352,8 @@ export default function OrganizerLayoutPage() {
                       type="button"
                       className="organizer-layout-url-preview-button"
                       onClick={() => setBackgroundLightboxOpen(true)}
-                      aria-label="Xem ảnh nền ở kích thước lớn"
-                      title="Xem ảnh nền"
+                      aria-label={t("organizerLayout.viewBackgroundLarge")}
+                      title={t("organizerLayout.viewBackground")}
                     >
                       <img
                         src={formState.backgroundImageUrl}
@@ -320,7 +367,7 @@ export default function OrganizerLayoutPage() {
                     className="organizer-input"
                     value={formState.backgroundImageUrl}
                     onChange={(event) => handleChange("backgroundImageUrl", event.target.value)}
-                    placeholder="Dán URL ảnh seat map hoặc nền sơ đồ"
+                    placeholder={t("organizerLayout.backgroundUrlPlaceholder")}
                   />
                 </div>
               </label>
@@ -333,7 +380,7 @@ export default function OrganizerLayoutPage() {
                   className="organizer-input"
                   value={formState.backgroundPublicId}
                   onChange={(event) => handleChange("backgroundPublicId", event.target.value)}
-                  placeholder="Nhập public ID của ảnh"
+                  placeholder={t("organizerLayout.publicIdPlaceholder")}
                 />
               </label>
               <label className="organizer-field">
@@ -359,10 +406,11 @@ export default function OrganizerLayoutPage() {
                 </span>
                 <input
                   type="number"
+                  min={1}
                   className="organizer-input"
                   value={formState.backgroundWidth}
                   onChange={(event) => handleChange("backgroundWidth", event.target.value)}
-                  placeholder="Nhập width của ảnh"
+                  placeholder={t("organizerLayout.widthPlaceholder")}
                 />
               </label>
 
@@ -372,10 +420,11 @@ export default function OrganizerLayoutPage() {
                 </span>
                 <input
                   type="number"
+                  min={1}
                   className="organizer-input"
                   value={formState.backgroundHeight}
                   onChange={(event) => handleChange("backgroundHeight", event.target.value)}
-                  placeholder="Nhập height của ảnh"
+                  placeholder={t("organizerLayout.heightPlaceholder")}
                 />
               </label>
 
@@ -385,7 +434,7 @@ export default function OrganizerLayoutPage() {
                   className="organizer-input"
                   value={formState.sourceId}
                   onChange={(event) => handleChange("sourceId", event.target.value)}
-                  placeholder="Nhập source ID"
+                  placeholder={t("organizerLayout.sourceIdPlaceholder")}
                 />
               </label>
 
@@ -395,7 +444,7 @@ export default function OrganizerLayoutPage() {
                   className="organizer-input organizer-textarea organizer-textarea-code"
                   value={formState.mapConfigText}
                   onChange={(event) => handleChange("mapConfigText", event.target.value)}
-                  placeholder="Nhập map config JSON"
+                  placeholder={t("organizerLayout.mapConfigPlaceholder")}
                 />
               </label>
             </div>
@@ -407,7 +456,7 @@ export default function OrganizerLayoutPage() {
                   onClick={handleDelete}
                   disabled={deleting}
                 >
-                  {deleting ? "Đang xóa" : "Xóa layout"}
+                  {deleting ? t("organizer.deletingEvent") : t("organizerLayout.deleteConfirm")}
                 </button>
               </div>
             ) : null}

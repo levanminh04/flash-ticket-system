@@ -1,25 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useKeycloak } from "@react-keycloak/web";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CheckCircle2, LoaderCircle, ShieldAlert, XCircle } from "lucide-react";
 import { toast } from "react-toastify";
 import Swal from "sweetalert2";
+import { useTranslation } from "react-i18next";
 import { hasRealmRole } from "../../lib/auth";
 import { OrganizerProfile, organizerService } from "../../services/organizerService";
 
 const statusOptions = ["PENDING", "ACTIVE", "REJECTED", "SUSPENDED"];
-const statusLabels: Record<string, string> = {
-  PENDING: "Chờ duyệt",
-  ACTIVE: "Đã duyệt",
-  REJECTED: "Đã từ chối",
-  SUSPENDED: "Tạm khóa",
-};
 
 export default function AdminOrganizerReviewPage() {
+  const { t } = useTranslation();
   const { keycloak, initialized } = useKeycloak();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("PENDING");
   const isAdmin = hasRealmRole(keycloak.tokenParsed, "ADMIN");
+
+  const statusLabels = useMemo<Record<string, string>>(
+    () => ({
+      PENDING: t("adminOrganizer.statusPending"),
+      ACTIVE: t("adminOrganizer.statusActive"),
+      REJECTED: t("adminOrganizer.statusRejected"),
+      SUSPENDED: t("adminOrganizer.statusSuspended"),
+    }),
+    [t],
+  );
 
   const organizersQuery = useQuery({
     queryKey: ["admin-organizers", status],
@@ -42,28 +48,28 @@ export default function AdminOrganizerReviewPage() {
         rejectionReason: rejectionReason?.trim() || null,
       }),
     onSuccess: () => {
-      toast.success("Đã cập nhật trạng thái hồ sơ organizer.");
+      toast.success(t("adminOrganizer.updateSuccess"));
       void queryClient.invalidateQueries({ queryKey: ["admin-organizers"] });
     },
     onError: () => {
-      toast.error("Không thể cập nhật hồ sơ organizer.");
+      toast.error(t("adminOrganizer.updateFailed"));
     },
   });
 
   const rejectOrganizer = async (profile: OrganizerProfile) => {
     const { value: rejectionReason } = await Swal.fire({
-      title: "Từ chối hồ sơ",
+      title: t("adminOrganizer.rejectTitle"),
       input: "textarea",
-      inputLabel: "Lý do từ chối",
-      inputPlaceholder: "Nhập lý do từ chối tại đây...",
+      inputLabel: t("adminOrganizer.rejectReason"),
+      inputPlaceholder: t("adminOrganizer.rejectPlaceholder"),
       showCancelButton: true,
-      confirmButtonText: "Xác nhận từ chối",
-      cancelButtonText: "Hủy",
+      confirmButtonText: t("adminOrganizer.rejectConfirm"),
+      cancelButtonText: t("adminOrganizer.rejectCancel"),
       confirmButtonColor: "#ef4444",
       cancelButtonColor: "#94a3b8",
       inputValidator: (value) => {
         if (!value || !value.trim()) {
-          return "Bạn cần nhập lý do từ chối!";
+          return t("adminOrganizer.rejectRequired");
         }
         return null;
       },
@@ -83,8 +89,8 @@ export default function AdminOrganizerReviewPage() {
       <main className="admin-organizer-page">
         <section className="admin-organizer-state">
           <ShieldAlert size={42} />
-          <h1>Không có quyền truy cập</h1>
-          <p>Chỉ tài khoản admin mới được duyệt hồ sơ nhà tổ chức.</p>
+          <h1>{t("adminOrganizer.noAccessTitle")}</h1>
+          <p>{t("adminOrganizer.noAccessDescription")}</p>
         </section>
       </main>
     );
@@ -95,12 +101,12 @@ export default function AdminOrganizerReviewPage() {
       <section className="container admin-organizer-wrap">
         <div className="admin-organizer-header">
           <div>
-            <h1>Duyệt đăng ký organizer</h1>
-            <p>Kiểm tra hồ sơ buyer gửi lên và approve hoặc reject quyền organizer.</p>
+            <h1>{t("adminOrganizer.headerTitle")}</h1>
+            <p>{t("adminOrganizer.headerDescription")}</p>
           </div>
 
           <label>
-            <span>Trạng thái</span>
+            <span>{t("adminOrganizer.status")}</span>
             <select value={status} onChange={(event) => setStatus(event.target.value)}>
               {statusOptions.map((option) => (
                 <option key={option} value={option}>
@@ -114,19 +120,19 @@ export default function AdminOrganizerReviewPage() {
         {organizersQuery.isLoading ? (
           <div className="admin-organizer-loading">
             <LoaderCircle size={20} className="spin" />
-            Đang tải danh sách hồ sơ...
+            {t("adminOrganizer.loading")}
           </div>
         ) : (
           <div className="admin-organizer-table-wrap">
             <table className="admin-organizer-table">
               <thead>
                 <tr>
-                  <th>Tên ban tổ chức</th>
+                  <th>{t("adminOrganizer.tableName")}</th>
                   <th>Slug</th>
-                  <th>SĐT</th>
+                  <th>{t("profile.phone")}</th>
                   <th>Email</th>
-                  <th>Kênh công khai</th>
-                  <th>Thao tác</th>
+                  <th>{t("adminOrganizer.publicChannel")}</th>
+                  <th>{t("adminOrganizer.tableActions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -136,13 +142,13 @@ export default function AdminOrganizerReviewPage() {
                       <strong>{profile.name}</strong>
                     </td>
                     <td>
-                      <span>{profile.slug ? `/${profile.slug}` : "Chưa có slug"}</span>
+                      <span>{profile.slug ? `/${profile.slug}` : t("adminOrganizer.slugMissing")}</span>
                     </td>
                     <td>
-                      <span>{profile.phone || "Chưa có số điện thoại"}</span>
+                      <span>{profile.phone || t("adminOrganizer.phoneMissing")}</span>
                     </td>
                     <td>
-                      <span>{profile.email || "Chưa có email"}</span>
+                      <span>{profile.email || t("adminOrganizer.emailMissing")}</span>
                     </td>
                     <td>
                       {profile.websiteUrl ? (
@@ -150,7 +156,7 @@ export default function AdminOrganizerReviewPage() {
                           {profile.websiteUrl}
                         </a>
                       ) : (
-                        <span>Chưa có website</span>
+                        <span>{t("adminOrganizer.websiteMissing")}</span>
                       )}
                     </td>
                     <td>
@@ -167,7 +173,7 @@ export default function AdminOrganizerReviewPage() {
                           }
                         >
                           <CheckCircle2 size={16} />
-                          Duyệt
+                          {t("adminOrganizer.approve")}
                         </button>
                         <button
                           className="btn btn-secondary"
@@ -176,7 +182,7 @@ export default function AdminOrganizerReviewPage() {
                           onClick={() => rejectOrganizer(profile)}
                         >
                           <XCircle size={16} />
-                          Từ chối
+                          {t("adminOrganizer.reject")}
                         </button>
                       </div>
                     </td>
@@ -184,7 +190,7 @@ export default function AdminOrganizerReviewPage() {
                 ))}
                 {organizersQuery.data?.content?.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>Không có hồ sơ ở trạng thái này.</td>
+                    <td colSpan={6}>{t("adminOrganizer.noRows")}</td>
                   </tr>
                 ) : null}
               </tbody>

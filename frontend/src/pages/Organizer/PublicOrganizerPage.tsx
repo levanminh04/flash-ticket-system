@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { useTranslation } from "react-i18next";
 import Footer from "../../components/common/Footer";
 import { eventService } from "../../services/eventService";
 import { OrganizerProfile, organizerService } from "../../services/organizerService";
@@ -21,9 +22,9 @@ import { EventSummary } from "../../types/api";
 
 const PUBLIC_EVENTS_PAGE_SIZE = 100;
 
-function statNumber(value?: number | null) {
+function statNumber(value: number | null | undefined, language: string) {
   return typeof value === "number" && Number.isFinite(value)
-    ? new Intl.NumberFormat("vi-VN").format(value)
+    ? new Intl.NumberFormat(language === "en" ? "en-US" : "vi-VN").format(value)
     : "0";
 }
 
@@ -116,9 +117,11 @@ function getTicketsSold(events: EventSummary[]) {
 }
 
 export default function PublicOrganizerPage() {
+  const { i18n, t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const { keycloak, initialized } = useKeycloak();
   const queryClient = useQueryClient();
+  const language = i18n.resolvedLanguage || "vi";
 
   const {
     data: organizer,
@@ -175,12 +178,12 @@ export default function PublicOrganizerPage() {
       );
       toast.success(
         response.isFollowing
-          ? "Đã theo dõi nhà tổ chức."
-          : "Đã bỏ theo dõi nhà tổ chức.",
+          ? t("publicOrganizer.followSuccess")
+          : t("publicOrganizer.unfollowSuccess"),
       );
     },
     onError: () => {
-      toast.error("Không thể cập nhật trạng thái theo dõi.");
+      toast.error(t("publicOrganizer.followFailed"));
     },
   });
 
@@ -197,7 +200,7 @@ export default function PublicOrganizerPage() {
       <main className="public-organizer-page">
         <div className="event-detail-loading" role="status" aria-live="polite">
           <LoaderCircle className="event-detail-loading-icon" size={24} />
-          <span>Đang tải hồ sơ nhà tổ chức...</span>
+          <span>{t("publicOrganizer.loading")}</span>
         </div>
       </main>
     );
@@ -207,10 +210,10 @@ export default function PublicOrganizerPage() {
     return (
       <main className="public-organizer-page">
         <section className="public-organizer-state">
-          <h1>Không tìm thấy nhà tổ chức</h1>
-          <p>Hồ sơ này không tồn tại hoặc chưa được công khai.</p>
+          <h1>{t("publicOrganizer.notFoundTitle")}</h1>
+          <p>{t("publicOrganizer.notFoundDescription")}</p>
           <Link className="btn btn-primary" to="/search">
-            Tìm sự kiện khác
+            {t("publicOrganizer.searchOther")}
           </Link>
         </section>
       </main>
@@ -249,14 +252,11 @@ export default function PublicOrganizerPage() {
               {organizer.isVerified ? (
                 <span className="public-organizer-verified">
                   <BadgeCheck size={16} />
-                  Đã xác minh
+                  {t("publicOrganizer.verified")}
                 </span>
               ) : null}
             </div>
-            <p>
-              {organizer.description ||
-                "Nhà tổ chức chưa cập nhật mô tả công khai."}
-            </p>
+            <p>{organizer.description || t("publicOrganizer.descriptionMissing")}</p>
             <div className="public-organizer-actions">
               {!isOwnOrganizer ? (
                 <button
@@ -270,12 +270,12 @@ export default function PublicOrganizerPage() {
                   ) : (
                     <Heart size={16} />
                   )}
-                  {isFollowing ? "Bỏ theo dõi" : "Theo dõi"}
+                  {isFollowing ? t("publicOrganizer.unfollow") : t("publicOrganizer.follow")}
                 </button>
               ) : null}
               {!organizer.bannerUrl ? (
                 <span className="public-organizer-banner-note">
-                  Nhà tổ chức chưa cập nhật ảnh bìa công khai.
+                  {t("publicOrganizer.bannerMissing")}
                 </span>
               ) : null}
             </div>
@@ -288,28 +288,28 @@ export default function PublicOrganizerPage() {
           <div className="public-organizer-stat">
             <CalendarDays size={24} />
             <div className="public-organizer-stat-info">
-              <span>Sự kiện đang bán</span>
-              <strong>{eventsLoading ? "..." : statNumber(totalEvents)}</strong>
+              <span>{t("publicOrganizer.eventsOnSale")}</span>
+              <strong>{eventsLoading ? "..." : statNumber(totalEvents, language)}</strong>
             </div>
           </div>
           <div className="public-organizer-stat">
             <Ticket size={24} />
             <div className="public-organizer-stat-info">
-              <span>Vé đã bán</span>
-              <strong>{eventsLoading ? "..." : statNumber(totalTicketsSold)}</strong>
+              <span>{t("publicOrganizer.ticketsSold")}</span>
+              <strong>{eventsLoading ? "..." : statNumber(totalTicketsSold, language)}</strong>
             </div>
           </div>
           <div className="public-organizer-stat">
             <Users size={24} />
             <div className="public-organizer-stat-info">
-              <span>Người theo dõi</span>
-              <strong>{statNumber(organizer.followerCount)}</strong>
+              <span>{t("publicOrganizer.followers")}</span>
+              <strong>{statNumber(organizer.followerCount, language)}</strong>
             </div>
           </div>
           <div className="public-organizer-stat">
             <Star size={24} />
             <div className="public-organizer-stat-info">
-              <span>Đánh giá</span>
+              <span>{t("publicOrganizer.averageRating")}</span>
               <strong>
                 {typeof organizer.averageRating === "number"
                   ? organizer.averageRating.toFixed(1)
@@ -320,21 +320,21 @@ export default function PublicOrganizerPage() {
         </div>
 
         <section className="public-organizer-info">
-          <h2>Thông tin liên hệ</h2>
+          <h2>{t("publicOrganizer.contactInfo")}</h2>
 
           <div className="public-organizer-contact-grid">
             <div className="public-organizer-contact">
               <Mail size={24} />
               <div className="public-organizer-contact-info">
                 <span>Email</span>
-                <strong>{organizer.email || "Đang cập nhật"}</strong>
+                <strong>{organizer.email || t("publicOrganizer.emailMissing")}</strong>
               </div>
             </div>
             <div className="public-organizer-contact">
               <Phone size={24} />
               <div className="public-organizer-contact-info">
-                <span>Điện thoại</span>
-                <strong>{organizer.phone || "Đang cập nhật"}</strong>
+                <span>{t("publicOrganizer.phone")}</span>
+                <strong>{organizer.phone || t("publicOrganizer.emailMissing")}</strong>
               </div>
             </div>
             <div className="public-organizer-contact">
@@ -346,7 +346,7 @@ export default function PublicOrganizerPage() {
                     {organizer.websiteUrl}
                   </a>
                 ) : (
-                  <strong>Đang cập nhật</strong>
+                  <strong>{t("publicOrganizer.websiteMissing")}</strong>
                 )}
               </div>
             </div>

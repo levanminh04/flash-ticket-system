@@ -1,23 +1,14 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { Link } from "react-router-dom";
 import { LoaderCircle, SendHorizontal, ShieldCheck } from "lucide-react";
 import { toast } from "react-toastify";
+import { useTranslation } from "react-i18next";
 import Footer from "../../components/common/Footer";
 import {
   ApplyOrganizerPayload,
   organizerService,
 } from "../../services/organizerService";
-
-const organizerTypes: Array<{
-  value: ApplyOrganizerPayload["organizerType"];
-  label: string;
-}> = [
-  { value: "INDIVIDUAL", label: "Cá nhân" },
-  { value: "COMPANY", label: "Công ty" },
-  { value: "NONPROFIT", label: "Phi lợi nhuận" },
-  { value: "GOVERNMENT", label: "Cơ quan nhà nước" },
-];
 
 const initialForm: ApplyOrganizerPayload = {
   organizerName: "",
@@ -31,10 +22,24 @@ const initialForm: ApplyOrganizerPayload = {
 };
 
 export default function OrganizerApplyPage() {
+  const { t } = useTranslation();
   const { keycloak, initialized } = useKeycloak();
   const [form, setForm] = useState<ApplyOrganizerPayload>(initialForm);
   const [submitting, setSubmitting] = useState(false);
   const [submittedSlug, setSubmittedSlug] = useState<string | null>(null);
+
+  const organizerTypes = useMemo<Array<{
+    value: ApplyOrganizerPayload["organizerType"];
+    label: string;
+  }>>(
+    () => [
+      { value: "INDIVIDUAL", label: t("organizer.individual") },
+      { value: "COMPANY", label: t("organizer.company") },
+      { value: "NONPROFIT", label: t("organizer.nonprofit") },
+      { value: "GOVERNMENT", label: t("organizer.government") },
+    ],
+    [t],
+  );
 
   const updateField = <TKey extends keyof ApplyOrganizerPayload>(
     key: TKey,
@@ -56,9 +61,9 @@ export default function OrganizerApplyPage() {
         representativeName: form.representativeName?.trim() || null,
       });
       setSubmittedSlug(profile.slug || null);
-      toast.success("Đã gửi đơn đăng ký nhà tổ chức.");
+      toast.success(t("organizer.applySuccess"));
     } catch {
-      toast.error("Không thể gửi đơn đăng ký lúc này.");
+      toast.error(t("organizer.applyFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -69,10 +74,10 @@ export default function OrganizerApplyPage() {
       <main className="organizer-application-page">
         <section className="organizer-application-state">
           <ShieldCheck size={42} />
-          <h1>Đăng ký nhà tổ chức</h1>
-          <p>Bạn cần đăng nhập bằng tài khoản buyer trước khi gửi đơn.</p>
+          <h1>{t("organizer.applyTitle")}</h1>
+          <p>{t("organizer.applyLoginRequired")}</p>
           <button className="btn btn-primary" type="button" onClick={() => keycloak.login()}>
-            Đăng nhập
+            {t("auth.signIn")}
           </button>
         </section>
       </main>
@@ -83,26 +88,23 @@ export default function OrganizerApplyPage() {
     <main className="organizer-application-page">
       <section className="container organizer-application-wrap">
         <div className="organizer-application-header">
-          <h1>Đăng ký nhà tổ chức</h1>
-          <p>
-            Gửi hồ sơ để admin xét duyệt. Sau khi được duyệt, tài khoản sẽ được cấp quyền
-            quản lý sự kiện.
-          </p>
+          <h1>{t("organizer.applyTitle")}</h1>
+          <p>{t("organizer.applyDescription")}</p>
         </div>
 
         {submittedSlug ? (
           <section className="organizer-application-success">
             <ShieldCheck size={36} />
-            <h2>Đơn đăng ký đã được gửi</h2>
-            <p>Hồ sơ đang chờ admin duyệt. Bạn có thể xem trang công khai sau khi hồ sơ được duyệt.</p>
+            <h2>{t("organizer.submittedTitle")}</h2>
+            <p>{t("organizer.submittedDescription")}</p>
             <Link className="btn btn-secondary" to={`/organizers/${submittedSlug}`}>
-              Xem hồ sơ công khai
+              {t("organizer.viewPublicProfile")}
             </Link>
           </section>
         ) : (
           <form className="organizer-application-form" onSubmit={handleSubmit}>
             <label>
-              <span>Tên nhà tổ chức</span>
+              <span>{t("organizer.name")}</span>
               <input
                 value={form.organizerName}
                 onChange={(event) => updateField("organizerName", event.target.value)}
@@ -112,7 +114,7 @@ export default function OrganizerApplyPage() {
             </label>
 
             <label>
-              <span>Loại hình</span>
+              <span>{t("organizer.organizerType")}</span>
               <select
                 value={form.organizerType}
                 onChange={(event) =>
@@ -131,7 +133,7 @@ export default function OrganizerApplyPage() {
             </label>
 
             <label className="organizer-application-span-2">
-              <span>Mô tả</span>
+              <span>{t("organizer.description")}</span>
               <textarea
                 value={form.description || ""}
                 onChange={(event) => updateField("description", event.target.value)}
@@ -141,7 +143,7 @@ export default function OrganizerApplyPage() {
             </label>
 
             <label>
-              <span>Email liên hệ</span>
+              <span>{t("organizer.contactEmail")}</span>
               <input
                 type="email"
                 value={form.contactEmail}
@@ -151,7 +153,7 @@ export default function OrganizerApplyPage() {
             </label>
 
             <label>
-              <span>Số điện thoại</span>
+              <span>{t("profile.phone")}</span>
               <input
                 value={form.contactPhone}
                 onChange={(event) => updateField("contactPhone", event.target.value)}
@@ -170,7 +172,7 @@ export default function OrganizerApplyPage() {
             </label>
 
             <label>
-              <span>Mã số thuế</span>
+              <span>{t("organizer.taxCode")}</span>
               <input
                 value={form.taxCode || ""}
                 onChange={(event) => updateField("taxCode", event.target.value)}
@@ -178,7 +180,7 @@ export default function OrganizerApplyPage() {
             </label>
 
             <label className="organizer-application-span-2">
-              <span>Người đại diện</span>
+              <span>{t("organizer.representative")}</span>
               <input
                 value={form.representativeName || ""}
                 onChange={(event) => updateField("representativeName", event.target.value)}
@@ -188,7 +190,7 @@ export default function OrganizerApplyPage() {
             <div className="organizer-application-actions">
               <button className="btn btn-primary" type="submit" disabled={submitting}>
                 {submitting ? <LoaderCircle size={16} className="spin" /> : <SendHorizontal size={16} />}
-                Gửi đơn đăng ký
+                {t("organizer.submitApplication")}
               </button>
             </div>
           </form>
