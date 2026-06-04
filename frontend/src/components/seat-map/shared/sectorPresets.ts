@@ -3,6 +3,7 @@ import {
   SeatMapEditorDocument,
   SeatMapEditorShape,
 } from "../editor/seatMapEditorTypes";
+import { createClientId } from "./idUtils";
 
 const PRESET_COLORS = {
   stage: "#64748b",
@@ -41,8 +42,8 @@ function createBaseShape(
   mapData: Record<string, unknown>,
 ): SeatMapEditorShape {
   return {
-    id: crypto.randomUUID(),
-    sectorId: crypto.randomUUID(),
+    id: createClientId(),
+    sectorId: createClientId(),
     name,
     sectorType: shapeType === "stage" || shapeType === "foh" ? "STANDING" : "SEATED",
     shapeType,
@@ -86,8 +87,8 @@ function createTemplateShape({
   mapData: Record<string, unknown>;
 }): SeatMapEditorShape {
   return {
-    id: crypto.randomUUID(),
-    sectorId: crypto.randomUUID(),
+    id: createClientId(),
+    sectorId: createClientId(),
     name,
     code,
     sectorType,
@@ -470,3 +471,4 @@ export function createRoundedBlockPreset(document: SeatMapEditorDocument): SeatM
     labelWidth: bounds.width * 0.78,
   });
 }
+
