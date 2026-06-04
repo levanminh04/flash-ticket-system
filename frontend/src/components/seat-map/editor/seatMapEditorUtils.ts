@@ -13,6 +13,7 @@ import {
   SeatMapEditorShapeType,
 } from "./seatMapEditorTypes";
 import { generateRingSeats } from "../shared/seatGenerationUtils";
+import { createClientId } from "../shared/idUtils";
 
 const DEFAULT_CANVAS_WIDTH = 1280;
 const DEFAULT_CANVAS_HEIGHT = 720;
@@ -605,7 +606,7 @@ export function generateSeatsForShape(
       const seatKey = `${rowName}::${seatNumber}`;
       const existingSeat = existingSeatMap.get(seatKey);
       nextSeats.push({
-        id: existingSeat?.id ?? crypto.randomUUID(),
+        id: existingSeat?.id ?? createClientId(),
         label: buildSeatLabel(rowName, seatNumber),
         rowName,
         seatNumber,
@@ -671,7 +672,7 @@ export function generateSeatsForShape(
       const seatKey = `${rowName}::${seatNumber}`;
       const existingSeat = existingSeatMap.get(seatKey);
       nextSeats.push({
-        id: existingSeat?.id ?? crypto.randomUUID(),
+        id: existingSeat?.id ?? createClientId(),
         label: buildSeatLabel(rowName, seatNumber),
         rowName,
         seatNumber,
@@ -768,8 +769,8 @@ export function createRectangleShape(
   };
 
   return {
-    id: crypto.randomUUID(),
-    sectorId: crypto.randomUUID(),
+    id: createClientId(),
+    sectorId: createClientId(),
     name: `Sector ${index + 1}`,
     sectorType: "STANDING",
     totalCapacity: 0,
@@ -808,8 +809,8 @@ function createPolygonPresetShape(
   };
 
   return {
-    id: crypto.randomUUID(),
-    sectorId: crypto.randomUUID(),
+    id: createClientId(),
+    sectorId: createClientId(),
     name: `${namePrefix} ${index + 1}`,
     sectorType: "STANDING",
     totalCapacity: 0,
@@ -859,8 +860,8 @@ export function createCircleShape(
   };
 
   return {
-    id: crypto.randomUUID(),
-    sectorId: crypto.randomUUID(),
+    id: createClientId(),
+    sectorId: createClientId(),
     name: `Circle ${index + 1}`,
     sectorType: "STANDING",
     totalCapacity: 0,
@@ -891,8 +892,8 @@ export function createEllipseShape(
   };
 
   return {
-    id: crypto.randomUUID(),
-    sectorId: crypto.randomUUID(),
+    id: createClientId(),
+    sectorId: createClientId(),
     name: `Ellipse ${index + 1}`,
     sectorType: "STANDING",
     totalCapacity: 0,
