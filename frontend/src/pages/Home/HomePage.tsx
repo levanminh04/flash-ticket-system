@@ -1,6 +1,8 @@
-﻿import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useKeycloak } from "@react-keycloak/web";
+import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "react-router-dom";
+import { toast } from "react-toastify";
 import { FaMusic } from "react-icons/fa6";
 import { FaMapMarkedAlt } from "react-icons/fa";
 import { AiFillPicture } from "react-icons/ai";
@@ -21,6 +23,16 @@ import {
   ShoppingCart,
   Tickets,
   Wallet,
+  Type,
+  FolderTree,
+  ArrowUpDown,
+  Image,
+  Undo2,
+  Save,
+  Settings,
+  HelpCircle,
+  BookOpen,
+  X,
 } from "lucide-react";
 import { eventService } from "../../services/eventService";
 import { categoryService } from "../../services/categoryService";
@@ -49,20 +61,29 @@ type HeroEventOverrides = Record<
 type HomeSectionKey =
   | "trust"
   | "features"
+  | "categories"
   | "upcoming"
+  | "venues"
   | "how"
   | "pricing"
-  | "past";
+  | "past"
+  | "faq"
+  | "blog";
 
 type HomeContentConfig = {
   heroTitle: string;
   trustTitle: string;
   featuresTitle: string;
   upcomingTitle: string;
+  venuesTitle: string;
   howTitle: string;
   pricingTitle: string;
   pastTitle: string;
+  faqTitle: string;
+  blogTitle: string;
   sectionOrder: HomeSectionKey[];
+  titleColors: Record<string, string>;
+  categoryOverrides: Record<string, { name: string; order: number; color?: string }>;
 };
 
 type CategoryEventSection = {
@@ -83,25 +104,50 @@ const HOME_CATEGORY_BANNER_URL =
   "https://i.ibb.co/tMB8JFfL/60f019b6-5f02-4ae0-8754-963c8785c246.png";
 const categoryTitleIcons = [FaMusic, GrWorkshop, AiFillPicture];
 
-const homeSectionLabels: Record<HomeSectionKey, string> = {
-  trust: "Trust strip",
-  features: "Our Core Features",
-  upcoming: "Upcoming Events",
-  how: "How it works",
-  pricing: "Transparent Pricing",
-  past: "Past Events",
+const homeSectionLabelKeys: Record<HomeSectionKey, string> = {
+  trust: "home.sections.trust",
+  categories: "home.sections.categories",
+  features: "home.sections.features",
+  upcoming: "home.sections.upcoming",
+  venues: "home.sections.venues",
+  how: "home.sections.how",
+  pricing: "home.sections.pricing",
+  past: "home.sections.past",
+  faq: "home.sections.faq",
+  blog: "home.sections.blog",
 };
 
-const defaultHomeContentConfig: HomeContentConfig = {
-  heroTitle: "Easy to Buy &\nSale your Event\nTicket",
-  trustTitle: "More than 100+ businesses owners across the world trust Counter",
-  featuresTitle: "Our Core Features",
-  upcomingTitle: "Upcoming Events",
-  howTitle: "How it works",
-  pricingTitle: "Transparent Pricing",
-  pastTitle: "Some of our Past Events",
-  sectionOrder: ["trust", "features", "upcoming", "how", "pricing", "past"],
+const getDefaultHomeContentConfig = (language: string): HomeContentConfig => {
+  const isEnglish = language === "en";
+  return {
+  heroTitle: isEnglish ? "Easy to Buy &\nSell your Event\nTicket" : "Dễ dàng mua và\nbán vé sự kiện\ncủa bạn",
+  trustTitle: isEnglish ? "More than 100+ businesses owners across the world trust FlashTicket" : "Hơn 100+ nhà tổ chức tin dùng FlashTicket",
+  featuresTitle: isEnglish ? "Our Core Features" : "Tính năng nổi bật",
+  upcomingTitle: isEnglish ? "Upcoming Events" : "Sự kiện sắp diễn ra",
+  venuesTitle: isEnglish ? "Interesting Venues" : "Điểm đến thú vị",
+  howTitle: isEnglish ? "How it works" : "Cách hoạt động",
+  pricingTitle: isEnglish ? "Transparent Pricing" : "Chi phí minh bạch",
+  pastTitle: isEnglish ? "Some of our Past Events" : "Một số sự kiện đã diễn ra",
+  faqTitle: isEnglish ? "Important FAQs for Event & Ticket" : "Câu hỏi thường gặp về sự kiện và vé",
+  blogTitle: isEnglish ? "Our latest Blog" : "Bài viết mới nhất",
+  sectionOrder: [
+    "trust",
+    "categories",
+    "features",
+    "upcoming",
+    "venues",
+    "how",
+    "pricing",
+    "past",
+    "faq",
+    "blog",
+  ],
+  titleColors: {},
+  categoryOverrides: {},
+  };
 };
+
+const defaultHomeContentConfig = getDefaultHomeContentConfig("vi");
 
 const fallbackHeroEvents: EditableHeroEvent[] = [
   {
@@ -146,64 +192,55 @@ const fallbackHeroEvents: EditableHeroEvent[] = [
 const featureCards = [
   {
     icon: ShoppingCart,
-    title: "Easy Ticket Purchase",
-    description:
-      "Tìm kiếm, so sánh và chọn chỗ ngồi phù hợp chỉ trong vài thao tác ngắn.",
+    titleKey: "home.features.easyPurchase.title",
+    descriptionKey: "home.features.easyPurchase.description",
   },
   {
     icon: Tickets,
-    title: "Instant Ticket Delivery",
-    description:
-      "Nhận vé điện tử ngay sau khi thanh toán thành công, sẵn sàng check-in bằng QR.",
+    titleKey: "home.features.instantDelivery.title",
+    descriptionKey: "home.features.instantDelivery.description",
   },
   {
     icon: ShieldCheck,
-    title: "Secure Payments",
-    description:
-      "Nhiều phương thức thanh toán an toàn với luồng xác nhận rõ ràng, minh bạch.",
+    titleKey: "home.features.securePayments.title",
+    descriptionKey: "home.features.securePayments.description",
   },
   {
     icon: LayoutDashboard,
-    title: "Complete Dashboard",
-    description:
-      "Theo dõi đơn hàng, vé đã mua và trạng thái thanh toán trong cùng một tài khoản.",
+    titleKey: "home.features.dashboard.title",
+    descriptionKey: "home.features.dashboard.description",
   },
   {
     icon: MessageSquareText,
-    title: "Trackable Reviews",
-    description:
-      "Thông tin sự kiện, địa điểm và lịch tổ chức được trình bày rõ, dễ kiểm tra trước khi mua.",
+    titleKey: "home.features.eventInfo.title",
+    descriptionKey: "home.features.eventInfo.description",
   },
   {
     icon: Headset,
-    title: "24/7 Support",
-    description:
-      "Luồng hỗ trợ được đặt đúng chỗ để người dùng và organizer xử lý vấn đề nhanh hơn.",
+    titleKey: "home.features.support.title",
+    descriptionKey: "home.features.support.description",
   },
 ];
 
 const howItWorks = [
   {
     step: "01",
-    title: "Go Event Page",
-    description:
-      "Truy cập trang sự kiện để xem thông tin, lịch diễn, địa điểm và mức giá vé.",
+    titleKey: "home.how.openEvent.title",
+    descriptionKey: "home.how.openEvent.description",
     image:
       "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1200&auto=format&fit=crop",
   },
   {
     step: "02",
-    title: "Choose Your Event",
-    description:
-      "Chọn loại vé, số lượng hoặc chỗ ngồi phù hợp với nhu cầu của bạn.",
+    titleKey: "home.how.chooseTicket.title",
+    descriptionKey: "home.how.chooseTicket.description",
     image:
       "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1200&auto=format&fit=crop",
   },
   {
     step: "03",
-    title: "Complete Payment",
-    description:
-      "Thanh toán nhanh và nhận vé điện tử ngay để sẵn sàng check-in tại sự kiện.",
+    titleKey: "home.how.payment.title",
+    descriptionKey: "home.how.payment.description",
     image: "https://images.pexels.com/photos/7191166/pexels-photo-7191166.jpeg",
   },
 ];
@@ -245,38 +282,33 @@ const otherVenueFallbackImages = [
 
 const faqItems = [
   {
-    question: "How to buy event tickets?",
-    answer:
-      "Tìm sự kiện phù hợp, mở trang chi tiết, chọn loại vé hoặc chỗ ngồi rồi hoàn tất thanh toán để nhận vé điện tử.",
+    questionKey: "home.faq.buy.question",
+    answerKey: "home.faq.buy.answer",
   },
   {
-    question: "Can I get refund after purchase?",
-    answer:
-      "Chính sách hoàn tiền phụ thuộc từng sự kiện. Trang chi tiết sẽ hiển thị rõ thông tin để người mua kiểm tra trước khi đặt vé.",
+    questionKey: "home.faq.refund.question",
+    answerKey: "home.faq.refund.answer",
   },
   {
-    question: "Why should I host events here?",
-    answer:
-      "Organizer có thể quản lý event, media, layout, ticket type, seat map và quy trình check-in trong cùng một workspace.",
+    questionKey: "home.faq.organizer.question",
+    answerKey: "home.faq.organizer.answer",
   },
   {
-    question: "How do subscriptions and ticket plans work?",
-    answer:
-      "Nền tảng tập trung vào mô hình phí giao dịch minh bạch, giúp người dùng và nhà tổ chức dễ theo dõi chi phí thực tế.",
+    questionKey: "home.faq.pricing.question",
+    answerKey: "home.faq.pricing.answer",
   },
   {
-    question: "Can I transfer my ticket to another person?",
-    answer:
-      "Tùy vào chính sách của từng sự kiện, bạn có thể được phép chuyển nhượng vé trước giờ diễn. Vui lòng kiểm tra điều khoản trên trang chi tiết sự kiện hoặc liên hệ hỗ trợ để được xác nhận.",
+    questionKey: "home.faq.transfer.question",
+    answerKey: "home.faq.transfer.answer",
   },
 ];
 
 const homeNavItems = [
-  { label: "Home", to: "#home-hero", isHash: true },
-  { label: "Events", to: "/search" },
-  { label: "About", to: "#home-features", isHash: true },
-  { label: "Blog", to: "#home-blog", isHash: true },
-  { label: "Pages", to: "#home-faq", isHash: true },
+  { labelKey: "nav.home", to: "#home-hero", isHash: true },
+  { labelKey: "nav.events", to: "/search" },
+  { labelKey: "home.nav.about", to: "#home-features", isHash: true },
+  { labelKey: "home.sections.blog", to: "#home-blog", isHash: true },
+  { labelKey: "home.nav.pages", to: "#home-faq", isHash: true },
 ];
 
 const monthShortNames = [
@@ -480,7 +512,10 @@ function readHeroOverrides(): HeroEventOverrides {
   }
 }
 
-function normalizeHomeContentConfig(value: unknown): HomeContentConfig {
+function normalizeHomeContentConfig(
+  value: unknown,
+  defaults: HomeContentConfig = defaultHomeContentConfig,
+): HomeContentConfig {
   const source =
     value && typeof value === "object"
       ? (value as Partial<HomeContentConfig>)
@@ -488,33 +523,35 @@ function normalizeHomeContentConfig(value: unknown): HomeContentConfig {
   const nextOrder = Array.isArray(source.sectionOrder)
     ? source.sectionOrder.filter(
         (key): key is HomeSectionKey =>
-          typeof key === "string" && key in homeSectionLabels,
+          typeof key === "string" && key in homeSectionLabelKeys,
       )
     : [];
 
   return {
-    ...defaultHomeContentConfig,
+    ...defaults,
     ...source,
+    titleColors: source.titleColors || {},
+    categoryOverrides: source.categoryOverrides || {},
     sectionOrder: [
       ...nextOrder,
-      ...defaultHomeContentConfig.sectionOrder.filter(
+      ...defaults.sectionOrder.filter(
         (key) => !nextOrder.includes(key),
       ),
     ],
   };
 }
 
-function readHomeContentConfig(): HomeContentConfig {
-  if (typeof window === "undefined") return defaultHomeContentConfig;
+function readHomeContentConfig(defaults: HomeContentConfig): HomeContentConfig {
+  if (typeof window === "undefined") return defaults;
 
   try {
     const raw = window.localStorage.getItem(HOME_CONTENT_CONFIG_KEY);
     return raw
-      ? normalizeHomeContentConfig(JSON.parse(raw))
-      : defaultHomeContentConfig;
+      ? normalizeHomeContentConfig(JSON.parse(raw), defaults)
+      : defaults;
   } catch (error) {
     console.warn("Không thể đọc cấu hình giao diện trang chủ", error);
-    return defaultHomeContentConfig;
+    return defaults;
   }
 }
 
@@ -542,6 +579,12 @@ function renderTitleWithHighlight(title: string, highlight: string) {
 }
 
 export default function HomePage() {
+  const { i18n, t } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language;
+  const localizedDefaultHomeContent = useMemo(
+    () => getDefaultHomeContentConfig(language),
+    [language],
+  );
   const { keycloak, initialized } = useKeycloak();
   const location = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -551,17 +594,64 @@ export default function HomePage() {
   const [venueDestinations, setVenueDestinations] = useState<
     HomeVenueDestination[]
   >([]);
-  const [categoryEventSections, setCategoryEventSections] = useState<
-    CategoryEventSection[]
+  const [rawCategorySections, setRawCategorySections] = useState<
+    { category: Category; events: EventSummary[]; totalEvents: number }[]
   >([]);
+  const [editorTab, setEditorTab] = useState<"titles" | "categories" | "layout" | "hero">("titles");
+
+  // Venue States
+  const [venues, setVenues] = useState<Venue[]>([]);
+
+  const getCityGoogleMapsUrl = (cityTitle: string) => {
+    const cityVenues = venues.filter(
+      (v) => normalizeVenueCity(v.city).toLowerCase() === cityTitle.toLowerCase()
+    );
+    if (cityVenues.length > 0) {
+      const firstVenue = cityVenues[0];
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        firstVenue.name + ", " + firstVenue.address
+      )}`;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cityTitle)}`;
+  };
+
   const [activeFaq, setActiveFaq] = useState(0);
   const [heroOverrides, setHeroOverrides] = useState<HeroEventOverrides>({});
   const [homeContent, setHomeContent] = useState<HomeContentConfig>(
-    defaultHomeContentConfig,
+    localizedDefaultHomeContent,
   );
   const [contentDraft, setContentDraft] = useState<HomeContentConfig>(
-    defaultHomeContentConfig,
+    localizedDefaultHomeContent,
   );
+  const localizedHomeNavItems = useMemo(
+    () => homeNavItems.map((item) => ({ ...item, label: t(item.labelKey) })),
+    [t],
+  );
+
+  const categoryEventSections: CategoryEventSection[] = useMemo(() => {
+    return [...rawCategorySections]
+      .sort((left, right) => {
+        const leftId = String(left.category.id || "");
+        const rightId = String(right.category.id || "");
+        const leftOverride = homeContent.categoryOverrides?.[leftId];
+        const rightOverride = homeContent.categoryOverrides?.[rightId];
+
+        const leftOrder = leftOverride?.order !== undefined ? leftOverride.order : 999;
+        const rightOrder = rightOverride?.order !== undefined ? rightOverride.order : 999;
+
+        if (leftOrder !== rightOrder) {
+          return leftOrder - rightOrder;
+        }
+
+        if (right.totalEvents !== left.totalEvents) {
+          return right.totalEvents - left.totalEvents;
+        }
+        return left.category.displayOrder - right.category.displayOrder;
+      })
+      .slice(0, 3)
+      .map(({ category, events }) => ({ category, events }));
+  }, [rawCategorySections, homeContent.categoryOverrides]);
+
   const [isHomeEditorOpen, setIsHomeEditorOpen] = useState(false);
   const [editorDraft, setEditorDraft] = useState({
     title: "",
@@ -654,7 +744,7 @@ export default function HomePage() {
           }),
         );
 
-        setCategoryEventSections(
+        setRawCategorySections(
           sections
             .filter((section) => section.totalEvents > 0 && section.events.length > 0)
             .sort((left, right) => {
@@ -663,8 +753,6 @@ export default function HomePage() {
               }
               return left.category.displayOrder - right.category.displayOrder;
             })
-            .slice(0, 3)
-            .map(({ category, events }) => ({ category, events })),
         );
       } catch (error) {
         console.error("Lỗi fetch event theo danh mục", error);
@@ -677,8 +765,9 @@ export default function HomePage() {
   useEffect(() => {
     const loadVenueDestinations = async () => {
       try {
-        const venues = await venueService.getVenues();
-        setVenueDestinations(buildVenueDestinations(venues));
+        const data = await venueService.getVenues();
+        setVenues(data);
+        setVenueDestinations(buildVenueDestinations(data));
       } catch (error) {
         console.error("Lỗi fetch venue cho HomePage", error);
       }
@@ -689,10 +778,21 @@ export default function HomePage() {
 
   useEffect(() => {
     setHeroOverrides(readHeroOverrides());
-    const savedContent = readHomeContentConfig();
-    setHomeContent(savedContent);
-    setContentDraft(savedContent);
-  }, []);
+    const savedContent = readHomeContentConfig(localizedDefaultHomeContent);
+    const shouldUseLocalizedDefaults =
+      savedContent.trustTitle === "More than 100+ businesses owners across the world trust Counter" ||
+      savedContent.featuresTitle === "Our Core Features";
+    const nextContent = shouldUseLocalizedDefaults
+      ? {
+          ...localizedDefaultHomeContent,
+          titleColors: savedContent.titleColors || {},
+          categoryOverrides: savedContent.categoryOverrides || {},
+          sectionOrder: savedContent.sectionOrder || localizedDefaultHomeContent.sectionOrder,
+        }
+      : savedContent;
+    setHomeContent(nextContent);
+    setContentDraft(nextContent);
+  }, [localizedDefaultHomeContent]);
 
   const canEditHomeHero =
     initialized &&
@@ -825,8 +925,73 @@ export default function HomePage() {
     });
   };
 
+  const moveCategoryInDraft = (categoryId: string, direction: -1 | 1) => {
+    setContentDraft((current) => {
+      const categoriesList = rawCategorySections.map((s) => String(s.category.id || ""));
+      const nextOverrides = { ...current.categoryOverrides };
+
+      const sortedCategoriesList = [...categoriesList].sort((a, b) => {
+        const orderA =
+          nextOverrides[a]?.order !== undefined ? nextOverrides[a].order : categoriesList.indexOf(a);
+        const orderB =
+          nextOverrides[b]?.order !== undefined ? nextOverrides[b].order : categoriesList.indexOf(b);
+        return orderA - orderB;
+      });
+
+      const index = sortedCategoriesList.indexOf(categoryId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= sortedCategoriesList.length) {
+        return current;
+      }
+
+      const swappedId = sortedCategoriesList[nextIndex];
+      sortedCategoriesList[index] = swappedId;
+      sortedCategoriesList[nextIndex] = categoryId;
+
+      sortedCategoriesList.forEach((id, idx) => {
+        nextOverrides[id] = {
+          ...(nextOverrides[id] || { name: "", color: "" }),
+          order: idx,
+        };
+      });
+
+      return {
+        ...current,
+        categoryOverrides: nextOverrides,
+      };
+    });
+  };
+
+  const handleRenameCategory = (categoryId: string, name: string) => {
+    setContentDraft((current) => {
+      const nextOverrides = { ...current.categoryOverrides };
+      nextOverrides[categoryId] = {
+        ...(nextOverrides[categoryId] || { order: 0, color: "" }),
+        name,
+      };
+      return {
+        ...current,
+        categoryOverrides: nextOverrides,
+      };
+    });
+  };
+
+  const handleChangeCategoryColor = (categoryId: string, color: string) => {
+    setContentDraft((current) => {
+      const nextOverrides = { ...current.categoryOverrides };
+      nextOverrides[categoryId] = {
+        ...(nextOverrides[categoryId] || { order: 0, name: "" }),
+        color,
+      };
+      return {
+        ...current,
+        categoryOverrides: nextOverrides,
+      };
+    });
+  };
+
   const saveHomeEditor = () => {
-    const normalizedContent = normalizeHomeContentConfig(contentDraft);
+    const normalizedContent = normalizeHomeContentConfig(contentDraft, localizedDefaultHomeContent);
     window.localStorage.setItem(
       HOME_CONTENT_CONFIG_KEY,
       JSON.stringify(normalizedContent),
@@ -834,13 +999,13 @@ export default function HomePage() {
     setHomeContent(normalizedContent);
     setContentDraft(normalizedContent);
     saveHeroEditor();
-    setIsHomeEditorOpen(false);
+    toast.success(t("home.editor.saveSuccess"));
   };
 
   const resetHomeEditor = () => {
     window.localStorage.removeItem(HOME_CONTENT_CONFIG_KEY);
-    setHomeContent(defaultHomeContentConfig);
-    setContentDraft(defaultHomeContentConfig);
+    setHomeContent(localizedDefaultHomeContent);
+    setContentDraft(localizedDefaultHomeContent);
   };
 
   const renderHeroTitle = () =>
@@ -860,19 +1025,18 @@ export default function HomePage() {
   return (
     <div className="home-page">
       <div className="home-topbar">
-        <AccountCategoryNav items={homeNavItems} />
+        <AccountCategoryNav items={localizedHomeNavItems} />
       </div>
 
       <main className="container home-main-shell">
         <section className="home-hero" id="home-hero" style={{ order: 1 }}>
           <div className="home-hero-shell">
             <div className="home-hero-copy">
-              <h1>
+              <h1 style={homeContent.titleColors?.hero ? { color: homeContent.titleColors.hero } : undefined}>
                 {renderHeroTitle()}
               </h1>
               <p className="home-hero-description">
-                It is a long established fact that a reader content of a page
-                when Ipsum is that it has a more-or-less normal.
+                {t("home.hero.description")}
               </p>
 
               <div className="home-hero-actions">
@@ -880,7 +1044,7 @@ export default function HomePage() {
                   to="/search"
                   className="btn btn-primary home-hero-primary-cta"
                 >
-                  Get Started
+                  {t("home.hero.getStarted")}
                 </Link>
               </div>
             </div>
@@ -897,14 +1061,14 @@ export default function HomePage() {
                     <button
                       type="button"
                       onClick={() => moveSlide(-1)}
-                      aria-label="Previous event"
+                      aria-label={t("home.hero.previousEvent")}
                     >
                       <ChevronLeft size={18} />
                     </button>
                     <button
                       type="button"
                       onClick={() => moveSlide(1)}
-                      aria-label="Next event"
+                      aria-label={t("home.hero.nextEvent")}
                     >
                       <ChevronRight size={18} />
                     </button>
@@ -913,13 +1077,13 @@ export default function HomePage() {
                   <div className="hero-event-media">
                     <img
                       src={getEventImage(primaryHeroEvent)}
-                      alt={primaryHeroEvent?.title || "Event"}
+                      alt={primaryHeroEvent?.title || t("organizerEvents.events")}
                     />
                   </div>
 
                   <div className="hero-event-body">
                     <h2>
-                      {primaryHeroEvent?.title || "Sự kiện đang cập nhật"}
+                      {primaryHeroEvent?.title || t("home.eventUpdating")}
                     </h2>
 
                     <div className="hero-event-footer">
@@ -937,7 +1101,7 @@ export default function HomePage() {
                         to={`/event/${primaryHeroEvent?.slug || primaryHeroEvent?.id || ""}`}
                         className="hero-event-cta"
                       >
-                        Get Event Ticket
+                        {t("home.hero.getEventTicket")}
                       </Link>
                     </div>
                   </div>
@@ -949,7 +1113,7 @@ export default function HomePage() {
         </section>
 
         <section className="home-trust-strip" style={{ order: getSectionOrder("trust") }}>
-          <p className="home-trust-copy">
+          <p className="home-trust-copy" style={homeContent.titleColors?.trust ? { color: homeContent.titleColors.trust } : undefined}>
             {homeContent.trustTitle}
           </p>
 
@@ -966,15 +1130,15 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section" id="home-features" style={{ order: getSectionOrder("features") + 1 }}>
+        <section className="home-section" id="home-features" style={{ order: getSectionOrder("features") }}>
           <div className="section-heading section-heading-center">
-            <h2 className="home-features-title">
-              {renderTitleWithHighlight(homeContent.featuresTitle, "Features")}
+            <h2 className="home-features-title" style={homeContent.titleColors?.features ? { color: homeContent.titleColors.features } : undefined}>
+              {renderTitleWithHighlight(
+                homeContent.featuresTitle,
+                language === "en" ? "Features" : "nổi bật",
+              )}
             </h2>
-            <p>
-              It is a long established fact that a reader content of a page when
-              Ipsum is that it has a more-or- this is simple less normal .
-            </p>
+            <p>{t("home.sectionDescriptions.features")}</p>
           </div>
 
           <div className="feature-grid">
@@ -982,12 +1146,12 @@ export default function HomePage() {
               const Icon = feature.icon;
 
               return (
-                <article className="feature-card" key={feature.title}>
+                <article className="feature-card" key={feature.titleKey}>
                   <div className="feature-icon">
                     <Icon size={22} />
                   </div>
-                  <h3>{feature.title}</h3>
-                  <p>{feature.description}</p>
+                  <h3>{t(feature.titleKey)}</h3>
+                  <p>{t(feature.descriptionKey)}</p>
                 </article>
               );
             })}
@@ -997,71 +1161,77 @@ export default function HomePage() {
         {categoryEventSections.length > 0 ? (
           <section
             className="home-category-events-section"
-            style={{ order: getSectionOrder("features") }}
+            style={{ order: getSectionOrder("categories") }}
           >
-            {categoryEventSections.map((section, index) => (
-              <div
-                className="home-category-event-group"
-                key={section.category.id || section.category.slug}
-              >
-                <div className="home-category-event-block">
-                  <div className="home-category-event-header">
-                    <h2>
-                      {(() => {
-                        const CategoryIcon = categoryTitleIcons[index];
-                        return CategoryIcon ? (
-                          <CategoryIcon className="home-category-title-icon" />
-                        ) : null;
-                      })()}
-                      <span>{section.category.name}</span>
-                    </h2>
-                    <Link
-                      to={`/search?category=${section.category.slug || section.category.id}`}
-                      className="home-category-event-more"
-                    >
-                      <span>Xem thêm</span>
-                      <ChevronRight size={18} />
-                    </Link>
+            {categoryEventSections.map((section, index) => {
+              const categoryId = String(section.category.id || "");
+              const displayColor = homeContent.categoryOverrides?.[categoryId]?.color || homeContent.titleColors?.categories;
+              const displayName = homeContent.categoryOverrides?.[categoryId]?.name || section.category.name;
+
+              return (
+                <div
+                  className="home-category-event-group"
+                  key={section.category.id || section.category.slug}
+                >
+                  <div className="home-category-event-block">
+                    <div className="home-category-event-header">
+                      <h2 style={displayColor ? { color: displayColor } : undefined}>
+                        {(() => {
+                          const CategoryIcon = categoryTitleIcons[index];
+                          return CategoryIcon ? (
+                            <CategoryIcon className="home-category-title-icon" />
+                          ) : null;
+                        })()}
+                        <span>{displayName}</span>
+                      </h2>
+                      <Link
+                        to={`/search?category=${section.category.slug || section.category.id}`}
+                        className="home-category-event-more"
+                      >
+                        <span>{t("common.viewMore")}</span>
+                        <ChevronRight size={18} />
+                      </Link>
+                    </div>
+
+                    <div className="home-category-event-grid">
+                      {section.events.map((event) => (
+                        <article className="home-category-event-card" key={event.id}>
+                          <Link
+                            to={`/event/${event.slug || event.id}`}
+                            className="home-category-event-image"
+                          >
+                            <img src={getEventImage(event)} alt={event.title} />
+                          </Link>
+
+                          <div className="home-category-event-body">
+                            <h3>
+                              <Link to={`/event/${event.slug || event.id}`}>
+                                {event.title}
+                              </Link>
+                            </h3>
+                            <p className="home-category-event-price">
+                              {formatPrice(event)}
+                            </p>
+                            <p className="home-category-event-date">
+                              <Calendar size={15} />
+                              <span>
+                                {formatCategoryEventDate(event.startDatetime)}
+                              </span>
+                            </p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="home-category-event-grid">
-                    {section.events.map((event) => (
-                      <article className="home-category-event-card" key={event.id}>
-                        <Link
-                          to={`/event/${event.slug || event.id}`}
-                          className="home-category-event-image"
-                        >
-                          <img src={getEventImage(event)} alt={event.title} />
-                        </Link>
-
-                        <div className="home-category-event-body">
-                          <h3>
-                            <Link to={`/event/${event.slug || event.id}`}>
-                              {event.title}
-                            </Link>
-                          </h3>
-                          <p className="home-category-event-price">
-                            {formatPrice(event)}
-                          </p>
-                          <p className="home-category-event-date">
-                            <Calendar size={15} />
-                            <span>
-                              {formatCategoryEventDate(event.startDatetime)}
-                            </span>
-                          </p>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
+                  {index === 0 && categoryEventSections.length > 1 ? (
+                    <div className="home-category-events-banner">
+                      <img src={HOME_CATEGORY_BANNER_URL} alt="Event banner" />
+                    </div>
+                  ) : null}
                 </div>
-
-                {index === 0 && categoryEventSections.length > 1 ? (
-                  <div className="home-category-events-banner">
-                    <img src={HOME_CATEGORY_BANNER_URL} alt="Event banner" />
-                  </div>
-                ) : null}
-              </div>
-            ))}
+              );
+            })}
           </section>
         ) : null}
 
@@ -1074,18 +1244,17 @@ export default function HomePage() {
         >
           <div className="section-heading">
             <div>
-              <h2 className="home-upcoming-title">
-                {renderTitleWithHighlight(homeContent.upcomingTitle, "Events")}
+              <h2 className="home-upcoming-title" style={homeContent.titleColors?.upcoming ? { color: homeContent.titleColors.upcoming } : undefined}>
+                {renderTitleWithHighlight(
+                  homeContent.upcomingTitle,
+                  language === "en" ? "Events" : "sắp diễn ra",
+                )}
               </h2>
-              <p>
-                {" "}
-                It is a long established fact that a reader content of a page
-                when Ipsum is that it has a more-or- this is simple less normal
-              </p>
+              <p>{t("home.sectionDescriptions.upcoming")}</p>
             </div>
             <div className="upcoming-header-actions">
               <Link to="/search" className="section-link home-upcoming-cta">
-                View all events
+                {t("home.upcoming.viewAll")}
               </Link>
             </div>
           </div>
@@ -1094,7 +1263,7 @@ export default function HomePage() {
             <button
               className="upcoming-nav-btn is-left"
               onClick={() => scrollUpcoming("left")}
-              aria-label="Previous"
+              aria-label={t("home.previous")}
             >
               <ChevronLeft size={24} />
             </button>
@@ -1150,7 +1319,7 @@ export default function HomePage() {
             <button
               className="upcoming-nav-btn is-right"
               onClick={() => scrollUpcoming("right")}
-              aria-label="Next"
+              aria-label={t("home.next")}
             >
               <ChevronRight size={24} />
             </button>
@@ -1160,56 +1329,83 @@ export default function HomePage() {
         {venueDestinations.length > 0 ? (
           <section
             className="home-venue-destinations-section"
-            style={{ order: getSectionOrder("upcoming") + 1 }}
+            style={{ order: getSectionOrder("venues") }}
           >
-            <h2>
+            <h2 style={homeContent.titleColors?.venues ? { color: homeContent.titleColors.venues } : undefined}>
               <FaMapMarkedAlt className="home-venue-destinations-title-icon" />
-              <span>Điểm đến thú vị</span>
+              <span>{homeContent.venuesTitle || "Điểm đến thú vị"}</span>
             </h2>
             <div className="home-venue-destination-grid">
-              {venueDestinations.map((destination) => (
-                <Link
-                  to={destination.to}
-                  className={`home-venue-destination-card${
-                    destination.images.length > 1 ? " is-collage" : ""
-                  }`}
-                  key={destination.title}
-                >
-                  <div className="home-venue-destination-media">
-                    {destination.images.map((image, index) => (
-                      <img
-                        src={image}
-                        alt={destination.title}
-                        key={`${destination.title}-${index}`}
-                      />
-                    ))}
-                  </div>
-                  <div className="home-venue-destination-overlay" />
-                  <h3>{destination.title}</h3>
-                </Link>
-              ))}
+              {venueDestinations.map((destination) => {
+                const isOther = destination.title === "Vị trí khác";
+                const cardClass = `home-venue-destination-card${
+                  destination.images.length > 1 ? " is-collage" : ""
+                }`;
+
+                if (isOther) {
+                  return (
+                    <Link
+                      to={destination.to}
+                      className={cardClass}
+                      key={destination.title}
+                    >
+                      <div className="home-venue-destination-media">
+                        {destination.images.map((image, index) => (
+                          <img
+                            src={image}
+                            alt={destination.title}
+                            key={`${destination.title}-${index}`}
+                          />
+                        ))}
+                      </div>
+                      <div className="home-venue-destination-overlay" />
+                      <h3>{destination.title}</h3>
+                    </Link>
+                  );
+                }
+
+                const mapUrl = getCityGoogleMapsUrl(destination.title);
+                return (
+                  <a
+                    href={mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cardClass}
+                    key={destination.title}
+                  >
+                    <div className="home-venue-destination-media">
+                      {destination.images.map((image, index) => (
+                        <img
+                          src={image}
+                          alt={destination.title}
+                          key={`${destination.title}-${index}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="home-venue-destination-overlay" />
+                    <h3>{destination.title}</h3>
+                  </a>
+                );
+              })}
             </div>
           </section>
         ) : null}
 
         <section className="home-section" id="how-it-works-section" style={{ order: getSectionOrder("how") }}>
           <div className="section-heading section-heading-center">
-            <h2>{homeContent.howTitle}</h2>
-            <p>
-              It is a long established fact that a reader content of a page when
-              Ipsum is that it has a more-or- this is simple less normal
-            </p>
+            <h2 style={homeContent.titleColors?.how ? { color: homeContent.titleColors.how } : undefined}>{homeContent.howTitle}</h2>
+            <p>{t("home.sectionDescriptions.how")}</p>
           </div>
 
           <div className="how-grid">
             {howItWorks.map((item) => (
               <article className="how-card" key={item.step}>
                 <div className="how-card-media">
-                  <img src={item.image} alt={item.title} />
+                  <img src={item.image} alt={t(item.titleKey)} />
                   <span>{item.step}</span>
                 </div>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
+                <h3>{t(item.titleKey)}</h3>
+                <p>{t(item.descriptionKey)}</p>
               </article>
             ))}
           </div>
@@ -1217,13 +1413,13 @@ export default function HomePage() {
 
         <section className="home-section home-pricing-section" style={{ order: getSectionOrder("pricing") }}>
           <div className="section-heading section-heading-center">
-            <h2 className="home-pricing-title">
-              {renderTitleWithHighlight(homeContent.pricingTitle, "Pricing")}
+            <h2 className="home-pricing-title" style={homeContent.titleColors?.pricing ? { color: homeContent.titleColors.pricing } : undefined}>
+              {renderTitleWithHighlight(
+                homeContent.pricingTitle,
+                language === "en" ? "Pricing" : "minh bạch",
+              )}
             </h2>
-            <p>
-              It is a long established fact that a reader content of a page when
-              Ipsum is that it has a more-or- this is simple less normal
-            </p>
+            <p>{t("home.sectionDescriptions.pricing")}</p>
           </div>
 
           <div className="pricing-cards-row">
@@ -1233,31 +1429,28 @@ export default function HomePage() {
                 <div className="pricing-glass-icon">
                   <Building2 size={40} />
                 </div>
-                <span className="pricing-big-value">Free</span>
+                <span className="pricing-big-value">{t("home.pricing.free")}</span>
               </div>
-              <h3>Organization Signup</h3>
-              <p>
-                One-time registration fee to create your organizer account and
-                start publishing events.
-              </p>
+              <h3>{t("home.pricing.signupTitle")}</h3>
+              <p>{t("home.pricing.signupDescription")}</p>
               <div className="pricing-signup-benefits">
                 <ul className="pricing-check-list">
                   <li>
-                    <Check size={16} /> Unlimited event creation
+                    <Check size={16} /> {t("home.pricing.unlimitedEvents")}
                   </li>
                   <li>
-                    <Check size={16} /> Real-time sales dashboard
+                    <Check size={16} /> {t("home.pricing.salesDashboard")}
                   </li>
                   <li>
-                    <Check size={16} /> QR check-in system
+                    <Check size={16} /> {t("home.pricing.qrCheckIn")}
                   </li>
                   <li>
-                    <Check size={16} /> Attendee management
+                    <Check size={16} /> {t("home.pricing.attendeeManagement")}
                   </li>
                 </ul>
                 <div className="pricing-card-footer">
                   <Link to="/register" className="pricing-cta-btn">
-                    Get Started
+                    {t("home.pricing.getStarted")}
                   </Link>
                 </div>
               </div>
@@ -1305,7 +1498,7 @@ export default function HomePage() {
                   <span className="pricing-progress-value">1.8%</span>
                 </div>
                 <div className="pricing-progress-item">
-                  <span className="pricing-progress-label">Platform Fee</span>
+                  <span className="pricing-progress-label">{t("home.pricing.platformFee")}</span>
                   <div className="pricing-progress-bar">
                     <div
                       className="pricing-progress-fill"
@@ -1325,15 +1518,15 @@ export default function HomePage() {
               style={{
                 fontSize: "clamp(2.2rem, 3.6vw, 3.4rem)",
                 fontWeight: 800,
+                color: homeContent.titleColors?.past || undefined,
               }}
             >
-              {renderTitleWithHighlight(homeContent.pastTitle, "Past Events")}
+              {renderTitleWithHighlight(
+                homeContent.pastTitle,
+                language === "en" ? "Past Events" : "sự kiện đã diễn ra",
+              )}
             </h2>
-            <p>
-              {" "}
-              It is a long established fact that a reader content of a page when
-              Ipsum is that it has a more-or- this is simple less normal
-            </p>
+            <p>{t("home.sectionDescriptions.past")}</p>
           </div>
 
           <div className="past-event-gallery">
@@ -1354,23 +1547,22 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="home-section faq-section" id="home-faq" style={{ order: 50 }}>
+        <section className="home-section faq-section" id="home-faq" style={{ order: getSectionOrder("faq") }}>
           <div className="faq-layout">
             <div className="faq-copy">
-              <h2 className="faq-title">
-                Some Important <span className="faq-title-highlight">FAQs</span>{" "}
-                for Event & Ticket
+              <h2 className="faq-title" style={homeContent.titleColors?.faq ? { color: homeContent.titleColors.faq } : undefined}>
+                {renderTitleWithHighlight(
+                  homeContent.faqTitle || t("home.defaults.faqTitle"),
+                  language === "en" ? "FAQs" : "Câu hỏi thường gặp",
+                )}
               </h2>
-              <p>
-                Where we address some of the most commonly asked questions about
-                our Event services.
-              </p>
+              <p>{t("home.sectionDescriptions.faq")}</p>
 
               <div className="faq-visual">
                 <img
                   className="faq-illustration-image"
                   src="https://i.ibb.co/Zz1y0hXk/vecteezy-three-cubes-with-q-and-a-on-transparent-background-faq-18735148.png"
-                  alt="Customer support illustration"
+                  alt={t("home.faq.illustrationAlt")}
                 />
               </div>
             </div>
@@ -1382,19 +1574,19 @@ export default function HomePage() {
                 return (
                   <article
                     className={`faq-item ${isOpen ? "is-open" : ""}`}
-                    key={item.question}
+                    key={item.questionKey}
                   >
                     <button
                       type="button"
                       onClick={() => setActiveFaq(isOpen ? -1 : index)}
                     >
-                      <span>{item.question}</span>
+                      <span>{t(item.questionKey)}</span>
                       <span className="faq-toggle-icon" aria-hidden="true">
                         {isOpen ? <Minus size={18} /> : <Plus size={18} />}
                       </span>
                     </button>
                     <div className="faq-answer">
-                      <p>{item.answer}</p>
+                      <p>{t(item.answerKey)}</p>
                     </div>
                   </article>
                 );
@@ -1403,9 +1595,12 @@ export default function HomePage() {
           </div>
         </section>
 
-          <div style={{ order: 60 }}>
-            <Blog />
-          </div>
+        <div style={{ order: getSectionOrder("blog") }}>
+          <Blog
+            title={homeContent.blogTitle || t("home.defaults.blogTitle")}
+            highlight={language === "en" ? "Blog" : "mới nhất"}
+          />
+        </div>
       </main>
 
       {canEditHomeHero && isHomeEditorOpen ? (
@@ -1419,6 +1614,7 @@ export default function HomePage() {
             <div className="home-editor-header">
               <div>
                 <h2 id="home-editor-title">Sửa giao diện trang chủ</h2>
+                <p className="home-editor-subtitle">Tùy biến nội dung, màu sắc và cách sắp xếp trang chủ</p>
               </div>
               <button
                 type="button"
@@ -1426,141 +1622,421 @@ export default function HomePage() {
                 onClick={() => setIsHomeEditorOpen(false)}
                 aria-label="Đóng"
               >
-                x
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="home-editor-tabs">
+              <button
+                type="button"
+                className={`home-editor-tab-btn ${editorTab === "titles" ? "active" : ""}`}
+                onClick={() => setEditorTab("titles")}
+              >
+                <Type size={16} />
+                <span>Tiêu đề & Màu</span>
+              </button>
+              <button
+                type="button"
+                className={`home-editor-tab-btn ${editorTab === "categories" ? "active" : ""}`}
+                onClick={() => setEditorTab("categories")}
+              >
+                <FolderTree size={16} />
+                <span>Danh mục</span>
+              </button>
+              <button
+                type="button"
+                className={`home-editor-tab-btn ${editorTab === "layout" ? "active" : ""}`}
+                onClick={() => setEditorTab("layout")}
+              >
+                <ArrowUpDown size={16} />
+                <span>Bố cục</span>
+              </button>
+              <button
+                type="button"
+                className={`home-editor-tab-btn ${editorTab === "hero" ? "active" : ""}`}
+                onClick={() => setEditorTab("hero")}
+              >
+                <Image size={16} />
+                <span>Banner Hero</span>
               </button>
             </div>
 
             <div className="home-editor-body">
-              <section className="home-editor-section">
-                <h3>Tiêu đề cố định</h3>
-                <label className="home-editor-field home-editor-field-full">
-                  <span>Hero title</span>
-                  <textarea
-                    value={contentDraft.heroTitle}
-                    rows={3}
-                    onChange={(event) =>
-                      setContentDraft((current) => ({
-                        ...current,
-                        heroTitle: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
+              {editorTab === "titles" && (
+                <div className="home-editor-tab-content">
+                  <div className="home-editor-section-header">
+                    <h3>Cấu hình tiêu đề & màu sắc</h3>
+                    <p>Nhập tiêu đề hiển thị và chọn màu sắc tương ứng cho từng phần</p>
+                  </div>
 
-                {(
-                  [
-                    ["trustTitle", "Trust strip"],
-                    ["featuresTitle", "Our Core Features"],
-                    ["upcomingTitle", "Upcoming Events"],
-                    ["howTitle", "How it works"],
-                    ["pricingTitle", "Transparent Pricing"],
-                    ["pastTitle", "Some of our Past Events"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label className="home-editor-field" key={key}>
-                    <span>{label}</span>
-                    <input
-                      value={contentDraft[key]}
-                      onChange={(event) =>
-                        setContentDraft((current) => ({
-                          ...current,
-                          [key]: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                ))}
-              </section>
-
-              <section className="home-editor-section">
-                <h3>Vị trí nội dung</h3>
-                <div className="home-editor-order-list">
-                  {contentDraft.sectionOrder.map((key, index) => (
-                    <div className="home-editor-order-item" key={key}>
-                      <span>{homeSectionLabels[key]}</span>
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => moveSectionInDraft(key, -1)}
-                          disabled={index === 0}
-                        >
-                          Lên
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveSectionInDraft(key, 1)}
-                          disabled={index === contentDraft.sectionOrder.length - 1}
-                        >
-                          Xuống
-                        </button>
+                  <div className="home-editor-fields-grid">
+                    <div className="home-editor-field-card">
+                      <div className="home-editor-field-card-header">
+                        <span className="field-card-number">01</span>
+                        <h4>Hero Section</h4>
+                      </div>
+                      <div className="home-editor-field-group">
+                        <label className="home-editor-label-span">Nội dung tiêu đề (sử dụng \n để xuống dòng)</label>
+                        <textarea
+                          className="home-editor-textarea"
+                          value={contentDraft.heroTitle}
+                          rows={3}
+                          onChange={(event) =>
+                            setContentDraft((current) => ({
+                              ...current,
+                              heroTitle: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="home-editor-field-group color-group">
+                        <label className="home-editor-label-span">Màu chữ tiêu đề</label>
+                        <div className="color-picker-wrapper">
+                          <input
+                            type="color"
+                            className="home-editor-color-input"
+                            value={contentDraft.titleColors?.hero || "#0f172a"}
+                            onChange={(event) =>
+                              setContentDraft((current) => ({
+                                ...current,
+                                titleColors: {
+                                  ...current.titleColors,
+                                  hero: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                          <input
+                            type="text"
+                            className="home-editor-color-text"
+                            value={contentDraft.titleColors?.hero || "#0f172a"}
+                            placeholder="#0f172a"
+                            onChange={(event) =>
+                              setContentDraft((current) => ({
+                                ...current,
+                                titleColors: {
+                                  ...current.titleColors,
+                                  hero: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </section>
 
-              <section className="home-editor-section">
-                <h3>Banner slide đang chọn</h3>
-                <label className="home-editor-field">
-                  <span>Tiêu đề sự kiện</span>
-                  <input
-                    value={editorDraft.title}
-                    onChange={(event) =>
-                      setEditorDraft((prev) => ({
-                        ...prev,
-                        title: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="home-editor-field home-editor-field-full">
-                  <span>Banner URL</span>
-                  <input
-                    value={editorDraft.bannerUrl}
-                    onChange={(event) =>
-                      setEditorDraft((prev) => ({
-                        ...prev,
-                        bannerUrl: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="home-editor-field">
-                  <span>Địa điểm</span>
-                  <input
-                    value={editorDraft.venueName}
-                    onChange={(event) =>
-                      setEditorDraft((prev) => ({
-                        ...prev,
-                        venueName: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="home-editor-field">
-                  <span>Thành phố</span>
-                  <input
-                    value={editorDraft.city}
-                    onChange={(event) =>
-                      setEditorDraft((prev) => ({
-                        ...prev,
-                        city: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              </section>
+                    {(
+                      [
+                        ["trustTitle", "trust", t("home.editor.cards.trust"), t("home.editor.fields.trustTitle")],
+                        ["featuresTitle", "features", t("home.editor.cards.features"), t("home.editor.fields.featuresTitle")],
+                        ["categories", "categories", t("home.editor.cards.categories"), t("home.editor.fields.categoriesTitleColor")],
+                        ["upcomingTitle", "upcoming", t("home.editor.cards.upcoming"), t("home.editor.fields.upcomingTitle")],
+                        ["venuesTitle", "venues", t("home.editor.cards.venues"), t("home.editor.fields.venuesTitle")],
+                        ["howTitle", "how", t("home.editor.cards.how"), t("home.editor.fields.howTitle")],
+                        ["pricingTitle", "pricing", t("home.editor.cards.pricing"), t("home.editor.fields.pricingTitle")],
+                        ["pastTitle", "past", t("home.editor.cards.past"), t("home.editor.fields.pastTitle")],
+                        ["faqTitle", "faq", t("home.editor.cards.faq"), t("home.editor.fields.faqTitle")],
+                        ["blogTitle", "blog", t("home.editor.cards.blog"), t("home.editor.fields.blogTitle")],
+                      ] as const
+                    ).map(([fieldKey, sectionKey, cardLabel, fieldLabel], index) => (
+                      <div className="home-editor-field-card" key={sectionKey}>
+                        <div className="home-editor-field-card-header">
+                          <span className="field-card-number">{String(index + 2).padStart(2, "0")}</span>
+                          <h4>{cardLabel}</h4>
+                        </div>
+                        {fieldKey !== "categories" && (
+                          <div className="home-editor-field-group">
+                            <label className="home-editor-label-span">{fieldLabel}</label>
+                            <input
+                              type="text"
+                              className="home-editor-input"
+                              value={(contentDraft[fieldKey as keyof HomeContentConfig] as string) || ""}
+                              onChange={(event) =>
+                                setContentDraft((current) => ({
+                                  ...current,
+                                  [fieldKey]: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        )}
+                        <div className="home-editor-field-group color-group">
+                          <label className="home-editor-label-span">Màu chữ tiêu đề</label>
+                          <div className="color-picker-wrapper">
+                            <input
+                              type="color"
+                              className="home-editor-color-input"
+                              value={contentDraft.titleColors?.[sectionKey] || "#0f172a"}
+                              onChange={(event) =>
+                                setContentDraft((current) => ({
+                                  ...current,
+                                  titleColors: {
+                                    ...current.titleColors,
+                                    [sectionKey]: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                            <input
+                              type="text"
+                              className="home-editor-color-text"
+                              value={contentDraft.titleColors?.[sectionKey] || "#0f172a"}
+                              placeholder="#0f172a"
+                              onChange={(event) =>
+                                setContentDraft((current) => ({
+                                  ...current,
+                                  titleColors: {
+                                    ...current.titleColors,
+                                    [sectionKey]: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {editorTab === "categories" && (
+                <div className="home-editor-tab-content">
+                  <div className="home-editor-section-header">
+                    <h3>Quản lý danh mục sự kiện</h3>
+                    <p>Thay đổi tên hiển thị, màu sắc tiêu đề và thứ tự các danh mục sự kiện nổi bật</p>
+                  </div>
+
+                  {rawCategorySections.length === 0 ? (
+                    <div className="home-editor-empty">Không có danh mục sự kiện nào hoạt động.</div>
+                  ) : (
+                    <div className="home-editor-order-list categories-list">
+                      {[...rawCategorySections]
+                        .sort((left, right) => {
+                          const leftId = String(left.category.id || "");
+                          const rightId = String(right.category.id || "");
+                          const leftOverride = contentDraft.categoryOverrides?.[leftId];
+                          const rightOverride = contentDraft.categoryOverrides?.[rightId];
+                          const leftOrder = leftOverride?.order !== undefined ? leftOverride.order : rawCategorySections.indexOf(left);
+                          const rightOrder = rightOverride?.order !== undefined ? rightOverride.order : rawCategorySections.indexOf(right);
+                          return leftOrder - rightOrder;
+                        })
+                        .map((section, index, sortedCategories) => {
+                          const categoryId = String(section.category.id || "");
+                          const displayName = contentDraft.categoryOverrides?.[categoryId]?.name || section.category.name;
+                          const displayColor = contentDraft.categoryOverrides?.[categoryId]?.color || "#0f172a";
+
+                          return (
+                            <div className="home-editor-category-card" key={categoryId}>
+                              <div className="category-card-drag-handle">
+                                <span className="category-index">{index + 1}</span>
+                              </div>
+                              
+                              <div className="category-card-details">
+                                <div className="home-editor-field-group">
+                                  <label className="home-editor-label-span">Tên danh mục hiển thị <em className="original-label-name">({section.category.name})</em></label>
+                                  <input
+                                    type="text"
+                                    className="home-editor-input"
+                                    value={displayName}
+                                    onChange={(e) => handleRenameCategory(categoryId, e.target.value)}
+                                    placeholder={section.category.name}
+                                  />
+                                </div>
+
+                                <div className="home-editor-field-group color-group">
+                                  <label className="home-editor-label-span">Màu tiêu đề</label>
+                                  <div className="color-picker-wrapper">
+                                    <input
+                                      type="color"
+                                      className="home-editor-color-input"
+                                      value={displayColor}
+                                      onChange={(e) => handleChangeCategoryColor(categoryId, e.target.value)}
+                                    />
+                                    <input
+                                      type="text"
+                                      className="home-editor-color-text"
+                                      value={displayColor}
+                                      placeholder="#0f172a"
+                                      onChange={(e) => handleChangeCategoryColor(categoryId, e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="category-card-actions">
+                                <button
+                                  type="button"
+                                  className="home-editor-btn-icon"
+                                  onClick={() => moveCategoryInDraft(categoryId, -1)}
+                                  disabled={index === 0}
+                                  title="Di chuyển lên"
+                                >
+                                  <ChevronLeft size={16} style={{ transform: "rotate(90deg)" }} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="home-editor-btn-icon"
+                                  onClick={() => moveCategoryInDraft(categoryId, 1)}
+                                  disabled={index === sortedCategories.length - 1}
+                                  title="Di chuyển xuống"
+                                >
+                                  <ChevronLeft size={16} style={{ transform: "rotate(-90deg)" }} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {editorTab === "layout" && (
+                <div className="home-editor-tab-content">
+                  <div className="home-editor-section-header">
+                    <h3>Sắp xếp vị trí bố cục</h3>
+                    <p>Thay đổi thứ tự hiển thị các phần nội dung trên Trang chủ từ trên xuống dưới</p>
+                  </div>
+
+                  <div className="home-editor-order-list layout-list">
+                    {contentDraft.sectionOrder.map((key, index) => {
+                      let SectionIcon = Settings;
+                      if (key === "trust") SectionIcon = Building2;
+                      else if (key === "features") SectionIcon = Check;
+                      else if (key === "categories") SectionIcon = FolderTree;
+                      else if (key === "upcoming") SectionIcon = Calendar;
+                      else if (key === "venues") SectionIcon = MapPin;
+                      else if (key === "how") SectionIcon = HelpCircle;
+                      else if (key === "pricing") SectionIcon = Wallet;
+                      else if (key === "past") SectionIcon = Image;
+                      else if (key === "faq") SectionIcon = MessageSquareText;
+                      else if (key === "blog") SectionIcon = BookOpen;
+
+                      return (
+                        <div className="home-editor-order-item-card" key={key}>
+                          <div className="item-card-icon-wrapper">
+                            <SectionIcon size={18} className="item-card-icon" />
+                          </div>
+                          
+                          <div className="item-card-label">
+                            <span className="item-card-name">{t(homeSectionLabelKeys[key])}</span>
+                            <span className="item-card-index">Vị trí {index + 1}</span>
+                          </div>
+
+                          <div className="item-card-actions">
+                            <button
+                              type="button"
+                              className="home-editor-btn-icon"
+                              onClick={() => moveSectionInDraft(key, -1)}
+                              disabled={index === 0}
+                            >
+                              <ChevronLeft size={16} style={{ transform: "rotate(90deg)" }} />
+                            </button>
+                            <button
+                              type="button"
+                              className="home-editor-btn-icon"
+                              onClick={() => moveSectionInDraft(key, 1)}
+                              disabled={index === contentDraft.sectionOrder.length - 1}
+                            >
+                              <ChevronLeft size={16} style={{ transform: "rotate(-90deg)" }} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {editorTab === "hero" && (
+                <div className="home-editor-tab-content">
+                  <div className="home-editor-section-header">
+                    <h3>Tùy chỉnh Slide Banner Hero</h3>
+                    <p>Chỉnh sửa hình ảnh, tiêu đề và địa điểm cho sự kiện đang chọn hiển thị trên Banner đầu trang</p>
+                  </div>
+
+                  <div className="home-editor-fields-grid">
+                    <div className="home-editor-field-card full-width">
+                      <div className="home-editor-field-group">
+                        <label className="home-editor-label-span">Tiêu đề sự kiện</label>
+                        <input
+                          type="text"
+                          className="home-editor-input"
+                          value={editorDraft.title}
+                          onChange={(event) =>
+                            setEditorDraft((prev) => ({
+                              ...prev,
+                              title: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="home-editor-field-group">
+                        <label className="home-editor-label-span">Đường dẫn ảnh Banner (URL)</label>
+                        <input
+                          type="text"
+                          className="home-editor-input"
+                          value={editorDraft.bannerUrl}
+                          onChange={(event) =>
+                            setEditorDraft((prev) => ({
+                              ...prev,
+                              bannerUrl: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="home-editor-row-fields">
+                        <div className="home-editor-field-group">
+                          <label className="home-editor-label-span">Địa điểm tổ chức</label>
+                          <input
+                            type="text"
+                            className="home-editor-input"
+                            value={editorDraft.venueName}
+                            onChange={(event) =>
+                              setEditorDraft((prev) => ({
+                                ...prev,
+                                venueName: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+
+                        <div className="home-editor-field-group">
+                          <label className="home-editor-label-span">Thành phố</label>
+                          <input
+                            type="text"
+                            className="home-editor-input"
+                            value={editorDraft.city}
+                            onChange={(event) =>
+                              setEditorDraft((prev) => ({
+                                ...prev,
+                                city: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="home-editor-actions">
-              <button type="button" onClick={resetHomeEditor}>
-                Khôi phục tiêu đề
+              <button type="button" className="home-editor-btn-secondary" onClick={resetHomeEditor}>
+                <Undo2 size={15} />
+                <span>Khôi phục tiêu đề</span>
               </button>
-              <button type="button" onClick={resetHeroEditor}>
-                Khôi phục banner
+              <button type="button" className="home-editor-btn-secondary" onClick={resetHeroEditor}>
+                <Undo2 size={15} />
+                <span>Khôi phục banner</span>
               </button>
-              <button type="button" onClick={saveHomeEditor}>
-                Lưu thay đổi
+              <button type="button" className="home-editor-btn-primary" onClick={saveHomeEditor}>
+                <Save size={15} />
+                <span>Lưu thay đổi</span>
               </button>
             </div>
           </section>

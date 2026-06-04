@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
-import { LuTicketsPlane } from "react-icons/lu";
+import { useTranslation } from "react-i18next";
 import { FaCalendarCheck, FaMapLocationDot } from "react-icons/fa6";
 import { eventService } from "../../services/eventService";
 import { bookingService } from "../../services/bookingService";
@@ -65,9 +65,11 @@ function getSectorType(sector?: PublicSeatSector | null) {
 }
 
 export default function SelectTicketPage() {
+  const { i18n, t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { keycloak } = useKeycloak();
+  const language = i18n.resolvedLanguage || "vi";
 
   const [event, setEvent] = useState<EventSummary | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
@@ -157,11 +159,11 @@ export default function SelectTicketPage() {
       })
       .catch((err: any) => {
         console.error("Failed to load event or seat map:", err);
-        setError("Vui lòng tải lại trang");
-        toast.error("Không thể tải thông tin sự kiện.");
+        setError(t("selectTicket.ticketLoadFailed"));
+        toast.error(t("selectTicket.ticketLoadFailed"));
       })
       .finally(() => setIsLoading(false));
-  }, [slug]);
+  }, [slug, t]);
 
   const totalSelected = Object.values(quantities).reduce((a, b) => a + b, 0);
   const minPerOrder = (event as any)?.config?.minTicketsPerOrder || (event as any)?.minTicketsPerOrder || 1;
@@ -214,12 +216,23 @@ export default function SelectTicketPage() {
 
   const standingSectorTicketTypes = useMemo(
     () =>
-      quantityTicketTypes.filter((ticketType) => {
+      ticketTypes
+        .filter((ticketType) => ticketType.isVisible !== false)
+        .filter((ticketType) => {
         const sectorId = getTicketTypeSectorId(ticketType);
         return sectorId && getSectorType(sectorById.get(sectorId)) === "STANDING";
-      }),
-    [quantityTicketTypes, sectorById],
+      })
+        .sort((a, b) => a.displayOrder - b.displayOrder),
+    [ticketTypes, sectorById],
   );
+
+  const orderQuantityTicketTypes = useMemo(() => {
+    const mapping = new Map<string, TicketType>();
+    [...quantityTicketTypes, ...standingSectorTicketTypes].forEach((ticketType) => {
+      mapping.set(ticketType.id, ticketType);
+    });
+    return [...mapping.values()];
+  }, [quantityTicketTypes, standingSectorTicketTypes]);
 
   const hasStandingSectorTickets = standingSectorTicketTypes.length > 0;
   const hasInteractiveSeatMap = Boolean(seatMap && (hasAssignedSeatTickets || hasStandingSectorTickets));
@@ -240,7 +253,10 @@ export default function SelectTicketPage() {
         (ticketType) => getTicketTypeSectorId(ticketType) === standingPopupSector.id,
       )
     : [];
-  const standingPopupPrimaryTicket = standingPopupTicketTypes[0] ?? null;
+  const standingPopupTotal = standingPopupTicketTypes.reduce(
+    (sum, ticketType) => sum + (quantities[ticketType.id] || 0) * Number(ticketType.price || 0),
+    0,
+  );
 
   const availableSeatCount = useMemo(
     () =>
@@ -259,12 +275,11 @@ export default function SelectTicketPage() {
     (ticketType: TicketType, delta: number) => {
       const sectorId = getTicketTypeSectorId(ticketType);
       if (
-        getInventoryMode(ticketType) === "QUANTITY" &&
         sectorId &&
         getSectorType(sectorById.get(sectorId)) === "STANDING" &&
         sectorId !== selectedStandingSectorId
       ) {
-        toast.warning("Vui lòng chọn khu đứng trên sơ đồ trước khi chọn số lượng vé.", {
+        toast.warning(t("selectTicket.selectStandingSectorFirst"), {
           toastId: "select-standing-sector",
         });
         return;
@@ -275,21 +290,21 @@ export default function SelectTicketPage() {
       const nextTotal = totalSelected - currentQuantity + nextQuantity;
 
       if (nextTotal > maxPerOrder) {
-        toast.warning(`Bạn chỉ được chọn tối đa ${maxPerOrder} vé.`, {
+        toast.warning(t("selectTicket.maxPerOrder", { count: maxPerOrder }), {
           toastId: "max-ticket-limit",
         });
         return;
       }
 
       if (nextQuantity > ticketType.maxPerOrder) {
-        toast.warning(`Loại vé này cho phép tối đa ${ticketType.maxPerOrder} vé mỗi đơn.`, {
+        toast.warning(t("selectTicket.ticketTypeMax", { count: ticketType.maxPerOrder }), {
           toastId: `ticket-max-${ticketType.id}`,
         });
         return;
       }
 
       if (nextQuantity > (ticketType.quantityAvailable || 0)) {
-        toast.warning("Loại vé này không còn số lượng phù hợp.", {
+        toast.warning(t("selectTicket.ticketTypeAvailable"), {
           toastId: `ticket-available-${ticketType.id}`,
         });
         return;
@@ -300,7 +315,7 @@ export default function SelectTicketPage() {
         [ticketType.id]: nextQuantity,
       }));
     },
-    [maxPerOrder, quantities, selectedStandingSectorId, sectorById, totalSelected],
+    [maxPerOrder, quantities, selectedStandingSectorId, sectorById, t, totalSelected],
   );
 
   const handleSectorClick = useCallback(
@@ -309,11 +324,19 @@ export default function SelectTicketPage() {
         return;
       }
 
+      const activeSectorId = selectedSeats[0]?.sectorId || selectedStandingSectorId;
+      if (activeSectorId && activeSectorId !== sector.id) {
+        toast.warning(t("selectTicket.oneSectorOnly"), {
+          toastId: "single-sector-limit",
+        });
+        return;
+      }
+
       const hasTicketType = standingSectorTicketTypes.some(
         (ticketType) => getTicketTypeSectorId(ticketType) === sector.id,
       );
       if (!hasTicketType) {
-        toast.warning("Khu đứng này chưa có loại vé đang mở bán.", {
+        toast.warning(t("selectTicket.noTicketInStandingSector"), {
           toastId: `standing-sector-${sector.id}`,
         });
         return;
@@ -322,8 +345,27 @@ export default function SelectTicketPage() {
       setSelectedStandingSectorId(sector.id);
       setStandingPopupSectorId(sector.id);
     },
-    [standingSectorTicketTypes],
+    [selectedSeats, selectedStandingSectorId, standingSectorTicketTypes, t],
   );
+
+  const clearStandingSectorSelection = useCallback(() => {
+    if (selectedStandingSectorId) {
+      const ticketTypeIds = standingSectorTicketTypes
+        .filter((ticketType) => getTicketTypeSectorId(ticketType) === selectedStandingSectorId)
+        .map((ticketType) => ticketType.id);
+
+      setQuantities((prev) => {
+        const next = { ...prev };
+        ticketTypeIds.forEach((ticketTypeId) => {
+          delete next[ticketTypeId];
+        });
+        return next;
+      });
+    }
+
+    setSelectedStandingSectorId(null);
+    setStandingPopupSectorId(null);
+  }, [selectedStandingSectorId, standingSectorTicketTypes]);
 
   const handleSeatClick = useCallback(
     (sector: PublicSeatSector, seat: PublicSeat) => {
@@ -336,11 +378,19 @@ export default function SelectTicketPage() {
         ticketTypeBySectorId.get(sector.id) ||
         ticketTypeById.get(getSectorTicketTypeId(sector));
       if (!ticketType) {
-        toast.warning("Khu vực này chưa được gắn loại vé.");
+        toast.warning(t("selectTicket.unmappedSector"));
         return;
       }
 
       if (getInventoryMode(ticketType) !== "ASSIGNED_SEAT") {
+        return;
+      }
+
+      const activeSectorId = selectedSeats[0]?.sectorId || selectedStandingSectorId;
+      if (activeSectorId && activeSectorId !== sector.id) {
+        toast.warning(t("selectTicket.oneSectorOnly"), {
+          toastId: "single-sector-limit",
+        });
         return;
       }
 
@@ -355,22 +405,14 @@ export default function SelectTicketPage() {
       }
 
       if (totalSelected >= maxPerOrder) {
-        toast.warning(`Bạn chỉ được chọn tối đa ${maxPerOrder} vé.`, {
+        toast.warning(t("selectTicket.maxPerOrder", { count: maxPerOrder }), {
           toastId: "max-ticket-limit",
         });
         return;
       }
 
-      const selectedSectorId = selectedSeats[0]?.sectorId;
-      if (selectedSectorId && selectedSectorId !== sector.id) {
-        toast.warning("Mỗi lần đặt vé chỉ được chọn ghế trong cùng một khu vực.", {
-          toastId: "single-sector-limit",
-        });
-        return;
-      }
-
       if ((quantities[ticketType.id] || 0) >= (ticketType.quantityAvailable || 0)) {
-        toast.warning("Loại vé này không còn số lượng phù hợp.", {
+        toast.warning(t("selectTicket.ticketTypeAvailable"), {
           toastId: `ticket-available-${ticketType.id}`,
         });
         return;
@@ -395,7 +437,7 @@ export default function SelectTicketPage() {
         [ticketType.id]: (prev[ticketType.id] || 0) + 1,
       }));
     },
-    [maxPerOrder, quantities, selectedSeats, ticketTypeById, ticketTypeBySectorId, totalSelected],
+    [maxPerOrder, quantities, selectedSeats, selectedStandingSectorId, t, ticketTypeById, ticketTypeBySectorId, totalSelected],
   );
 
   const handleRemoveSeat = useCallback(
@@ -419,18 +461,18 @@ export default function SelectTicketPage() {
     const errors: Record<string, string> = {};
 
     if (!modalName.trim()) {
-      errors.name = "Vui lòng nhập họ tên";
+      errors.name = t("selectTicket.formNameRequired");
     }
     if (!modalEmail.trim()) {
-      errors.email = "Vui lòng nhập email";
+      errors.email = t("selectTicket.formEmailRequired");
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(modalEmail)) {
-      errors.email = "Email không hợp lệ";
+      errors.email = t("selectTicket.formEmailInvalid");
     }
     const cleanPhone = modalPhone.replace(/\s/g, "");
     if (!cleanPhone) {
-      errors.phone = "Vui lòng nhập số điện thoại";
+      errors.phone = t("selectTicket.formPhoneRequired");
     } else if (!/^(?:\+84|0)[0-9]{8,10}$/.test(cleanPhone)) {
-      errors.phone = "Số điện thoại không hợp lệ (bắt đầu bằng 0 hoặc +84)";
+      errors.phone = t("selectTicket.formPhoneInvalid");
     }
 
     if (Object.keys(errors).length > 0) {
@@ -462,7 +504,7 @@ export default function SelectTicketPage() {
         }, new Map()).values(),
       );
 
-      const quantityItems = quantityTicketTypes
+      const quantityItems = orderQuantityTicketTypes
         .map((ticketType) => ({
           ticketTypeId: ticketType.id,
           quantity: quantities[ticketType.id] || 0,
@@ -493,7 +535,7 @@ export default function SelectTicketPage() {
       sessionStorage.setItem("lastOrderId", response.orderId);
       sessionStorage.setItem("lastOrderNumber", response.orderNumber);
 
-      toast.success("Giữ vé thành công!");
+      toast.success(t("selectTicket.bookingSuccess"));
       setIsModalOpen(false);
       navigate(`/checkout?orderId=${response.orderId}`);
     } catch (err: any) {
@@ -501,7 +543,7 @@ export default function SelectTicketPage() {
       toast.error(
         err?.response?.data?.message ||
           err?.response?.data?.error?.message ||
-          "Không thể giữ vé. Vui lòng kiểm tra lại thông tin hoặc thử lại sau.",
+          t("selectTicket.bookingFailed"),
       );
     } finally {
       setIsBookingInProgress(false);
@@ -514,7 +556,7 @@ export default function SelectTicketPage() {
 
   const handleContinue = () => {
     if (totalSelected < minPerOrder) {
-      toast.warning(`Vui lòng chọn ít nhất ${minPerOrder} vé.`);
+      toast.warning(t("selectTicket.minRequired", { count: minPerOrder }));
       return;
     }
 
@@ -542,7 +584,7 @@ export default function SelectTicketPage() {
     );
 
     if (invalidSeatItem) {
-      toast.warning("Vé chọn ghế cần có số ghế bằng đúng số lượng.");
+      toast.warning(t("selectTicket.assignedSeatQuantityMismatch"));
       return;
     }
 
@@ -580,7 +622,7 @@ export default function SelectTicketPage() {
       <div className="select-ticket-page">
         <div className="select-ticket-loading" role="status" aria-live="polite">
           <LoaderCircle className="select-ticket-loading-icon" size={24} />
-          <span>Loading</span>
+          <span>{t("selectTicket.loading")}</span>
         </div>
       </div>
     );
@@ -590,12 +632,12 @@ export default function SelectTicketPage() {
     return (
       <div className="select-ticket-page">
         <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-          <p>{error || "Không tìm thấy sự kiện"}</p>
+          <p>{error || t("selectTicket.eventNotFound")}</p>
           <Link
             to="/"
             style={{ textDecoration: "underline", color: "var(--primary)" }}
           >
-            Quay về trang chủ
+            {t("selectTicket.returnHome")}
           </Link>
         </div>
       </div>
@@ -612,11 +654,11 @@ export default function SelectTicketPage() {
             onClick={() => navigate(-1)}
           >
             <ArrowLeft size={22} />
-            <span>Trở về</span>
+            <span>{t("selectTicket.back")}</span>
           </button>
 
           {hasInteractiveSeatMap ? (
-            <div className="select-ticket-floating-zoom" aria-label="Điều khiển sơ đồ">
+            <div className="select-ticket-floating-zoom" aria-label={t("selectTicket.interactiveMapControls")}>
               <button type="button" className="zoom-btn" onClick={() => setZoom((z) => Math.min(3, z + 0.25))}>
                 <ZoomIn size={18} />
               </button>
@@ -629,37 +671,97 @@ export default function SelectTicketPage() {
             </div>
           ) : null}
 
-          <div className="select-ticket-map-heading">
-            <h1>Chọn khu vực</h1>
-            <p>Bấm vào khu vực để chọn vé</p>
-          </div>
+          {hasInteractiveSeatMap ? (
+            <div className="select-ticket-map-heading">
+              <h1>{t("selectTicket.chooseSector")}</h1>
+              <p>{t("selectTicket.clickSector")}</p>
+            </div>
+          ) : null}
 
           <div className="seat-map-section">
             <div className={`seat-map-container ${hasInteractiveSeatMap ? "has-interactive-map" : ""}`}>
               {hasInteractiveSeatMap && seatMap ? (
-                <BuyerSeatMapCanvas
-                  seatMap={seatMap}
-                  zoom={zoom}
-                  selectedSeatIds={selectedSeats.map((seat) => seat.seatId)}
-                  selectedSectorId={selectedStandingSectorId}
-                  getSeatColor={(sector, seat) => {
-                    const ticketType =
-                      ticketTypeById.get(getSeatTicketTypeId(sector, seat)) ||
-                      ticketTypeBySectorId.get(sector.id);
-                    return seat.colorCode || ticketType?.colorCode || sector.colorCode || "#16a34a";
-                  }}
-                  onZoomChange={setZoom}
-                  onSeatClick={handleSeatClick}
-                  onSectorClick={handleSectorClick}
-                />
-              ) : !hasAssignedSeatTickets && !hasStandingSectorTickets ? (
-                <div className="buyer-seat-map-empty">
-                  <div className="quantity-booking-notice">
-                    <div className="notice-icon-wrapper">
-                      <LuTicketsPlane size={40} className="notice-icon" />
+                <>
+                  <BuyerSeatMapCanvas
+                    seatMap={seatMap}
+                    zoom={zoom}
+                    selectedSeatIds={selectedSeats.map((seat) => seat.seatId)}
+                    selectedSectorId={selectedStandingSectorId}
+                    getSeatColor={(sector, seat) => {
+                      const ticketType =
+                        ticketTypeById.get(getSeatTicketTypeId(sector, seat)) ||
+                        ticketTypeBySectorId.get(sector.id);
+                      return seat.colorCode || ticketType?.colorCode || sector.colorCode || "#16a34a";
+                    }}
+                    onZoomChange={setZoom}
+                    onSeatClick={handleSeatClick}
+                    onSectorClick={handleSectorClick}
+                  />
+                  <div className="seat-map-status-legend" aria-label={t("selectTicket.seatLegend")}>
+                    <strong>{t("selectTicket.seatLegend")}</strong>
+                    <div className="seat-map-status-legend-grid">
+                      <span><i className="legend-seat-dot is-available" />{t("selectTicket.seatAvailable")}</span>
+                      <span><i className="legend-seat-dot is-selected" />{t("selectTicket.seatSelected")}</span>
+                      <span><i className="legend-seat-dot is-sold" />{t("selectTicket.seatSold")}</span>
+                      <span><i className="legend-seat-dot is-locked" />{t("selectTicket.seatLocked")}</span>
+                      <span><i className="legend-seat-dot is-unavailable" />{t("selectTicket.seatUnavailable")}</span>
                     </div>
-                    <h3>Bán vé theo số lượng</h3>
-                    <p>Sự kiện này bán vé theo số lượng. Chọn số lượng ở từng seat type để tiếp tục.</p>
+                  </div>
+                </>
+              ) : !hasAssignedSeatTickets && !hasStandingSectorTickets ? (
+                <div className="quantity-booking-panel">
+                  <h2>{t("selectTicket.quantityBookingTitle")}</h2>
+                  <p>{t("selectTicket.quantityBookingDescription")}</p>
+
+                  <div className="quantity-ticket-list">
+                    {quantityTicketTypes.length === 0 ? (
+                      <div className="selected-empty">{t("selectTicket.noMatchingTicketType")}</div>
+                    ) : (
+                      quantityTicketTypes.map((ticketType) => {
+                        const isSoldOut =
+                          ticketType.status === "SOLD_OUT" ||
+                          ticketType.quantityAvailable === 0;
+
+                        return (
+                          <div
+                            className={`quantity-ticket-row ${isSoldOut ? "sold-out" : ""}`}
+                            key={ticketType.id}
+                          >
+                            <div className="quantity-ticket-copy">
+                              <strong>{ticketType.name}</strong>
+                              <span>
+                                {isSoldOut
+                                  ? t("selectTicket.soldOut")
+                                  : `${ticketType.price.toLocaleString(language === "en" ? "en-US" : "vi-VN")} ₫`}
+                              </span>
+                            </div>
+
+                            <div
+                              className="quantity-selector quantity-selector-main"
+                              aria-label={t("selectTicket.chooseQuantity", { name: ticketType.name })}
+                            >
+                              <button
+                                type="button"
+                                className="quantity-btn"
+                                onClick={() => updateQuantity(ticketType, -1)}
+                                disabled={(quantities[ticketType.id] || 0) <= 0}
+                              >
+                                -
+                              </button>
+                              <span className="quantity-value">{quantities[ticketType.id] || 0}</span>
+                              <button
+                                type="button"
+                                className="quantity-btn"
+                                onClick={() => updateQuantity(ticketType, 1)}
+                                disabled={isSoldOut}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               ) : (
@@ -668,8 +770,8 @@ export default function SelectTicketPage() {
                     <div className="notice-icon-wrapper">
                       <Info size={40} className="notice-icon" />
                     </div>
-                    <h3>Không có sơ đồ ghế</h3>
-                    <p>Sự kiện này chưa có sơ đồ chỗ ngồi được publish</p>
+                    <h3>{t("selectTicket.noSeatMapTitle")}</h3>
+                    <p>{t("selectTicket.noPublishedSeatMap")}</p>
                   </div>
                 </div>
               )}
@@ -687,14 +789,14 @@ export default function SelectTicketPage() {
                   <div className="event-meta-row">
                     <FaCalendarCheck size={14} />
                     <span>
-                      {startDate.toLocaleDateString("vi-VN", {
+                      {startDate.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", {
                         weekday: "long",
                         day: "numeric",
                         month: "long",
                         year: "numeric",
                       })}
                       {" · "}
-                      {startDate.toLocaleTimeString("vi-VN", {
+                      {startDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
@@ -715,24 +817,17 @@ export default function SelectTicketPage() {
             </div>
 
             <div className="sidebar-tiers">
-              <h3>Giá vé</h3>
+              <h3>{t("selectTicket.ticketPrice")}</h3>
               {visibleTicketTypes.length === 0 ? (
-                <div className="selected-empty">Chưa có loại vé phù hợp với khu đang chọn.</div>
+                <div className="selected-empty">{t("selectTicket.noMatchingTicketType")}</div>
               ) : (
                 visibleTicketTypes.map((ticketType) => {
                   const isSoldOut = ticketType.status === "SOLD_OUT" || ticketType.quantityAvailable === 0;
-                  const isQuantityMode = getInventoryMode(ticketType) === "QUANTITY";
-                  const sectorId = getTicketTypeSectorId(ticketType);
-                  const isStandingQuantityTicket =
-                    isQuantityMode &&
-                    sectorId &&
-                    getSectorType(sectorById.get(sectorId)) === "STANDING";
-                  const showQuantityControls = isQuantityMode && !isStandingQuantityTicket;
 
                   return (
                     <div
                       key={ticketType.id}
-                      className={`tier-item ${showQuantityControls ? "tier-item-quantity" : ""} ${isSoldOut ? "sold-out" : ""}`}
+                      className={`tier-item ${isSoldOut ? "sold-out" : ""}`}
                     >
                       <div className="tier-left">
                         <span
@@ -744,29 +839,8 @@ export default function SelectTicketPage() {
                         </span>
                       </div>
                       <span className="tier-price">
-                        {isSoldOut ? "Hết vé" : `${ticketType.price.toLocaleString("vi-VN")} ₫`}
+                        {isSoldOut ? t("selectTicket.soldOut") : `${ticketType.price.toLocaleString(language === "en" ? "en-US" : "vi-VN")} ₫`}
                       </span>
-                      {showQuantityControls ? (
-                        <div className="quantity-selector" aria-label={`Chọn số lượng ${ticketType.name}`}>
-                          <button
-                            type="button"
-                            className="quantity-btn"
-                            onClick={() => updateQuantity(ticketType, -1)}
-                            disabled={(quantities[ticketType.id] || 0) <= 0}
-                          >
-                            -
-                          </button>
-                          <span className="quantity-value">{quantities[ticketType.id] || 0}</span>
-                          <button
-                            type="button"
-                            className="quantity-btn"
-                            onClick={() => updateQuantity(ticketType, 1)}
-                            disabled={isSoldOut}
-                          >
-                            +
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })
@@ -775,23 +849,24 @@ export default function SelectTicketPage() {
               <div className="ticket-notice" style={{ marginTop: 12 }}>
                 <Info size={14} />
                 <span>
-                  Tối thiểu {minPerOrder}, tối đa {maxPerOrder} vé{hasAssignedSeatTickets ? ` · ${availableSeatCount} ghế trống` : ""}
+                  {t("selectTicket.minMaxNotice", { min: minPerOrder, max: maxPerOrder })}
+                  {hasAssignedSeatTickets ? ` · ${t("selectTicket.availableSeats", { count: availableSeatCount })}` : ""}
                 </span>
               </div>
             </div>
 
             <div className="sidebar-selected">
               <div className="selected-header">
-                <span className="label">Đã chọn</span>
+                <span className="label">{t("selectTicket.selected")}</span>
                 {totalSelected > 0 && (
                   <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                    {totalSelected} vé
+                    {totalSelected} {t("nav.tickets").toLowerCase()}
                   </span>
                 )}
               </div>
 
               {totalSelected === 0 ? (
-                <div className="selected-empty">Chưa chọn vé nào</div>
+                <div className="selected-empty">{t("selectTicket.emptySelection")}</div>
               ) : (
                 <div className="selected-seats-list">
                   {quantityTicketTypes
@@ -842,7 +917,7 @@ export default function SelectTicketPage() {
               <div className="sidebar-action-embedded">
                 {totalSelected === 0 ? (
                   <button className="action-btn disabled-state" disabled>
-                    Vui lòng chọn vé
+                    {t("selectTicket.selectAtLeastTicket")}
                   </button>
                 ) : (
                   <button
@@ -850,63 +925,68 @@ export default function SelectTicketPage() {
                     onClick={handleContinue}
                     disabled={totalSelected < minPerOrder}
                   >
-                    <span className="btn-label">Thanh toán ngay</span>
-                    <span className="btn-total">{subtotal.toLocaleString("vi-VN")} ₫</span>
+                    <span className="btn-label">{t("selectTicket.paymentNow")}</span>
+                    <span className="btn-total">{subtotal.toLocaleString(language === "en" ? "en-US" : "vi-VN")} ₫</span>
                   </button>
                 )}
               </div>
             </div>
           </div>
         </div>
-      {standingPopupSector && standingPopupPrimaryTicket ? (
+      {standingPopupSector && standingPopupTicketTypes.length > 0 ? (
         <div className="standing-ticket-popup-overlay" role="dialog" aria-modal="true">
           <div className="standing-ticket-popup">
             <button
               type="button"
               className="standing-ticket-popup-close"
-              onClick={() => setStandingPopupSectorId(null)}
-              aria-label="Đóng"
+              onClick={clearStandingSectorSelection}
+              aria-label={t("common.close")}
             >
               <X size={22} />
             </button>
-            <h3>Khu {standingPopupSector.name}</h3>
-            <p className="standing-ticket-popup-note">Lưu ý: Bạn chỉ có thể chọn vé trong 1 khu vực</p>
-            <div className="standing-ticket-popup-row">
-              <span className="standing-ticket-popup-name">
-                {standingPopupPrimaryTicket.name} (Standing)
-              </span>
-              <div className="standing-ticket-popup-quantity">
-                <button
-                  type="button"
-                  onClick={() => updateQuantity(standingPopupPrimaryTicket, -1)}
-                  disabled={(quantities[standingPopupPrimaryTicket.id] || 0) <= 0}
-                >
-                  -
-                </button>
-                <span>{quantities[standingPopupPrimaryTicket.id] || 0}</span>
-                <button
-                  type="button"
-                  onClick={() => updateQuantity(standingPopupPrimaryTicket, 1)}
-                  disabled={standingPopupPrimaryTicket.status === "SOLD_OUT" || standingPopupPrimaryTicket.quantityAvailable === 0}
-                >
-                  +
-                </button>
-              </div>
+            <h3>{t("selectTicket.zone")} {standingPopupSector.name}</h3>
+            <p className="standing-ticket-popup-note">{t("selectTicket.oneSectorOnly")}</p>
+            <div className="standing-ticket-popup-list">
+              {standingPopupTicketTypes.map((ticketType) => (
+                <div className="standing-ticket-popup-row" key={ticketType.id}>
+                  <span className="standing-ticket-popup-name">
+                    <strong>{ticketType.name}</strong>
+                    <small>{Number(ticketType.price || 0).toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ</small>
+                  </span>
+                  <div className="standing-ticket-popup-quantity">
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(ticketType, -1)}
+                      disabled={(quantities[ticketType.id] || 0) <= 0}
+                    >
+                      -
+                    </button>
+                    <span>{quantities[ticketType.id] || 0}</span>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(ticketType, 1)}
+                      disabled={ticketType.status === "SOLD_OUT" || ticketType.quantityAvailable === 0}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
             <button
               type="button"
               className="standing-ticket-popup-switch"
-              onClick={() => setStandingPopupSectorId(null)}
+              onClick={clearStandingSectorSelection}
             >
-              Chọn khu vực khác
+              {t("selectTicket.chooseAnotherSector")}
             </button>
             <button
               type="button"
               className="standing-ticket-popup-continue"
               onClick={() => setStandingPopupSectorId(null)}
             >
-              <span>Tiếp tục</span>
-              <span>- {((quantities[standingPopupPrimaryTicket.id] || 0) * Number(standingPopupPrimaryTicket.price || 0)).toLocaleString("vi-VN")} ₫</span>
+              <span>{t("selectTicket.continue")}</span>
+              <span>- {standingPopupTotal.toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ</span>
               <ChevronRight size={18} />
             </button>
           </div>
@@ -916,12 +996,12 @@ export default function SelectTicketPage() {
         <div className="booking-info-modal-overlay" role="dialog" aria-modal="true">
           <form className="booking-info-modal" onSubmit={handleModalSubmit}>
             <div className="booking-info-modal-header">
-              <h3>Thông tin người nhận vé</h3>
+              <h3>{t("selectTicket.recipientInfo")}</h3>
               <button
                 type="button"
                 className="booking-info-modal-close"
                 onClick={() => setIsModalOpen(false)}
-                aria-label="Đóng"
+                aria-label={t("common.close")}
                 disabled={isBookingInProgress}
               >
                 <X size={18} />
@@ -931,12 +1011,12 @@ export default function SelectTicketPage() {
             <div className="booking-info-modal-body">
               <div className="form-group">
                 <label>
-                  Họ và tên <span className="required">*</span>
+                  {t("selectTicket.fullName")} <span className="required">*</span>
                 </label>
                 <input
                   type="text"
                   className={`form-input ${modalErrors.name ? "error" : ""}`}
-                  placeholder="Nhập họ và tên"
+                  placeholder={t("selectTicket.fullNamePlaceholder")}
                   value={modalName}
                   onChange={(e) => setModalName(e.target.value)}
                   disabled={isBookingInProgress}
@@ -948,7 +1028,7 @@ export default function SelectTicketPage() {
 
               <div className="form-group">
                 <label>
-                  Email <span className="required">*</span>
+                  {t("profile.email")} <span className="required">*</span>
                 </label>
                 <input
                   type="email"
@@ -965,7 +1045,7 @@ export default function SelectTicketPage() {
 
               <div className="form-group">
                 <label>
-                  Số điện thoại <span className="required">*</span>
+                  {t("selectTicket.phone")} <span className="required">*</span>
                 </label>
                 <input
                   type="tel"
@@ -981,11 +1061,11 @@ export default function SelectTicketPage() {
               </div>
 
               <div className="form-group">
-                <label>Mã giảm giá (Voucher)</label>
+                <label>{t("selectTicket.discountCode")}</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="Nhập mã voucher (nếu có)"
+                  placeholder={t("selectTicket.voucherPlaceholder")}
                   value={modalVoucher}
                   onChange={(e) => setModalVoucher(e.target.value.toUpperCase())}
                   disabled={isBookingInProgress}
@@ -993,11 +1073,11 @@ export default function SelectTicketPage() {
               </div>
 
               <div className="form-group">
-                <label>Ghi chú</label>
+                <label>{t("selectTicket.note")}</label>
                 <textarea
                   className="form-input"
                   style={{ minHeight: "60px", resize: "vertical" }}
-                  placeholder="Ghi chú thêm (nếu có)"
+                  placeholder={t("selectTicket.notePlaceholder")}
                   value={modalNote}
                   onChange={(e) => setModalNote(e.target.value)}
                   disabled={isBookingInProgress}
@@ -1012,14 +1092,14 @@ export default function SelectTicketPage() {
                 onClick={() => setIsModalOpen(false)}
                 disabled={isBookingInProgress}
               >
-                Hủy bỏ
+                {t("selectTicket.cancel")}
               </button>
               <button
                 type="submit"
                 className="btn-confirm"
                 disabled={isBookingInProgress}
               >
-                {isBookingInProgress ? "Đang xử lý..." : "Xác nhận & Giữ vé"}
+                {isBookingInProgress ? t("selectTicket.holdProcessing") : t("selectTicket.confirmHold")}
               </button>
             </div>
           </form>

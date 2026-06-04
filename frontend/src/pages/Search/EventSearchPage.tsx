@@ -8,21 +8,7 @@ import { eventService } from "../../services/eventService";
 import { categoryService } from "../../services/categoryService";
 import { EventSummary, SpringPage, Category } from "../../types/api";
 import { Search, MapPin, X, ChevronDown, LoaderCircle } from "lucide-react";
-
-const monthShortNames = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+import { useTranslation } from "react-i18next";
 
 function getEventImage(event: EventSummary) {
   return (
@@ -34,17 +20,21 @@ function getEventImage(event: EventSummary) {
   );
 }
 
-function getEventLocation(event: EventSummary) {
+function getEventLocation(event: EventSummary, fallback: string) {
   const venueName = event.venue?.name || event.venueName;
   const cityName = event.venue?.city || event.city;
   const parts = [venueName, cityName]
     .filter((part): part is string => Boolean(part && part.trim()))
     .map((part) => part.trim());
 
-  return Array.from(new Set(parts)).join(", ") || "Đang cập nhật địa điểm";
+  return Array.from(new Set(parts)).join(", ") || fallback;
 }
 
-function formatEventPrice(event: EventSummary) {
+function formatEventPrice(
+  event: EventSummary,
+  language: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   const minPrice =
     typeof event.minPrice === "number"
       ? event.minPrice
@@ -53,13 +43,17 @@ function formatEventPrice(event: EventSummary) {
         : undefined;
 
   if (typeof minPrice === "number" && Number.isFinite(minPrice)) {
-    return `Từ ${minPrice.toLocaleString("vi-VN")} đ`;
+    return t("searchPage.fromPrice", {
+      price: minPrice.toLocaleString(language === "en" ? "en-US" : "vi-VN"),
+    });
   }
-  return "Đang cập nhật";
+  return t("searchPage.priceUpdating");
 }
 
 export default function EventSearchPage() {
+  const { i18n, t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const language = i18n.resolvedLanguage || "vi";
 
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -226,7 +220,7 @@ export default function EventSearchPage() {
                   fontWeight: "600",
                 }}
               >
-                Tất cả
+                {t("common.all")}
               </button>
             </li>
             {categories.length > 0 ? (
@@ -253,7 +247,7 @@ export default function EventSearchPage() {
               ))
             ) : (
               <li className="category-item">
-                <span className="category-link">Đang tải...</span>
+                <span className="category-link">{t("searchPage.loading")}</span>
               </li>
             )}
           </ul>
@@ -304,7 +298,7 @@ export default function EventSearchPage() {
                   alignItems: "center",
                 }}
               >
-                Bộ lọc
+                {t("searchPage.filter")}
               </h3>
               <button
                 onClick={clearFilters}
@@ -316,7 +310,7 @@ export default function EventSearchPage() {
                   cursor: "pointer",
                 }}
               >
-                Xóa tất cả
+                {t("searchPage.clearFilters")}
               </button>
             </div>
 
@@ -333,7 +327,7 @@ export default function EventSearchPage() {
                     marginBottom: "8px",
                   }}
                 >
-                  Từ khóa
+                  {t("searchPage.keyword")}
                 </label>
                 <div
                   style={{
@@ -363,7 +357,7 @@ export default function EventSearchPage() {
                       border: "1px solid #ccc",
                       backgroundColor: "#f9f9f9",
                     }}
-                    placeholder="Tên sự kiện, nghệ sĩ..."
+                    placeholder={t("searchPage.placeholder")}
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                   />
@@ -385,7 +379,7 @@ export default function EventSearchPage() {
                         alignItems: "center",
                         padding: "4px",
                       }}
-                      title="Xóa tìm kiếm"
+                      title={t("searchPage.clearSearch")}
                     >
                       <X size={16} />
                     </button>
@@ -403,7 +397,7 @@ export default function EventSearchPage() {
                   marginBottom: "12px",
                 }}
               >
-                Danh mục
+                {t("searchPage.category")}
               </label>
               <div
                 style={{
@@ -427,7 +421,7 @@ export default function EventSearchPage() {
                     onChange={() => updateFilter("category", null)}
                     style={{ marginRight: "8px" }}
                   />
-                  Tất cả danh mục
+                  {t("searchPage.allCategories")}
                 </label>
                 {categories.map((cat) => (
                   <label
@@ -461,7 +455,7 @@ export default function EventSearchPage() {
                   marginBottom: "12px",
                 }}
               >
-                Địa điểm
+                {t("searchPage.location")}
               </label>
               <div style={{ position: "relative" }}>
                 <button
@@ -481,7 +475,7 @@ export default function EventSearchPage() {
                     color: queryCity ? "var(--text-primary)" : "#666",
                   }}
                 >
-                  {queryCity || "Tất cả địa điểm"}
+                  {queryCity || t("searchPage.allLocations")}
                   <ChevronDown
                     size={16}
                     style={{
@@ -509,7 +503,7 @@ export default function EventSearchPage() {
                     }}
                   >
                     {[
-                      { value: null, label: "Tất cả địa điểm" },
+                      { value: null, label: t("searchPage.allLocations") },
                       { value: "Hồ Chí Minh", label: "Hồ Chí Minh" },
                       { value: "Hà Nội", label: "Hà Nội" },
                       { value: "Đà Nẵng", label: "Đà Nẵng" },
@@ -545,7 +539,7 @@ export default function EventSearchPage() {
                   marginBottom: "12px",
                 }}
               >
-                Khoảng giá
+                {t("searchPage.priceRange")}
               </label>
               <div
                 style={{ display: "flex", gap: "10px", alignItems: "center" }}
@@ -553,7 +547,7 @@ export default function EventSearchPage() {
                 <input
                   type="number"
                   className="form-control"
-                  placeholder="Từ"
+                  placeholder={t("searchPage.priceFrom")}
                   value={queryMinPrice}
                   onChange={(e) =>
                     updateFilter("minPrice", e.target.value || null)
@@ -569,7 +563,7 @@ export default function EventSearchPage() {
                 <input
                   type="number"
                   className="form-control"
-                  placeholder="Đến"
+                  placeholder={t("searchPage.priceTo")}
                   value={queryMaxPrice}
                   onChange={(e) =>
                     updateFilter("maxPrice", e.target.value || null)
@@ -593,7 +587,7 @@ export default function EventSearchPage() {
                   marginBottom: "12px",
                 }}
               >
-                Thời gian
+                {t("eventDetail.time")}
               </label>
               <div
                 style={{
@@ -604,7 +598,7 @@ export default function EventSearchPage() {
               >
                 <div>
                   <span style={{ fontSize: "12px", color: "#666" }}>
-                    Từ ngày:
+                    {t("searchPage.dateFrom")}
                   </span>
                   <input
                     type="date"
@@ -623,7 +617,7 @@ export default function EventSearchPage() {
                 </div>
                 <div>
                   <span style={{ fontSize: "12px", color: "#666" }}>
-                    Đến ngày:
+                    {t("searchPage.dateTo")}
                   </span>
                   <input
                     type="date"
@@ -662,8 +656,8 @@ export default function EventSearchPage() {
                 }}
               >
                 {isLoading
-                  ? "Đang tìm kiếm"
-                  : `Tìm thấy ${eventsPage?.totalElements || 0} sự kiện`}
+                  ? t("searchPage.loading")
+                  : t("searchPage.found", { count: eventsPage?.totalElements || 0 })}
               </p>
               <div
                 style={{
@@ -677,7 +671,7 @@ export default function EventSearchPage() {
                 <label
                   style={{ fontSize: "16px", fontWeight: 600, color: "#ffffff" }}
                 >
-                  Sắp xếp:
+                  {t("searchPage.sort")}
                 </label>
                 <button
                   type="button"
@@ -697,11 +691,11 @@ export default function EventSearchPage() {
                   }}
                 >
                   {querySort === "startDatetime,asc"
-                    ? "Gần đây"
+                    ? t("searchPage.recent")
                     : querySort === "startDatetime,desc"
-                      ? "Xa nhất"
+                      ? t("searchPage.farthest")
                       : querySort === "createdAt,desc"
-                        ? "Mới nhất"
+                        ? t("searchPage.newest")
                         : "A-Z"}
                   <ChevronDown
                     size={16}
@@ -730,9 +724,9 @@ export default function EventSearchPage() {
                     }}
                   >
                     {[
-                      { value: "startDatetime,asc", label: "Gần đây" },
-                      { value: "startDatetime,desc", label: "Xa nhất" },
-                      { value: "createdAt,desc", label: "Mới nhất" },
+                      { value: "startDatetime,asc", label: t("searchPage.recent") },
+                      { value: "startDatetime,desc", label: t("searchPage.farthest") },
+                      { value: "createdAt,desc", label: t("searchPage.newest") },
                       { value: "title,asc", label: "A-Z" },
                     ].map((option) => (
                       <div
@@ -773,7 +767,7 @@ export default function EventSearchPage() {
               >
                 {queryCategory && (
                   <span className="filter-chip" style={chipStyle}>
-                    Danh mục:{" "}
+                    {t("searchPage.category")}:{" "}
                     {categories.find((c) => c.slug === queryCategory)?.name ||
                       queryCategory}
                     <button
@@ -786,7 +780,7 @@ export default function EventSearchPage() {
                 )}
                 {queryCity && (
                   <span className="filter-chip" style={chipStyle}>
-                    Địa điểm: {queryCity}
+                    {t("searchPage.location")}: {queryCity}
                     <button
                       onClick={() => updateFilter("city", null)}
                       style={chipBtnStyle}
@@ -797,13 +791,13 @@ export default function EventSearchPage() {
                 )}
                 {(queryMinPrice || queryMaxPrice) && (
                   <span className="filter-chip" style={chipStyle}>
-                    Giá:{" "}
+                    {t("searchPage.price")}:{" "}
                     {queryMinPrice
-                      ? `${parseInt(queryMinPrice).toLocaleString("vi-VN")}đ`
+                      ? `${parseInt(queryMinPrice).toLocaleString(language === "en" ? "en-US" : "vi-VN")}đ`
                       : "0đ"}{" "}
                     -{" "}
                     {queryMaxPrice
-                      ? `${parseInt(queryMaxPrice).toLocaleString("vi-VN")}đ`
+                      ? `${parseInt(queryMaxPrice).toLocaleString(language === "en" ? "en-US" : "vi-VN")}đ`
                       : "Max"}
                     <button
                       onClick={() => {
@@ -817,7 +811,7 @@ export default function EventSearchPage() {
                 )}
                 {(queryStartDate || queryEndDate) && (
                   <span className="filter-chip" style={chipStyle}>
-                    Ngày: {queryStartDate || "..."} đến {queryEndDate || "..."}
+                    {t("searchPage.date")}: {queryStartDate || "..."} {t("searchPage.to")} {queryEndDate || "..."}
                     <button
                       onClick={() => {
                         updateFilters({ startDate: null, endDate: null });
@@ -835,7 +829,7 @@ export default function EventSearchPage() {
             {isLoading ? (
               <div className="event-search-loading">
                 <LoaderCircle className="event-search-loading-icon" size={22} />
-                <span>Loading</span>
+                <span>{t("searchPage.loading")}</span>
               </div>
             ) : isError ? (
               <div
@@ -847,7 +841,7 @@ export default function EventSearchPage() {
                   color: "#d32f2f",
                 }}
               >
-                <p>Có lỗi xảy ra khi lấy dữ liệu: {(error as Error).message}</p>
+                <p>{t("searchPage.error", { message: (error as Error).message })}</p>
               </div>
             ) : !eventsPage?.content || eventsPage.content.length === 0 ? (
               <div
@@ -870,7 +864,7 @@ export default function EventSearchPage() {
                     marginBottom: "8px",
                   }}
                 >
-                  Không tìm thấy sự kiện nào
+                  {t("searchPage.noResults")}
                 </h3>
                 <p
                   style={{
@@ -878,10 +872,10 @@ export default function EventSearchPage() {
                     marginBottom: "24px",
                   }}
                 >
-                  Hãy thử thay đổi bộ lọc hoặc từ khóa tìm kiếm
+                  {t("searchPage.noResultsHint")}
                 </p>
                 <button onClick={clearFilters} className="btn btn-outline">
-                  Xóa bộ lọc
+                  {t("searchPage.clearFilters")}
                 </button>
               </div>
             ) : (
@@ -894,7 +888,10 @@ export default function EventSearchPage() {
                     const isValidDate =
                       eventDate !== null && !Number.isNaN(eventDate.getTime());
                     const dayMonth = isValidDate
-                      ? `${eventDate.getDate()} ${monthShortNames[eventDate.getMonth()]}`
+                      ? eventDate.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", {
+                          day: "numeric",
+                          month: "short",
+                        })
                       : "";
                     const year = isValidDate ? eventDate.getFullYear() : "";
 
@@ -926,17 +923,17 @@ export default function EventSearchPage() {
                           </h3>
                           <div className="upcoming-card-location">
                             <MapPin size={16} />
-                            <span>{getEventLocation(event)}</span>
+                            <span>{getEventLocation(event, t("searchPage.locationUpdating"))}</span>
                           </div>
                           <div className="upcoming-card-bottom">
                             <span className="upcoming-card-price">
-                              {formatEventPrice(event)}
+                              {formatEventPrice(event, language, t)}
                             </span>
                             <Link
                               to={`/event/${event.slug || event.id}`}
                               className="upcoming-card-buy-btn"
                             >
-                              Buy
+                              {t("searchPage.buy")}
                             </Link>
                           </div>
                         </div>

@@ -1,4 +1,5 @@
 import { ChangeEvent, ReactNode, RefObject, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   Circle,
@@ -34,6 +35,7 @@ interface SeatDropdownOptions {
 }
 
 interface SeatMapRightSidebarProps {
+  assignmentEnabled?: boolean;
   document: SeatMapEditorDocument;
   selectedShape: SeatMapEditorShape | null;
   selectedSeat: SeatMapEditorSeat | null;
@@ -54,6 +56,7 @@ interface SeatMapRightSidebarProps {
   onAddCircle: () => void;
   onAddEllipse: () => void;
   onAddRoundedBlock: () => void;
+  onAddConcertOvalTemplate: () => void;
   onAddVipLeftCurved: () => void;
   onAddVipRightCurved: () => void;
   onAddBottomRingSection: () => void;
@@ -71,6 +74,7 @@ interface SeatMapRightSidebarProps {
       name?: string;
       color?: string;
       ticketTypeId?: string;
+      ticketTypeIds?: string[];
       sectorType?: SeatMapEditorSectorType;
       totalCapacity?: number;
     },
@@ -97,8 +101,8 @@ interface SeatMapRightSidebarProps {
 }
 
 const sectorTypeOptions: Array<{ value: SeatMapEditorSectorType; label: string }> = [
-  { value: "STANDING", label: "khu đứng" },
-  { value: "SEATED", label: "Khu ghế ngồi" },
+  { value: "STANDING", label: "seatMap.standingSector" },
+  { value: "SEATED", label: "seatMap.seatedSector" },
 ];
 
 const seatLayoutFields = [
@@ -144,6 +148,166 @@ function getSeatAssignableTicketTypes(ticketTypes: OrganizerPublicTicketType[], 
   );
 }
 
+function getStandingTicketTypeIds(shape: SeatMapEditorShape) {
+  const ids = shape.ticketTypeIds ?? (shape.ticketTypeId ? [shape.ticketTypeId] : []);
+  return new Set(ids.filter(Boolean));
+}
+
+function TicketTypeColorDot({ ticketType }: { ticketType: OrganizerPublicTicketType }) {
+  return (
+    <span
+      className="seat-map-ticket-type-color"
+      style={{ backgroundColor: getTicketTypeColor(ticketType) }}
+      aria-hidden="true"
+    />
+  );
+}
+
+function TicketTypeSingleDropdown({
+  disabled,
+  emptyLabel,
+  noOptionsLabel,
+  onChange,
+  onToggle,
+  open,
+  options,
+  value,
+}: {
+  disabled?: boolean;
+  emptyLabel: string;
+  noOptionsLabel: string;
+  onChange: (ticketTypeId: string) => void;
+  onToggle: () => void;
+  open: boolean;
+  options: OrganizerPublicTicketType[];
+  value: string;
+}) {
+  const selectedTicketType = options.find((ticketType) => ticketType.id === value);
+
+  return (
+    <div className={`seat-map-ticket-type-dropdown ${open ? "is-open" : ""}`}>
+      <button
+        type="button"
+        className="seat-map-ticket-type-dropdown-trigger"
+        disabled={disabled}
+        onClick={onToggle}
+      >
+        <span className="seat-map-ticket-type-trigger-content">
+          {selectedTicketType ? (
+            <>
+              <TicketTypeColorDot ticketType={selectedTicketType} />
+              <span>{selectedTicketType.name}</span>
+            </>
+          ) : (
+            <span className="seat-map-ticket-type-placeholder">{emptyLabel}</span>
+          )}
+        </span>
+        <ChevronDown size={15} />
+      </button>
+      {open ? (
+        <div className="seat-map-ticket-type-dropdown-menu">
+          <button
+            type="button"
+            className="seat-map-ticket-type-dropdown-option is-empty-option"
+            onClick={() => onChange("")}
+          >
+            <span className="seat-map-ticket-type-placeholder">{emptyLabel}</span>
+          </button>
+          {!options.length ? (
+            <p className="seat-map-editor-empty">{noOptionsLabel}</p>
+          ) : (
+            options.map((ticketType) => (
+              <button
+                key={ticketType.id}
+                type="button"
+                className={`seat-map-ticket-type-dropdown-option ${ticketType.id === value ? "is-selected" : ""}`}
+                onClick={() => onChange(ticketType.id)}
+              >
+                <TicketTypeColorDot ticketType={ticketType} />
+                <span>{ticketType.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TicketTypeMultiDropdown({
+  disabled,
+  emptyLabel,
+  noOptionsLabel,
+  onChange,
+  onToggle,
+  open,
+  options,
+  selectedCountLabel,
+  valueIds,
+}: {
+  disabled?: boolean;
+  emptyLabel: string;
+  noOptionsLabel: string;
+  onChange: (ticketTypeIds: string[]) => void;
+  onToggle: () => void;
+  open: boolean;
+  options: OrganizerPublicTicketType[];
+  selectedCountLabel: (count: number) => string;
+  valueIds: string[];
+}) {
+  const selectedTicketTypeIds = new Set(valueIds);
+  const selectedTicketTypes = options.filter((ticketType) => selectedTicketTypeIds.has(ticketType.id));
+  const triggerText =
+    selectedTicketTypes.length === 0
+      ? emptyLabel
+      : selectedTicketTypes.length === 1
+        ? selectedTicketTypes[0].name
+        : selectedCountLabel(selectedTicketTypes.length);
+
+  return (
+    <div className={`seat-map-ticket-type-dropdown ${open ? "is-open" : ""}`}>
+      <button
+        type="button"
+        className="seat-map-ticket-type-dropdown-trigger"
+        disabled={disabled}
+        onClick={onToggle}
+      >
+        <span className="seat-map-ticket-type-trigger-content">
+          {selectedTicketTypes.length === 1 ? <TicketTypeColorDot ticketType={selectedTicketTypes[0]} /> : null}
+          <span className={selectedTicketTypes.length ? "" : "seat-map-ticket-type-placeholder"}>{triggerText}</span>
+        </span>
+        <ChevronDown size={15} />
+      </button>
+      {open ? (
+        <div className="seat-map-ticket-type-dropdown-menu">
+          {!options.length ? (
+            <p className="seat-map-editor-empty">{noOptionsLabel}</p>
+          ) : (
+            options.map((ticketType) => {
+              const checked = selectedTicketTypeIds.has(ticketType.id);
+              const nextIds = checked
+                ? valueIds.filter((ticketTypeId) => ticketTypeId !== ticketType.id)
+                : [...valueIds, ticketType.id];
+
+              return (
+                <label key={ticketType.id} className="seat-map-ticket-type-dropdown-option has-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => onChange(nextIds)}
+                  />
+                  <TicketTypeColorDot ticketType={ticketType} />
+                  <span>{ticketType.name}</span>
+                </label>
+              );
+            })
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ToolButton({
   active,
   icon,
@@ -164,6 +328,7 @@ function ToolButton({
 }
 
 export default function SeatMapRightSidebar({
+  assignmentEnabled = true,
   document,
   selectedShape,
   selectedSeat,
@@ -184,6 +349,7 @@ export default function SeatMapRightSidebar({
   onAddCircle,
   onAddEllipse,
   onAddRoundedBlock,
+  onAddConcertOvalTemplate,
   onAddVipLeftCurved,
   onAddVipRightCurved,
   onAddBottomRingSection,
@@ -211,11 +377,13 @@ export default function SeatMapRightSidebar({
   canClearDraft,
   onCreateSeatTypeForShape,
 }: SeatMapRightSidebarProps) {
+  const { t } = useTranslation();
   void onCreateSeatTypeForShape;
   const [workspaceToolsOpen, setWorkspaceToolsOpen] = useState(true);
   const [layersOpen, setLayersOpen] = useState(true);
   const [seatGenerationOpen, setSeatGenerationOpen] = useState(false);
   const [selectedSeatOpen, setSelectedSeatOpen] = useState(false);
+  const [openTicketTypeDropdown, setOpenTicketTypeDropdown] = useState<string | null>(null);
   const selectedSectorTicketTypes = getSectorTicketTypes(ticketTypes, selectedShape);
   const selectedSeatAssignableTicketTypes = getSeatAssignableTicketTypes(ticketTypes, selectedShape);
 
@@ -240,9 +408,9 @@ export default function SeatMapRightSidebar({
         <div className="seat-map-workspace-panel-title">
           <span>
             <MousePointer2 size={16} />
-            <span>Workspace Tools</span>
+            <span>{t("seatMap.workspaceTools")}</span>
           </span>
-          <button type="button" onClick={() => setWorkspaceToolsOpen((current) => !current)} aria-label="Toggle Workspace Tools">
+          <button type="button" onClick={() => setWorkspaceToolsOpen((current) => !current)} aria-label={t("seatMap.toggleWorkspaceTools")}>
             <ChevronDown size={16} className={workspaceToolsOpen ? "is-open" : ""} />
           </button>
         </div>
@@ -258,6 +426,7 @@ export default function SeatMapRightSidebar({
             <ToolButton icon={<Square size={15} />} label="Rounded" onClick={() => { onSetActiveTool("rectangle"); onAddRoundedBlock(); }} />
             <ToolButton icon={<Pentagon size={15} />} label="Fan" onClick={() => { onSetActiveTool("select"); onAddFanSection(); }} />
             <ToolButton icon={<Circle size={15} />} label="Ring" onClick={() => { onSetActiveTool("select"); onAddBottomRingSection(); }} />
+            <ToolButton icon={<Grid3X3 size={15} />} label={t("seatMap.concertTemplate")} onClick={() => { onSetActiveTool("select"); onAddConcertOvalTemplate(); }} />
             <ToolButton icon={<Pentagon size={15} />} label="Curved L" onClick={() => { onSetActiveTool("select"); onAddVipLeftCurved(); }} />
             <ToolButton icon={<Pentagon size={15} />} label="Curved R" onClick={() => { onSetActiveTool("select"); onAddVipRightCurved(); }} />
             <ToolButton icon={<Pentagon size={15} />} label="Side L" onClick={() => { onSetActiveTool("select"); onAddLeftSideRing(); }} />
@@ -283,11 +452,11 @@ export default function SeatMapRightSidebar({
         <div className="seat-map-layers-panel-title">
           <span>
             <Layers3 size={16} />
-            <span>Layers</span>
+            <span>{t("seatMap.layers")}</span>
           </span>
           <span className="seat-map-layers-panel-actions">
             <Plus size={14} />
-            <button type="button" onClick={() => setLayersOpen((current) => !current)} aria-label="Toggle Layers">
+            <button type="button" onClick={() => setLayersOpen((current) => !current)} aria-label={t("seatMap.toggleLayers")}>
               <ChevronDown size={16} className={layersOpen ? "is-open" : ""} />
             </button>
           </span>
@@ -296,7 +465,7 @@ export default function SeatMapRightSidebar({
         {layersOpen ? (
           <div className="seat-map-layers-panel-body">
             {!document.shapes.length ? (
-              <p className="seat-map-editor-empty">No shapes yet. Add a block from Workspace Tools.</p>
+              <p className="seat-map-editor-empty">{t("seatMap.noShapes")}</p>
             ) : (
               <div className="seat-map-layer-list-modern">
                 {document.shapes.map((shape) => {
@@ -308,7 +477,7 @@ export default function SeatMapRightSidebar({
                         <span className="seat-map-layer-color" style={{ backgroundColor: shape.color, opacity: shape.visible ? 1 : 0.35 }} />
                         <span>
                           <strong>{shape.name}</strong>
-                          <small>{shape.shapeType} · {shape.seatCount} seats</small>
+                          <small>{shape.shapeType} · {t("seatMap.seatCount", { count: shape.seatCount })}</small>
                         </span>
                       </button>
                       <div className="seat-map-layer-row-actions">
@@ -319,18 +488,18 @@ export default function SeatMapRightSidebar({
                       </div>
                       {editingShapeId === shape.id ? (
                         <div className="seat-map-layer-editor-modern">
-                          <label><span>Name</span><input value={shape.name} onChange={(event) => onShapeMetaChange(shape.id, { name: event.target.value })} /></label>
-                          <label><span>Color</span><input type="color" value={shape.color} onChange={(event) => onShapeMetaChange(shape.id, { color: event.target.value })} /></label>
+                          <label><span>{t("organizer.name")}</span><input value={shape.name} onChange={(event) => onShapeMetaChange(shape.id, { name: event.target.value })} /></label>
+                          <label><span>{t("seatMap.color")}</span><input type="color" value={shape.color} onChange={(event) => onShapeMetaChange(shape.id, { color: event.target.value })} /></label>
                           <label>
-                            <span>Loại khu vực</span>
+                            <span>{t("seatMap.sectorType")}</span>
                             <select value={shape.sectorType} onChange={(event) => onShapeMetaChange(shape.id, { sectorType: event.target.value as SeatMapEditorSectorType })}>
-                              {sectorTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                              {sectorTypeOptions.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}
                             </select>
                           </label>
                           {shape.sectorType === "STANDING" ? (
                             <>
                               <label>
-                                <span>Sức chứa tối đa</span>
+                                <span>{t("seatMap.maxCapacity")}</span>
                                 <input
                                   type="number"
                                   min={1}
@@ -360,9 +529,9 @@ export default function SeatMapRightSidebar({
         <div className="seat-map-seat-generation-panel-title">
           <span>
             <Grid3X3 size={16} />
-            <span>Seat Generation</span>
+            <span>{t("seatMap.seatGeneration")}</span>
           </span>
-          <button type="button" onClick={() => setSeatGenerationOpen((current) => !current)} aria-label="Toggle Seat Generation">
+          <button type="button" onClick={() => setSeatGenerationOpen((current) => !current)} aria-label={t("seatMap.toggleSeatGeneration")}>
             <ChevronDown size={16} className={seatGenerationOpen ? "is-open" : ""} />
           </button>
         </div>
@@ -370,9 +539,13 @@ export default function SeatMapRightSidebar({
         {seatGenerationOpen ? (
           <div className="seat-map-seat-generation-panel-body">
             {!selectedShape ? (
-              <p className="seat-map-editor-empty">Select a shape before generating seats.</p>
+              <p className="seat-map-editor-empty">{t("seatMap.selectShapeBeforeGenerate")}</p>
+            ) : !assignmentEnabled ? (
+              <p className="seat-map-editor-empty">
+                {t("seatMap.generateSeatsAfterTicketTypes")}
+              </p>
             ) : selectedShape.sectorType === "STANDING" ? (
-              <p className="seat-map-editor-empty">Khu đứng không sinh ghế vật lý. Nhập sức chứa tối đa trong phần chỉnh sửa khu vực.</p>
+              <p className="seat-map-editor-empty">{t("seatMap.standingNoPhysicalSeats")}</p>
             ) : (
               <>
                 <div className="seat-map-form-grid-modern">
@@ -390,9 +563,9 @@ export default function SeatMapRightSidebar({
                   ))}
                 </div>
                 <div className="seat-map-action-grid seat-map-generation-actions">
-                  <button type="button" className="seat-map-editor-button secondary compact" onClick={() => onRestoreHiddenSeats(selectedShape.id)}>Restore Hidden</button>
-                  <button type="button" className="seat-map-editor-button danger compact" onClick={() => onClearSeats(selectedShape.id)}>Clear Seats</button>
-                  <button type="button" className="seat-map-editor-button primary compact" onClick={() => onGenerateSeats(selectedShape.id)}>Generate Seats</button>
+                  <button type="button" className="seat-map-editor-button secondary compact" onClick={() => onRestoreHiddenSeats(selectedShape.id)}>{t("seatMap.restoreHidden")}</button>
+                  <button type="button" className="seat-map-editor-button danger compact" onClick={() => onClearSeats(selectedShape.id)}>{t("seatMap.clearSeats")}</button>
+                  <button type="button" className="seat-map-editor-button primary compact" onClick={() => onGenerateSeats(selectedShape.id)}>{t("seatMap.generateSeats")}</button>
                 </div>
               </>
             )}
@@ -400,13 +573,13 @@ export default function SeatMapRightSidebar({
         ) : null}
       </section>
 
-      <section className="seat-map-selected-seat-panel-frame">
+      {assignmentEnabled ? <section className="seat-map-selected-seat-panel-frame">
         <div className="seat-map-selected-seat-panel-title">
           <span>
             <MousePointer2 size={16} />
-            <span>Selected Seat</span>
+            <span>{t("seatMap.selectedSeat")}</span>
           </span>
-          <button type="button" onClick={() => setSelectedSeatOpen((current) => !current)} aria-label="Toggle Selected Seat">
+          <button type="button" onClick={() => setSelectedSeatOpen((current) => !current)} aria-label={t("seatMap.toggleSelectedSeat")}>
             <ChevronDown size={16} className={selectedSeatOpen ? "is-open" : ""} />
           </button>
         </div>
@@ -414,38 +587,37 @@ export default function SeatMapRightSidebar({
         {selectedSeatOpen ? (
           <div className="seat-map-selected-seat-panel-body">
             {!selectedShape ? (
-              <p className="seat-map-editor-empty">Select a sector or seat to edit details.</p>
+              <p className="seat-map-editor-empty">{t("seatMap.selectSectorOrSeat")}</p>
             ) : selectedShape.sectorType === "STANDING" ? (
               <div className="seat-map-seat-panel">
                 <label><span>Sector</span><input value={selectedShape.name} readOnly /></label>
-                <label>
-                  <span>Loại vé khu đứng</span>
-                  <select
-                    value={selectedShape.ticketTypeId || ""}
+                <div className="seat-map-ticket-type-field">
+                  <span>{t("seatMap.standingTicketTypes")}</span>
+                  <TicketTypeMultiDropdown
                     disabled={!selectedSectorTicketTypes.length}
-                    onChange={(event) => {
-                      onShapeMetaChange(selectedShape.id, { ticketTypeId: event.target.value });
-                    }}
-                  >
-                    <option value="">Chọn loại vé</option>
-                    {!selectedSectorTicketTypes.length ? (
-                      <option value="" disabled>Chưa có loại vé hợp lệ cho khu này</option>
-                    ) : null}
-                    {selectedSectorTicketTypes.map((ticketType) => (
-                      <option key={ticketType.id} value={ticketType.id}>{ticketType.name}</option>
+                    emptyLabel={t("seatMap.chooseTicketType")}
+                    noOptionsLabel={t("seatMap.noValidTicketType")}
+                    onChange={(nextIds) => onShapeMetaChange(selectedShape.id, { ticketTypeIds: nextIds })}
+                    onToggle={() =>
+                      setOpenTicketTypeDropdown((current) => current === "standing" ? null : "standing")
+                    }
+                    open={openTicketTypeDropdown === "standing"}
+                    options={selectedSectorTicketTypes}
+                    selectedCountLabel={(count) => t("seatMap.ticketTypeCount", { count })}
+                    valueIds={[...getStandingTicketTypeIds(selectedShape)]}
+                  />
+                </div>
+                {!selectedSectorTicketTypes.length && otherSectorTicketTypes.length ? (
+                  <div className="seat-map-ticket-type-other-list">
+                    <span>{t("seatMap.otherSectorTicketTypes")}</span>
+                    {otherSectorTicketTypes.map((ticketType) => (
+                      <small key={ticketType.id}>{ticketType.name}</small>
                     ))}
-                    {!selectedSectorTicketTypes.length && otherSectorTicketTypes.length ? (
-                      <optgroup label="Loại vé thuộc khu khác">
-                        {otherSectorTicketTypes.map((ticketType) => (
-                          <option key={ticketType.id} value="" disabled>{ticketType.name}</option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                </label>
+                  </div>
+                ) : null}
               </div>
             ) : !selectedSeat ? (
-              <p className="seat-map-editor-empty">Select a seat to edit seat details.</p>
+              <p className="seat-map-editor-empty">{t("seatMap.selectSeat")}</p>
             ) : (
               <div className="seat-map-seat-panel">
                 <label><span>Sector</span><input value={selectedShape.name} readOnly /></label>
@@ -463,69 +635,57 @@ export default function SeatMapRightSidebar({
                     {seatDropdownOptions.seatNumbers.map((seatNumber) => <option key={seatNumber.value} value={seatNumber.value}>{seatNumber.value}{seatNumber.hidden ? " - hide" : ""}</option>)}
                   </select>
                 </label>
-                <label><span>Ghế đang chọn</span><input value={`${selectedSeats.length} ghế`} readOnly /></label>
-                <label>
-                  <span>Loại vé</span>
-                  <select
-                    value={selectedSeat.ticketTypeId || ""}
-                    onChange={(event) => {
-                      const ticketType = ticketTypes.find((item) => item.id === event.target.value);
+                <label><span>{t("seatMap.selectedSeats")}</span><input value={t("seatMap.seatCount", { count: selectedSeats.length })} readOnly /></label>
+                <div className="seat-map-ticket-type-field">
+                  <span>{t("ticketsPage.ticketType")}</span>
+                  <TicketTypeSingleDropdown
+                    disabled={!selectedSeatAssignableTicketTypes.length}
+                    emptyLabel={t("seatMap.chooseTicketType")}
+                    noOptionsLabel={t("seatMap.noValidTicketType")}
+                    onChange={(ticketTypeId) => {
+                      const ticketType = ticketTypes.find((item) => item.id === ticketTypeId);
                       const targetSeatIds = selectedSeats.length ? selectedSeats.map((seat) => seat.id) : [selectedSeat.id];
 
-                      if (targetSeatIds.length > 1 && event.target.value) {
-                        onAssignTicketTypeToSeats(selectedShape.id, "selected", targetSeatIds.join(","), event.target.value);
+                      setOpenTicketTypeDropdown(null);
+                      if (targetSeatIds.length > 1 && ticketTypeId) {
+                        onAssignTicketTypeToSeats(selectedShape.id, "selected", targetSeatIds.join(","), ticketTypeId);
                         return;
                       }
 
                       onUpdateSeat(selectedShape.id, selectedSeat.id, {
-                        ticketTypeId: event.target.value || undefined,
-                        colorCode: event.target.value ? getTicketTypeColor(ticketType) : undefined,
+                        ticketTypeId: ticketTypeId || undefined,
+                        colorCode: ticketTypeId ? getTicketTypeColor(ticketType) : undefined,
                       });
                     }}
-                  >
-                    <option value="">Chọn loại vé</option>
-                    {!selectedSeatAssignableTicketTypes.length ? (
-                      <option value="" disabled>Chưa có loại vé hợp lệ cho khu này</option>
-                    ) : null}
-                    {selectedSeatAssignableTicketTypes.map((ticketType) => (
-                      <option key={ticketType.id} value={ticketType.id}>{ticketType.name}</option>
-                    ))}
-                    {!selectedSeatAssignableTicketTypes.length && otherSectorTicketTypes.length ? (
-                      <optgroup label="Loại vé thuộc khu khác">
-                        {otherSectorTicketTypes.map((ticketType) => (
-                          <option key={ticketType.id} value="" disabled>{ticketType.name}</option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                </label>
+                    onToggle={() =>
+                      setOpenTicketTypeDropdown((current) => current === "seat" ? null : "seat")
+                    }
+                    open={openTicketTypeDropdown === "seat"}
+                    options={selectedSeatAssignableTicketTypes}
+                    value={selectedSeat.ticketTypeId || ""}
+                  />
+                </div>
 
-                <label>
-                  <span>Gán cả khu</span>
-                  <select
-                    value=""
+                <div className="seat-map-ticket-type-field">
+                  <span>{t("seatMap.assignWholeSector")}</span>
+                  <TicketTypeSingleDropdown
                     disabled={!selectedSeatAssignableTicketTypes.length}
-                    onChange={(event) => {
-                      onAssignTicketTypeToSeats(selectedShape.id, "all", "", event.target.value);
-                      event.target.value = "";
+                    emptyLabel={t("seatMap.chooseTicketType")}
+                    noOptionsLabel={t("seatMap.noValidTicketType")}
+                    onChange={(ticketTypeId) => {
+                      setOpenTicketTypeDropdown(null);
+                      if (ticketTypeId) {
+                        onAssignTicketTypeToSeats(selectedShape.id, "all", "", ticketTypeId);
+                      }
                     }}
-                  >
-                    <option value="">Chọn loại vé</option>
-                    {!selectedSeatAssignableTicketTypes.length ? (
-                      <option value="" disabled>Chưa có loại vé hợp lệ cho khu này</option>
-                    ) : null}
-                    {selectedSeatAssignableTicketTypes.map((ticketType) => (
-                      <option key={ticketType.id} value={ticketType.id}>{ticketType.name}</option>
-                    ))}
-                    {!selectedSeatAssignableTicketTypes.length && otherSectorTicketTypes.length ? (
-                      <optgroup label="Loại vé thuộc khu khác">
-                        {otherSectorTicketTypes.map((ticketType) => (
-                          <option key={ticketType.id} value="" disabled>{ticketType.name}</option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                </label>
+                    onToggle={() =>
+                      setOpenTicketTypeDropdown((current) => current === "all" ? null : "all")
+                    }
+                    open={openTicketTypeDropdown === "all"}
+                    options={selectedSeatAssignableTicketTypes}
+                    value=""
+                  />
+                </div>
 
                 <div className="seat-map-action-grid">
                   <button
@@ -540,7 +700,7 @@ export default function SeatMapRightSidebar({
                       }
                     }}
                   >
-                    <EyeOff size={15} />Hide Seat
+                    <EyeOff size={15} />{t("seatMap.hideSeat")}
                   </button>
                   <button
                     type="button"
@@ -554,14 +714,14 @@ export default function SeatMapRightSidebar({
                       }
                     }}
                   >
-                    <Eye size={15} />Show Seat
+                    <Eye size={15} />{t("seatMap.showSeat")}
                   </button>
                 </div>
               </div>
             )}
           </div>
         ) : null}
-      </section>
+      </section> : null}
 
       <div className="seat-map-action-grid seat-map-publish-actions">
         <button
@@ -570,7 +730,7 @@ export default function SeatMapRightSidebar({
           onClick={onClearDraft}
           disabled={!canClearDraft}
         >
-          Restore
+          {t("seatMap.restore")}
         </button>
       </div>
     </aside>

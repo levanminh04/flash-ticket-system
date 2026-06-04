@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import Chart from "react-apexcharts";
-import { AlertCircle, ArrowDown, ArrowUp, ArrowUpRight } from "lucide-react";
-import { FaCalendarAlt, FaCheckCircle } from "react-icons/fa";
-import { IoTicketSharp } from "react-icons/io5";
-import { HiUserGroup } from "react-icons/hi2";
+import { Link } from "react-router-dom";
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  FilePenLine,
+  ImagePlus,
+  Plus,
+} from "lucide-react";
 import { ApexOptions } from "apexcharts";
+import { IoCalendarNumberSharp, IoTicketSharp } from "react-icons/io5";
+import { HiTicket } from "react-icons/hi2";
+import { FaMoneyBill1Wave } from "react-icons/fa6";
+import { FaCheckCircle } from "react-icons/fa";
 import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import {
   OrganizerEventDetail,
@@ -21,64 +31,70 @@ import {
 } from "./organizerWorkspaceUtils";
 import { useOrganizerGate } from "./useOrganizerGate";
 
-type EventStatusKey = "DRAFT" | "PUBLISHED" | "CANCELLED" | "SOLD_OUT" | "OTHER";
+type EventStatusKey = "DRAFT" | "PUBLISHED" | "SOLD_OUT" | "CANCELLED";
+type RevenueRange = "week" | "month" | "year";
+
+type ActionItem = {
+  id: string;
+  title: string;
+  description: string;
+  to: string;
+  actionLabel: string;
+  icon: React.ElementType;
+};
 
 const ORGANIZER_EVENTS_PAGE_SIZE = 100;
 
-type DashboardTrend = {
-  value: number;
-  direction: "up" | "down";
-  sparkline: number[];
-};
-
-type TopEventRange = "week" | "month" | "year";
-
-const topEventRangeOptions: Array<{ value: TopEventRange; label: string }> = [
-  { value: "week", label: "This week" },
-  { value: "month", label: "This month" },
-  { value: "year", label: "This year" },
+const revenueRangeOptions: Array<{ value: RevenueRange; label: string }> = [
+  { value: "week", label: "organizerHub.rangeWeek" },
+  { value: "month", label: "organizerHub.rangeMonth" },
+  { value: "year", label: "organizerHub.rangeYear" },
 ];
 
-const eventStatusLabels: Record<EventStatusKey, string> = {
-  DRAFT: "Bản nháp",
-  PUBLISHED: "Đã công bố",
-  CANCELLED: "Đã hủy",
-  SOLD_OUT: "Hết vé",
-  OTHER: "Khác",
+const categoryRevenueColors = [
+  "#10B981",
+  "#3B82F6",
+  "#8B5CF6",
+  "#F59E0B",
+  "#EC4899",
+  "#06B6D4",
+  "#F97316",
+  "#64748B",
+  "#14B8A6",
+  "#A855F7",
+];
+
+const eventStatusMeta: Record<
+  EventStatusKey,
+  { label: string; className: string }
+> = {
+  DRAFT: { label: "status.draft", className: "is-draft" },
+  PUBLISHED: { label: "status.published", className: "is-published" },
+  SOLD_OUT: { label: "status.soldOut", className: "is-sold-out" },
+  CANCELLED: { label: "status.cancelled", className: "is-cancelled" },
 };
 
-
-
-function numberFormat(value: number | null | undefined): string {
-  return Number(value ?? 0).toLocaleString("vi-VN");
+function numberFormat(value: number | null | undefined, language: string): string {
+  return Number(value ?? 0).toLocaleString(language === "en" ? "en-US" : "vi-VN");
 }
 
-function percentFormat(value: number): string {
-  return `${Math.round(value)}%`;
+function currencyFormat(value: number, language: string): string {
+  return `${Math.round(value).toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`;
 }
 
-function currencyFormat(value: number): string {
-  return `${Math.round(value).toLocaleString("vi-VN")} đ`;
+function getEventStatus(status?: string): EventStatusKey {
+  if (
+    status === "PUBLISHED" ||
+    status === "SOLD_OUT" ||
+    status === "CANCELLED"
+  ) {
+    return status;
+  }
+  return "DRAFT";
 }
 
-function getEventStartTime(event: OrganizerEventDetail): number {
-  const value = event.schedule?.startDatetime;
-  if (!value) return Number.POSITIVE_INFINITY;
-  const time = new Date(value).getTime();
-  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
-}
-
-function getEventYear(event: OrganizerEventDetail): number | null {
-  const time = getEventStartTime(event);
-  if (!Number.isFinite(time)) return null;
-  return new Date(time).getFullYear();
-}
-
-function isEventInTopRange(
-  event: OrganizerEventDetail,
-  range: TopEventRange,
-): boolean {
-  const time = getEventStartTime(event);
+function isEventInRevenueRange(event: OrganizerEventDetail, range: RevenueRange): boolean {
+  const time = new Date(event.schedule?.startDatetime ?? "").getTime();
   if (!Number.isFinite(time)) return false;
 
   const eventDate = new Date(time);
@@ -100,129 +116,6 @@ function isEventInTopRange(
   return eventDate.getFullYear() === now.getFullYear();
 }
 
-function calculateTrend(
-  current: number,
-  previous: number,
-  sparkline: number[],
-): DashboardTrend {
-  if (previous <= 0) {
-    return {
-      value: current > 0 ? 100 : 0,
-      direction: "up",
-      sparkline,
-    };
-  }
-
-  const change = ((current - previous) / previous) * 100;
-  return {
-    value: Math.abs(change),
-    direction: change >= 0 ? "up" : "down",
-    sparkline,
-  };
-}
-
-function buildMonthlySeries(
-  events: OrganizerEventDetail[],
-  selector: (events: OrganizerEventDetail[]) => number,
-): number[] {
-  const currentYear = new Date().getFullYear();
-
-  return Array.from({ length: 12 }, (_, monthIndex) =>
-    selector(
-      events.filter((event) => {
-        const time = getEventStartTime(event);
-        if (!Number.isFinite(time)) return false;
-        const date = new Date(time);
-        return date.getFullYear() === currentYear && date.getMonth() === monthIndex;
-      }),
-    ),
-  );
-}
-
-function DashboardStatCard({
-  icon,
-  label,
-  value,
-  trend,
-}: {
-  icon: JSX.Element;
-  label: string;
-  value: string;
-  trend: DashboardTrend;
-}) {
-  const isUp = trend.direction === "up";
-  const ArrowIcon = isUp ? ArrowUp : ArrowDown;
-  const trendColor = isUp ? "#16a34a" : "#dc2626";
-  const sparklineOptions: ApexOptions = {
-    chart: {
-      type: "line",
-      sparkline: { enabled: true },
-      animations: { enabled: false },
-      toolbar: { show: false },
-    },
-    colors: [trendColor],
-    stroke: {
-      width: 3,
-      curve: "smooth",
-      lineCap: "round",
-    },
-    tooltip: { enabled: false },
-    grid: { show: false },
-    xaxis: { labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
-    yaxis: { show: false },
-  };
-
-  return (
-    <article className="organizer-dashboard-stat-card">
-      <div className="organizer-dashboard-stat-top">
-        <div className="organizer-dashboard-stat-heading">
-          <span className="organizer-dashboard-stat-icon-wrap">{icon}</span>
-          <span>{label}</span>
-        </div>
-        <span className="organizer-dashboard-stat-open-icon">
-          <ArrowUpRight size={18} />
-        </span>
-      </div>
-
-      <div className="organizer-dashboard-stat-bottom">
-        <div className="organizer-dashboard-stat-copy">
-          <strong>{value}</strong>
-          <div
-            className={`organizer-dashboard-stat-trend ${
-              isUp ? "is-up" : "is-down"
-            }`}
-          >
-            <ArrowIcon size={14} />
-            <span>{percentFormat(trend.value)}</span>
-            <small>This Year</small>
-          </div>
-        </div>
-        <div className="organizer-dashboard-stat-line-chart">
-          <Chart
-            options={sparklineOptions}
-            series={[{ name: label, data: trend.sparkline }]}
-            type="line"
-            height={64}
-            width="100%"
-          />
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function getStatusKey(status?: string): EventStatusKey {
-  if (
-    status === "DRAFT" ||
-    status === "PUBLISHED" ||
-    status === "CANCELLED" ||
-    status === "SOLD_OUT"
-  ) {
-    return status;
-  }
-  return "OTHER";
-}
-
 async function getAllOrganizerEvents(): Promise<OrganizerEventDetail[]> {
   const firstPage = await organizerWorkspaceService.getMyEvents(
     0,
@@ -231,9 +124,7 @@ async function getAllOrganizerEvents(): Promise<OrganizerEventDetail[]> {
   );
   const firstPageEvents = firstPage.content ?? [];
 
-  if (firstPage.totalPages <= 1) {
-    return firstPageEvents;
-  }
+  if (firstPage.totalPages <= 1) return firstPageEvents;
 
   const remainingPages = await Promise.all(
     Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
@@ -251,13 +142,42 @@ async function getAllOrganizerEvents(): Promise<OrganizerEventDetail[]> {
   ];
 }
 
+function HubKpiCard({
+  icon: Icon,
+  label,
+  value,
+  description,
+  iconColor,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  description: string;
+  iconColor?: string;
+}) {
+  return (
+    <article className="organizer-hub-kpi-card">
+      <span className="organizer-hub-kpi-icon" style={iconColor ? { color: iconColor } : undefined}>
+        <Icon size={36} />
+      </span>
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{description}</small>
+      </div>
+    </article>
+  );
+}
+
 export default function OrganizerHubPage() {
   const { ready } = useOrganizerGate();
+  const { i18n, t } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language;
   const [profile, setProfile] = useState<OrganizerProfile | null>(null);
   const [events, setEvents] = useState<OrganizerEventDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topEventRange, setTopEventRange] = useState<TopEventRange>("year");
+  const [revenueRange, setRevenueRange] = useState<RevenueRange>("year");
 
   useEffect(() => {
     if (!ready) return;
@@ -268,18 +188,18 @@ export default function OrganizerHubPage() {
       setLoading(true);
       setError(null);
       try {
-        const [profileData, allEvents] = await Promise.all([
+        const [profileData, organizerEvents] = await Promise.all([
           organizerService.getMyOrganizerProfile(),
           getAllOrganizerEvents(),
         ]);
 
         if (!cancelled) {
           setProfile(profileData);
-          setEvents(allEvents);
+          setEvents(organizerEvents);
         }
       } catch {
         if (!cancelled) {
-          setError("Không thể tải dữ liệu tổng quan organizer.");
+          setError(t("organizerHub.loadFailed"));
           setProfile(null);
           setEvents([]);
         }
@@ -293,222 +213,163 @@ export default function OrganizerHubPage() {
     return () => {
       cancelled = true;
     };
-  }, [ready]);
+  }, [ready, t]);
 
   const dashboard = useMemo(() => {
-    const totalEvents = events.length;
-    const totalTicketsSold = events.reduce(
+    const statusCounts = events.reduce<Record<EventStatusKey, number>>(
+      (counts, event) => {
+        counts[getEventStatus(event.status)] += 1;
+        return counts;
+      },
+      { DRAFT: 0, PUBLISHED: 0, SOLD_OUT: 0, CANCELLED: 0 },
+    );
+
+    const activeEvents = events.filter((event) => event.status === "PUBLISHED");
+    const totalTicketsSold = activeEvents.reduce(
       (sum, event) => sum + getEventTicketsSold(event),
       0,
     );
-    const totalCapacity = events.reduce(
+    const totalCapacity = activeEvents.reduce(
       (sum, event) => sum + getEventTicketCapacity(event),
       0,
     );
-    const occupancyRate =
-      totalCapacity > 0 ? Math.min((totalTicketsSold / totalCapacity) * 100, 100) : 0;
-    const estimatedRevenue = events.reduce(
+    const estimatedRevenue = activeEvents.reduce(
       (sum, event) => sum + getEventEstimatedRevenue(event),
       0,
     );
-    const currentYear = new Date().getFullYear();
-    const currentYearEvents = events.filter(
-      (event) => getEventYear(event) === currentYear,
-    );
-    const previousYearEvents = events.filter(
-      (event) => getEventYear(event) === currentYear - 1,
-    );
-    const currentYearTicketsSold = currentYearEvents.reduce(
-      (sum, event) => sum + getEventTicketsSold(event),
-      0,
-    );
-    const previousYearTicketsSold = previousYearEvents.reduce(
-      (sum, event) => sum + getEventTicketsSold(event),
-      0,
-    );
-    const currentYearCapacity = currentYearEvents.reduce(
-      (sum, event) => sum + getEventTicketCapacity(event),
-      0,
-    );
-    const previousYearCapacity = previousYearEvents.reduce(
-      (sum, event) => sum + getEventTicketCapacity(event),
-      0,
-    );
-    const currentYearOccupancyRate =
-      currentYearCapacity > 0
-        ? Math.min((currentYearTicketsSold / currentYearCapacity) * 100, 100)
+    const occupancyRate =
+      totalCapacity > 0
+        ? Math.min(Math.round((totalTicketsSold / totalCapacity) * 100), 100)
         : 0;
-    const previousYearOccupancyRate =
-      previousYearCapacity > 0
-        ? Math.min((previousYearTicketsSold / previousYearCapacity) * 100, 100)
-        : 0;
-    const eventSparkline = buildMonthlySeries(
-      events,
-      (monthlyEvents) => monthlyEvents.length,
-    );
-    const ticketSparkline = buildMonthlySeries(
-      events,
-      (monthlyEvents) =>
-        monthlyEvents.reduce(
-          (sum, event) => sum + getEventTicketsSold(event),
-          0,
-        ),
-    );
-    const occupancySparkline = buildMonthlySeries(events, (monthlyEvents) => {
-      const monthlyTicketsSold = monthlyEvents.reduce(
-        (sum, event) => sum + getEventTicketsSold(event),
-        0,
-      );
-      const monthlyCapacity = monthlyEvents.reduce(
-        (sum, event) => sum + getEventTicketCapacity(event),
-        0,
-      );
-      return monthlyCapacity > 0
-        ? Math.min((monthlyTicketsSold / monthlyCapacity) * 100, 100)
-        : 0;
-    });
-    const followerSparkline = Array.from(
-      { length: 12 },
-      () => profile?.followerCount ?? 0,
-    );
+    const categoryRevenueMap = activeEvents.reduce((map, event) => {
+      const revenue = getEventEstimatedRevenue(event);
+      const categories = event.categories?.length
+        ? event.categories
+        : [{ name: t("organizerHub.uncategorized") }];
+      const revenuePerCategory = categories.length > 0 ? revenue / categories.length : revenue;
 
-    const statusCounts = events.reduce<Record<EventStatusKey, number>>(
-      (counts, event) => {
-        const key = getStatusKey(event.status);
-        counts[key] += 1;
-        return counts;
-      },
-      { DRAFT: 0, PUBLISHED: 0, CANCELLED: 0, SOLD_OUT: 0, OTHER: 0 },
-    );
-
-    const upcomingEvents = events
-      .filter((event) => getEventStartTime(event) > Date.now())
-      .sort((a, b) => getEventStartTime(a) - getEventStartTime(b))
-      .slice(0, 3);
-
-    return {
-      totalEvents,
-      totalTicketsSold,
-      totalCapacity,
-      occupancyRate,
-      estimatedRevenue,
-      trends: {
-        totalEvents: calculateTrend(
-          currentYearEvents.length,
-          previousYearEvents.length,
-          eventSparkline,
-        ),
-        totalTicketsSold: calculateTrend(
-          currentYearTicketsSold,
-          previousYearTicketsSold,
-          ticketSparkline,
-        ),
-        occupancyRate: calculateTrend(
-          currentYearOccupancyRate,
-          previousYearOccupancyRate,
-          occupancySparkline,
-        ),
-        followerCount: calculateTrend(
-          profile?.followerCount ?? 0,
-          0,
-          followerSparkline,
-        ),
-      },
-      statusCounts,
-      upcomingEvents,
-    };
-  }, [events, profile]);
-
-  const topEvents = useMemo(
-    () =>
-      events
-        .filter((event) => isEventInTopRange(event, topEventRange))
-        .sort((a, b) => getEventTicketsSold(b) - getEventTicketsSold(a))
-        .slice(0, 5),
-    [events, topEventRange],
-  );
-
-  const categoryChartItems = useMemo(() => {
-    const categoryChartColors = [
-      "#8B5CF6",
-      "#F59E0B",
-      "#EC4899",
-      "#3B82F6",
-      "#06B6D4",
-      "#10B981",
-      "#CC9900",
-      "#64748b",
-    ];
-
-    const categoryMap = events.reduce((map, event) => {
-      const categories = event.categories ?? [];
-      if (categories.length === 0) {
-        map.set("Chưa phân loại", (map.get("Chưa phân loại") ?? 0) + 1);
-        return map;
-      }
       categories.forEach((category) => {
-        const label = category.name || "Chưa phân loại";
-        map.set(label, (map.get(label) ?? 0) + 1);
+        const label = category.name || t("organizerHub.uncategorized");
+        map.set(label, (map.get(label) ?? 0) + revenuePerCategory);
       });
       return map;
     }, new Map<string, number>());
-
-    return [...categoryMap.entries()]
-      .map(([label, count], index) => ({
+    const categoryRevenueItems = [...categoryRevenueMap.entries()]
+      .map(([label, value], index) => ({
         label,
-        count,
-        color: categoryChartColors[index % categoryChartColors.length],
+        value,
+        color: categoryRevenueColors[index % categoryRevenueColors.length],
       }))
-      .sort((a, b) => b.count - a.count);
-  }, [events]);
+      .sort((a, b) => b.value - a.value);
+    const actionItems = events
+      .filter((event) => event.status === "DRAFT")
+      .flatMap<ActionItem>((event) => {
+        const items: ActionItem[] = [];
+        const eventPath = `/organizer/events/${event.id}`;
 
-  const categorySeries = useMemo(
-    () => categoryChartItems.map((item) => item.count),
-    [categoryChartItems],
+        if (!event.images?.length) {
+          items.push({
+            id: `${event.id}-images`,
+            title: event.title,
+            description: t("organizerHub.actionImageDescription"),
+            to: `${eventPath}/media`,
+            actionLabel: t("organizerHub.addImage"),
+            icon: ImagePlus,
+          });
+        }
+
+        if (!event.ticketTypes?.length) {
+          items.push({
+            id: `${event.id}-tickets`,
+            title: event.title,
+            description: t("organizerHub.actionTicketDescription"),
+            to: `${eventPath}/edit`,
+            actionLabel: t("organizerHub.continue"),
+            icon: IoTicketSharp,
+          });
+        }
+
+        if (items.length === 0) {
+          items.push({
+            id: `${event.id}-publish`,
+            title: event.title,
+            description: t("organizerHub.actionPublishDescription"),
+            to: `${eventPath}/edit`,
+            actionLabel: t("organizerHub.continue"),
+            icon: FilePenLine,
+          });
+        }
+
+        return items;
+      })
+      .slice(0, 5);
+
+    return {
+      statusCounts,
+      totalTicketsSold,
+      estimatedRevenue,
+      occupancyRate,
+      categoryRevenueItems,
+      actionItems,
+    };
+  }, [events, t]);
+
+  const filteredRevenueEvents = useMemo(
+    () =>
+      events
+        .filter((event) => event.status === "PUBLISHED")
+        .filter((event) => isEventInRevenueRange(event, revenueRange))
+        .map((event) => ({ event, revenue: getEventEstimatedRevenue(event) }))
+        .filter((item) => item.revenue > 0)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 8),
+    [events, revenueRange],
   );
 
-  const categoryChartOptions = useMemo<ApexOptions>(
+  const categoryRevenueSeries = useMemo(
+    () => dashboard.categoryRevenueItems.map((item) => Math.round(item.value)),
+    [dashboard.categoryRevenueItems],
+  );
+
+  const categoryRevenueOptions = useMemo<ApexOptions>(
     () => ({
       chart: {
         type: "donut",
         toolbar: { show: false },
         fontFamily: "Inter, system-ui, sans-serif",
       },
-      labels: categoryChartItems.map((item) => item.label),
-      colors: categoryChartItems.map((item) => item.color),
+      labels: dashboard.categoryRevenueItems.map((item) => item.label),
+      colors: dashboard.categoryRevenueItems.map((item) => item.color),
       dataLabels: { enabled: false },
       legend: {
         position: "bottom",
-        fontWeight: 600,
+        fontWeight: 700,
         labels: { colors: "#475569" },
       },
-      stroke: { width: 0 },
       plotOptions: {
         pie: {
-          customScale: 0.8,
           donut: {
-            size: "68%",
+            size: "66%",
             labels: {
               show: true,
               total: {
                 show: true,
-                label: "Sự kiện",
-                formatter: () => numberFormat(dashboard.totalEvents),
+                label: t("organizerHub.revenue"),
+                formatter: () => currencyFormat(dashboard.estimatedRevenue, language),
               },
             },
           },
         },
       },
+      stroke: { width: 0 },
       tooltip: {
-        y: {
-          formatter: (value) => `${numberFormat(value)} sự kiện`,
-        },
+        y: { formatter: (value) => currencyFormat(Number(value), language) },
       },
     }),
-    [dashboard.totalEvents, categoryChartItems],
+    [dashboard.categoryRevenueItems, dashboard.estimatedRevenue, language, t],
   );
 
-  const topEventChartOptions = useMemo<ApexOptions>(
+  const revenueByRangeOptions = useMemo<ApexOptions>(
     () => ({
       chart: {
         type: "bar",
@@ -516,128 +377,64 @@ export default function OrganizerHubPage() {
         fontFamily: "Inter, system-ui, sans-serif",
       },
       colors: ["#10B981"],
+      dataLabels: { enabled: false },
+      grid: { borderColor: "#e2e8f0", strokeDashArray: 4 },
       plotOptions: {
         bar: {
-          borderRadius: 6,
-          horizontal: false,
-          columnWidth: "48%",
+          borderRadius: 8,
+          columnWidth: "46%",
         },
       },
-      dataLabels: { enabled: false },
       xaxis: {
-        categories: topEvents.map((event) => event.title),
+        categories: filteredRevenueEvents.map(({ event }) => event.title),
         labels: {
-          rotate: -45,
-          rotateAlways: true,
-          hideOverlappingLabels: false,
+          rotate: -30,
           trim: true,
-          maxHeight: 120,
-          style: { colors: "#334155", fontWeight: 600 },
+          maxHeight: 110,
+          style: { colors: "#64748b", fontWeight: 700 },
         },
       },
       yaxis: {
         labels: {
-          style: { colors: "#64748b", fontWeight: 600 },
-          formatter: (value) => numberFormat(Number(value)),
+          style: { colors: "#334155", fontWeight: 700 },
+          formatter: (value) => currencyFormat(Number(value), language),
         },
-      },
-      grid: {
-        borderColor: "#e2e8f0",
-        strokeDashArray: 4,
       },
       tooltip: {
-        y: {
-          formatter: (value) => `${numberFormat(value)} vé`,
-        },
+        y: { formatter: (value) => currencyFormat(Number(value), language) },
       },
     }),
-    [topEvents],
+    [filteredRevenueEvents, language],
   );
 
-  const topEventSeries = useMemo(
+  const revenueByRangeSeries = useMemo(
     () => [
       {
-        name: "Vé đã bán",
-        data: topEvents.map((event) => getEventTicketsSold(event)),
+        name: t("organizerHub.revenue"),
+        data: filteredRevenueEvents.map((item) => Math.round(item.revenue)),
       },
     ],
-    [topEvents],
-  );
-
-  const performanceChartOptions = useMemo<ApexOptions>(
-    () => ({
-      chart: {
-        type: "radialBar",
-        toolbar: { show: false },
-        fontFamily: "Inter, system-ui, sans-serif",
-      },
-      plotOptions: {
-        radialBar: {
-          startAngle: -110,
-          endAngle: 110,
-          hollow: {
-            size: "68%",
-          },
-          track: {
-            background: "#f1f5f9",
-            strokeWidth: "97%",
-          },
-          dataLabels: {
-            name: {
-              show: true,
-              fontSize: "13px",
-              fontWeight: 600,
-              color: "#64748b",
-              offsetY: -8,
-            },
-            value: {
-              show: true,
-              fontSize: "24px",
-              fontWeight: 700,
-              color: "#0f172a",
-              offsetY: 4,
-              formatter: (val) => `${Math.round(Number(val))}%`,
-            },
-          },
-        },
-      },
-      fill: {
-        type: "gradient",
-        gradient: {
-          shade: "dark",
-          type: "horizontal",
-          shadeIntensity: 0.5,
-          gradientToColors: ["#059669"],
-          inverseColors: true,
-          opacityFrom: 1,
-          opacityTo: 1,
-          stops: [0, 100],
-        },
-      },
-      colors: ["#10B981"],
-      stroke: {
-        dashArray: 3,
-      },
-      labels: ["Tỷ lệ lấp đầy"],
-    }),
-    [],
-  );
-
-  const performanceSeries = useMemo(
-    () => [dashboard.occupancyRate],
-    [dashboard.occupancyRate],
+    [filteredRevenueEvents, t],
   );
 
   return (
     <OrganizerLayout
-      title="Tổng quan"
-      description="Theo dõi hiệu suất sự kiện và vé bán."
+      title={t("organizerHub.greeting", { name: profile?.name ? `, ${profile.name}` : "" })}
+      description={t("organizerHub.description")}
       className="organizer-hub-page"
+      actions={
+        <div className="organizer-hub-header-actions">
+          <Link className="organizer-events-add-button" to="/organizer/events/new">
+            <Plus size={18} />
+            {t("organizerHub.createEvent")}
+          </Link>
+        </div>
+      }
     >
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải dữ liệu tổng quan...</p>
+          <p>{t("organizerHub.loading")}</p>
         </section>
       ) : error ? (
         <section className="organizer-panel organizer-dashboard-state">
@@ -646,175 +443,155 @@ export default function OrganizerHubPage() {
         </section>
       ) : (
         <>
-          <section className="organizer-dashboard-stats">
-            <DashboardStatCard
-              icon={<FaCalendarAlt size={30} className="organizer-dashboard-stat-icon-events" />}
-              label="Tổng sự kiện"
-              value={numberFormat(dashboard.totalEvents)}
-              trend={dashboard.trends.totalEvents}
+          <section className="organizer-hub-kpi-grid" aria-label={t("organizerHub.operationalMetrics")}>
+            <HubKpiCard
+              icon={IoCalendarNumberSharp}
+              label={t("organizerHub.publishedEvents")}
+              value={numberFormat(dashboard.statusCounts.PUBLISHED, language)}
+              description={t("organizerHub.publishedEventsDescription")}
+              iconColor="#60a5fa"
             />
-            <DashboardStatCard
-              icon={<IoTicketSharp size={30} className="organizer-dashboard-stat-icon-tickets" />}
-              label="Vé đã bán"
-              value={numberFormat(dashboard.totalTicketsSold)}
-              trend={dashboard.trends.totalTicketsSold}
+            <HubKpiCard
+              icon={HiTicket}
+              label={t("publicOrganizer.ticketsSold")}
+              value={numberFormat(dashboard.totalTicketsSold, language)}
+              description={t("organizerHub.ticketsSoldDescription")}
+              iconColor="#34d399"
             />
-            <DashboardStatCard
-              icon={<FaCheckCircle size={30} className="organizer-dashboard-stat-icon-occupancy" />}
-              label="Tỷ lệ lấp đầy"
-              value={percentFormat(dashboard.occupancyRate)}
-              trend={dashboard.trends.occupancyRate}
+            <HubKpiCard
+              icon={FaMoneyBill1Wave}
+              label={t("organizerHub.estimatedRevenue")}
+              value={currencyFormat(dashboard.estimatedRevenue, language)}
+              description={t("organizerHub.estimatedRevenueDescription")}
+              iconColor="#fbbf24"
             />
-            <DashboardStatCard
-              icon={<HiUserGroup size={30} className="organizer-dashboard-stat-icon-followers" />}
-              label="Người theo dõi"
-              value={numberFormat(profile?.followerCount)}
-              trend={dashboard.trends.followerCount}
+            <HubKpiCard
+              icon={FaCheckCircle}
+              label={t("organizerHub.occupancyRate")}
+              value={`${dashboard.occupancyRate}%`}
+              description={t("organizerHub.occupancyRateDescription")}
+              iconColor="#a78bfa"
             />
           </section>
 
-          <section className="organizer-dashboard-grid">
-            <article className="organizer-panel organizer-chart-panel">
-              <div className="organizer-panel-heading-row">
+          <section className="organizer-hub-chart-grid">
+            <article className="organizer-panel organizer-hub-chart-card">
+              <div className="organizer-hub-panel-heading">
                 <div>
-                  <p className="organizer-dashboard-chart-title">
-                    Sự kiện theo danh mục
-                  </p>
+                  <h2>{t("organizerHub.revenueByCategory")}</h2>
+                  <p>{t("organizerHub.revenueByCategoryDescription")}</p>
                 </div>
               </div>
-              {categorySeries.length > 0 ? (
+              {categoryRevenueSeries.length > 0 ? (
                 <Chart
-                  options={categoryChartOptions}
-                  series={categorySeries}
+                  options={categoryRevenueOptions}
+                  series={categoryRevenueSeries}
                   type="donut"
                   height={350}
                 />
               ) : (
-                <div className="organizer-dashboard-empty-chart">
-                  Chưa có dữ liệu danh mục.
+                <div className="organizer-hub-empty">
+                  <p>{t("organizerHub.emptyCategoryRevenue")}</p>
                 </div>
               )}
             </article>
 
-            <article className="organizer-panel organizer-chart-panel">
-              <div className="organizer-panel-heading-row">
+            <article className="organizer-panel organizer-hub-chart-card">
+              <div className="organizer-hub-panel-heading organizer-hub-chart-heading">
                 <div>
-                  <p className="organizer-dashboard-chart-title">
-                    Top 5 sự kiện bán chạy nhất
-                  </p>
+                  <h2>{t("organizerHub.revenueByEvent")}</h2>
+                  <p>{t("organizerHub.revenueByEventDescription")}</p>
                 </div>
                 <div
                   className="organizer-dashboard-time-tabs"
-                  aria-label="Chọn khoảng thời gian top sự kiện"
+                  aria-label={t("organizerHub.selectRevenueRange")}
                 >
-                  {topEventRangeOptions.map((option) => (
+                  {revenueRangeOptions.map((option) => (
                     <button
                       key={option.value}
                       type="button"
-                      className={topEventRange === option.value ? "is-active" : ""}
-                      onClick={() => setTopEventRange(option.value)}
+                      className={revenueRange === option.value ? "is-active" : ""}
+                      onClick={() => setRevenueRange(option.value)}
                     >
-                      {option.label}
+                      {t(option.label)}
                     </button>
                   ))}
                 </div>
               </div>
-              {topEvents.length > 0 ? (
+              {filteredRevenueEvents.length > 0 ? (
                 <Chart
-                  options={topEventChartOptions}
-                  series={topEventSeries}
+                  options={revenueByRangeOptions}
+                  series={revenueByRangeSeries}
                   type="bar"
                   height={350}
                 />
               ) : (
-                <div className="organizer-dashboard-empty-chart">
-                  Chưa có dữ liệu vé bán.
+                <div className="organizer-hub-empty">
+                  <p>{t("organizerHub.emptyRangeRevenue")}</p>
                 </div>
               )}
             </article>
           </section>
 
-          <section className="organizer-dashboard-grid">
-            <article className="organizer-panel organizer-dashboard-list-panel">
-              <div className="organizer-panel-heading-row" style={{ marginBottom: "18px" }}>
+          <section className="organizer-hub-main-grid">
+            <article className="organizer-panel organizer-hub-action-panel">
+              <div className="organizer-hub-panel-heading">
                 <div>
-                  <p className="organizer-dashboard-chart-title">Sự kiện sắp diễn ra</p>
+                  <h2>{t("organizerHub.todo")}</h2>
+                  <p>{t("organizerHub.todoDescription")}</p>
                 </div>
               </div>
-              <div className="organizer-dashboard-event-list">
-                {dashboard.upcomingEvents.length > 0 ? (
-                  dashboard.upcomingEvents.map((event) => {
-                    const primaryImage = event.images?.find((img) => img.isPrimary) || event.images?.[0];
-                    const thumbnailUrl = primaryImage?.url;
+
+              <div className="organizer-hub-action-list">
+                {dashboard.actionItems.length > 0 ? (
+                  dashboard.actionItems.map((item) => {
+                    const Icon = item.icon;
                     return (
-                      <div className="organizer-dashboard-event-row" key={event.id}>
-                        <div className="organizer-dashboard-event-main">
-                          {thumbnailUrl ? (
-                            <img
-                              src={thumbnailUrl}
-                              alt={event.title}
-                              className="organizer-dashboard-event-thumb"
-                            />
-                          ) : (
-                            <div className="organizer-dashboard-event-thumb-placeholder">
-                              {event.title.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="organizer-dashboard-event-copy">
-                            <strong>{event.title}</strong>
-                            <span className="organizer-dashboard-event-time">
-                              {event.schedule?.startDatetime
-                                ? new Date(event.schedule.startDatetime).toLocaleString(
-                                    "vi-VN",
-                                  )
-                                : "Chưa có lịch"}
-                            </span>
-                          </div>
-                        </div>
-                        <span className={`organizer-tag ${
-                          getStatusKey(event.status) === "PUBLISHED" ? "organizer-dashboard-status-published" : ""
-                        }`}>
-                          {eventStatusLabels[getStatusKey(event.status)]}
+                      <div className="organizer-hub-action-row" key={item.id}>
+                        <span className={`organizer-hub-action-icon ${item.icon === IoTicketSharp ? "no-bg" : ""}`}>
+                          <Icon size={item.icon === IoTicketSharp ? 22 : 19} />
                         </span>
+                        <div>
+                          <strong>{item.title}</strong>
+                          <p>{item.description}</p>
+                        </div>
+                        <Link to={item.to}>
+                          {item.actionLabel}
+                          <ArrowRight size={16} />
+                        </Link>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="organizer-dashboard-empty-chart">
-                    Chưa có sự kiện sắp diễn ra.
+                  <div className="organizer-hub-empty">
+                    <CheckCircle2 size={24} />
+                    <p>{t("organizerHub.emptyTodo")}</p>
                   </div>
                 )}
               </div>
             </article>
 
-            <article className="organizer-panel organizer-dashboard-list-panel">
-              <div className="organizer-panel-heading">
-                <p className="organizer-dashboard-chart-title">Hiệu suất ước tính</p>
+            <article className="organizer-panel organizer-hub-status-panel">
+              <div className="organizer-hub-panel-heading">
+                <div>
+                  <h2>{t("organizerHub.eventStatus")}</h2>
+                  <p>{t("organizerHub.eventStatusDescription")}</p>
+                </div>
+                <Link className="organizer-hub-panel-link" to="/organizer/events">
+                  {t("organizerHub.viewAll")}
+                  <ArrowRight size={16} />
+                </Link>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center" }}>
-                <div style={{ width: "100%", height: "200px", display: "flex", justifyContent: "center", alignItems: "center" }}>
-                  <Chart
-                    options={performanceChartOptions}
-                    series={performanceSeries}
-                    type="radialBar"
-                    height={240}
-                    width="100%"
-                  />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", width: "100%", textAlign: "center" }}>
-                  <div style={{ background: "#f8fafc", padding: "10px 4px", borderRadius: "14px", border: "1px solid #e2e8f0" }}>
-                    <span style={{ fontSize: "16px", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>Sức chứa</span>
-                    <strong style={{ fontSize: "16px", color: "#0f172a", fontWeight: 700 }}>{numberFormat(dashboard.totalCapacity)}</strong>
+              <div className="organizer-hub-status-list">
+                {(Object.keys(eventStatusMeta) as EventStatusKey[]).map((status) => (
+                  <div className="organizer-hub-status-row" key={status}>
+                    <span className={`organizer-hub-status-dot ${eventStatusMeta[status].className}`} />
+                    <span style={status === "PUBLISHED" ? { fontWeight: 700 } : undefined}>
+                      {t(eventStatusMeta[status].label)}
+                    </span>
+                    <strong>{numberFormat(dashboard.statusCounts[status], language)}</strong>
                   </div>
-                  <div style={{ background: "#f8fafc", padding: "10px 4px", borderRadius: "14px", border: "1px solid #e2e8f0" }}>
-                    <span style={{ fontSize: "16px", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>Vé đã bán</span>
-                    <strong style={{ fontSize: "16px", color: "#0f172a", fontWeight: 700 }}>{numberFormat(dashboard.totalTicketsSold)}</strong>
-                  </div>
-                  <div style={{ background: "#f8fafc", padding: "10px 4px", borderRadius: "14px", border: "1px solid #e2e8f0" }}>
-                    <span style={{ fontSize: "16px", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "4px" }}>Doanh thu ước tính</span>
-                    <strong style={{ fontSize: "16px", color: "#0f172a", fontWeight: 700, whiteSpace: "nowrap" }}>{currencyFormat(dashboard.estimatedRevenue)}</strong>
-                  </div>
-                </div>
+                ))}
               </div>
             </article>
           </section>
@@ -823,5 +600,3 @@ export default function OrganizerHubPage() {
     </OrganizerLayout>
   );
 }
-
-

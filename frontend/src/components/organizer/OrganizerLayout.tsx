@@ -3,6 +3,7 @@ import { useKeycloak } from "@react-keycloak/web";
 import { useNavigate } from "react-router-dom";
 import { LoaderCircle, ShieldAlert } from "lucide-react";
 import { toast } from "react-toastify";
+import { useTranslation } from "react-i18next";
 import OrganizerSidebar from "./OrganizerSidebar";
 import OrganizerTopBar from "./OrganizerTopBar";
 import OrganizerEventWorkspaceNav from "./OrganizerEventWorkspaceNav";
@@ -31,6 +32,7 @@ type OrganizerEventHeaderActionsProps = {
 };
 
 function OrganizerEventHeaderActions({ eventId }: OrganizerEventHeaderActionsProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [eventDetail, setEventDetail] = useState<OrganizerEventDetail | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -66,10 +68,10 @@ function OrganizerEventHeaderActions({ eventId }: OrganizerEventHeaderActionsPro
 
   const handleCancel = async () => {
     const confirmed = await confirmDestructiveAction({
-      title: "Xóa sự kiện này?",
-      text: "Sự kiện sẽ bị xóa khỏi workspace organizer và thao tác này không thể hoàn tác.",
-      confirmButtonText: "Xóa sự kiện",
-      cancelButtonText: "Giữ lại",
+      title: t("organizer.deleteEventConfirm"),
+      text: t("organizer.deleteEventText"),
+      confirmButtonText: t("organizer.deleteEvent"),
+      cancelButtonText: t("organizer.deleteEventKeep"),
     });
 
     if (!confirmed) return;
@@ -77,10 +79,10 @@ function OrganizerEventHeaderActions({ eventId }: OrganizerEventHeaderActionsPro
     setCancelling(true);
     try {
       await organizerWorkspaceService.deleteEvent(eventId);
-      toast.success("Đã xóa sự kiện.");
+      toast.success(t("organizer.deleteEventSuccess"));
       navigate("/organizer/events");
     } catch {
-      toast.error("Không thể xóa sự kiện lúc này.");
+      toast.error(t("organizer.deleteEventFailed"));
     } finally {
       setCancelling(false);
     }
@@ -94,7 +96,7 @@ function OrganizerEventHeaderActions({ eventId }: OrganizerEventHeaderActionsPro
         onClick={handleCancel}
         disabled={cancelling}
       >
-        {cancelling ? "Đang xóa" : "Hủy sự kiện"}
+        {cancelling ? t("organizer.deletingEvent") : t("organizer.deleteEvent")}
       </button>
     </div>
   );
@@ -111,6 +113,7 @@ export default function OrganizerLayout({
   showWorkflowNav = false,
   eventId,
 }: OrganizerLayoutProps) {
+  const { t } = useTranslation();
   const { keycloak, initialized } = useKeycloak();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -142,8 +145,8 @@ export default function OrganizerLayout({
       <div className="organizer-page organizer-loading-page">
         <div className="organizer-page-loading" role="status" aria-live="polite">
           <LoaderCircle className="organizer-loading-icon" size={32} />
-          <h1>Loading Page</h1>
-          <p>Vui lòng chờ trong giây lát, hệ thống đang chuẩn bị workspace.</p>
+          <h1>{t("organizer.loadingPage")}</h1>
+          <p>{t("organizer.loadingWorkspace")}</p>
         </div>
       </div>
     );
@@ -154,10 +157,10 @@ export default function OrganizerLayout({
       <div className="organizer-page organizer-state-page">
         <div className="container organizer-state-card">
           <ShieldAlert size={28} />
-          <h1>Đăng nhập để dùng organizer workspace</h1>
-          <p>Các API upload ảnh và check-in yêu cầu JWT có quyền organizer.</p>
+          <h1>{t("organizer.loginWorkspace")}</h1>
+          <p>{t("organizer.loginWorkspaceDescription")}</p>
           <button className="btn btn-primary" onClick={() => keycloak.login()}>
-            Đăng nhập
+            {t("auth.signIn")}
           </button>
         </div>
       </div>
@@ -171,17 +174,17 @@ export default function OrganizerLayout({
           <ShieldAlert size={28} />
           <h1>
             {hasOrganizerProfileRole
-              ? "Cần cập nhật phiên đăng nhập"
-              : "Tài khoản hiện tại chưa có quyền organizer"}
+              ? t("organizer.refreshLoginTitle")
+              : t("organizer.organizerRoleMissing")}
           </h1>
           <p>
             {hasOrganizerProfileRole
-              ? "Hồ sơ của bạn đã được duyệt, nhưng token đăng nhập hiện tại vẫn chưa có role ORGANIZER. Hãy đăng nhập lại để lấy quyền mới."
-              : "Hồ sơ organizer của bạn chưa được admin duyệt hoặc token chưa có role ORGANIZER."}
+              ? t("organizer.refreshLoginDescription")
+              : t("organizer.organizerRoleMissingDescription")}
           </p>
           {hasOrganizerProfileRole ? (
             <button className="btn btn-primary" type="button" onClick={refreshLoginSession}>
-              Cập nhật phiên đăng nhập
+              {t("organizer.refreshLogin")}
             </button>
           ) : null}
         </div>

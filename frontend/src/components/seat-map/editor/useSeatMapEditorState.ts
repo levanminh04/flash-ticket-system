@@ -31,6 +31,7 @@ import {
 } from "./seatMapEditorUtils";
 import {
   createCatBottomRingPreset,
+  createConcertOvalTemplate,
   createFanPreset,
   createFohPreset,
   createLeftSideRingPreset,
@@ -109,7 +110,12 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     const rawDraft = window.localStorage.getItem(draftKey);
     const draftDocument = rawDraft ? deserializeEditorDocument(rawDraft) : null;
 
-    setDocument(draftDocument ?? sourceDocument);
+    const nextDocument = draftDocument ?? sourceDocument;
+    setDocument(nextDocument);
+    setViewport(getCenteredViewport(nextDocument));
+    setSelectedShapeIds([]);
+    setSelectedSeatId(null);
+    setSelectedSeatIds([]);
     setHasDraft(Boolean(draftDocument));
     setUndoStack([]);
     setRedoStack([]);
@@ -206,15 +212,20 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
   };
 
   const selectShape = (shapeId: string | null, additive = false) => {
-    setSelectedSeatId(null);
-    setSelectedSeatIds([]);
-
     if (!shapeId) {
       setSelectedShapeIds([]);
+      setSelectedSeatId(null);
+      setSelectedSeatIds([]);
       return;
     }
 
     setSelectedShapeIds((current) => {
+      const keepsCurrentSeatSelection = current.includes(shapeId);
+      if (!keepsCurrentSeatSelection) {
+        setSelectedSeatId(null);
+        setSelectedSeatIds([]);
+      }
+
       if (!additive) {
         return [shapeId];
       }
@@ -224,12 +235,24 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
         return nextSelection.length ? nextSelection : [];
       }
 
-      return [shapeId, ...current];
+    return [shapeId, ...current];
     });
+  };
+
+  const selectShapes = (shapeIds: string[]) => {
+    const nextShapeIds = Array.from(new Set(shapeIds));
+    setSelectedShapeIds(nextShapeIds);
+    setSelectedSeatId(null);
+    setSelectedSeatIds([]);
   };
 
   const clearSelection = () => {
     setSelectedShapeIds([]);
+    setSelectedSeatId(null);
+    setSelectedSeatIds([]);
+  };
+
+  const clearSeatSelection = () => {
     setSelectedSeatId(null);
     setSelectedSeatIds([]);
   };
@@ -243,8 +266,9 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
       }
 
       if (!additive) {
-        setSelectedSeatId(seatId);
-        return [seatId];
+        const isAlreadySelected = current.length === 1 && current[0] === seatId;
+        setSelectedSeatId(isAlreadySelected ? null : seatId);
+        return isAlreadySelected ? [] : [seatId];
       }
 
       const nextSelection = current.includes(seatId)
@@ -375,6 +399,25 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     });
   };
 
+  const addConcertOvalTemplate = () => {
+    updateDocument((current) => {
+      const templateShapes = createConcertOvalTemplate(current);
+      const nextDocument = {
+        ...current,
+        shapes: sortShapesByZIndex([...current.shapes, ...templateShapes]),
+      };
+      setSelectedShapeIds(
+        templateShapes
+          .filter((shape) => shape.mapData?.decorative !== true)
+          .map((shape) => shape.id),
+      );
+      setSelectedSeatId(null);
+      setSelectedSeatIds([]);
+      setActiveTool("select");
+      return nextDocument;
+    });
+  };
+
   const updateShape = (shapeId: string, updater: (shape: SeatMapEditorShape) => SeatMapEditorShape) => {
     updateDocument((current) => ({
       ...current,
@@ -386,6 +429,24 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
 
   const translateShapeBy = (shapeId: string, deltaX: number, deltaY: number) => {
     updateShape(shapeId, (shape) => translateShape(shape, deltaX, deltaY));
+  };
+
+  const translateShapesBy = (shapeIds: string[], deltaX: number, deltaY: number) => {
+    const targetShapeIds = new Set(shapeIds);
+    if (!targetShapeIds.size) {
+      return;
+    }
+
+    updateDocument((current) => ({
+      ...current,
+      shapes: sortShapesByZIndex(
+        current.shapes.map((shape) =>
+          targetShapeIds.has(shape.id) && !shape.locked
+            ? translateShape(shape, deltaX, deltaY)
+            : shape,
+        ),
+      ),
+    }));
   };
 
   const resizeShape = (
@@ -709,6 +770,7 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     addCircle,
     addEllipse,
     addFanSection: () => addPresetShape(createFanPreset),
+    addConcertOvalTemplate,
     addFoh: () => addPresetShape(createFohPreset),
     addStage: () => addPresetShape(createStagePreset),
     addRoundedBlock: () => addPresetShape(createRoundedBlockPreset),
@@ -720,6 +782,7 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     addHexagon,
     addRectangle,
     clearDraft,
+    clearSeatSelection,
     clearSeats,
     clearSelection,
     hideSeat,
@@ -740,6 +803,7 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     redo,
     selectSeat,
     selectShape,
+    selectShapes,
     setActiveTool,
     setReferenceImageVisible,
     setViewport,
@@ -747,6 +811,7 @@ export function useSeatMapEditorState(eventId: string | undefined, seatMap: Orga
     toggleShapeVisibility,
     transformPolygon,
     translateShapeBy,
+    translateShapesBy,
     undo,
     updateSeatLayout,
     updateShape,

@@ -174,6 +174,14 @@ function normalizeSectorType(value: unknown, seatCount = 0): SeatMapEditorSector
       : "STANDING";
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
 function buildFallbackBounds(
   sectorIndex: number,
   seatCount: number,
@@ -432,14 +440,18 @@ function buildShape(
   const locked = mapData.locked === true;
   const zIndex = asNumber(mapData.zIndex) ?? sectorIndex;
   const totalCapacity = asNumber(sector.totalCapacity ?? mapData.totalCapacity) ?? undefined;
+  const ticketTypeIds = normalizeStringArray(mapData.ticketTypeIds);
+  const ticketTypeNames = normalizeStringArray(mapData.ticketTypeNames);
 
   return {
     id: sector.id,
     sectorId: sector.id,
     name: sector.name,
     code: typeof mapData.code === "string" ? mapData.code : undefined,
-    ticketTypeId: typeof mapData.ticketTypeId === "string" ? mapData.ticketTypeId : undefined,
+    ticketTypeId: typeof mapData.ticketTypeId === "string" ? mapData.ticketTypeId : ticketTypeIds[0],
     ticketTypeName: typeof mapData.ticketTypeName === "string" ? mapData.ticketTypeName : undefined,
+    ticketTypeIds,
+    ticketTypeNames,
     sectorType: normalizeSectorType(sector.sectorType ?? mapData.sectorType, seats.length),
     totalCapacity,
     shapeType: inferredShapeType,
@@ -1000,6 +1012,12 @@ function normalizeParsedEditorDocument(parsed: unknown): SeatMapEditorDocument |
             ...shape,
             sectorType: normalizeSectorType(shape.sectorType, seats.length),
             totalCapacity: asNumber(shape.totalCapacity ?? shape.mapData?.totalCapacity) ?? undefined,
+            ticketTypeIds: Array.isArray(shape.ticketTypeIds)
+              ? shape.ticketTypeIds.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+              : normalizeStringArray(shape.mapData?.ticketTypeIds),
+            ticketTypeNames: Array.isArray(shape.ticketTypeNames)
+              ? shape.ticketTypeNames.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+              : normalizeStringArray(shape.mapData?.ticketTypeNames),
             mapData: shape.mapData,
             visible: shape.visible !== false,
             locked: shape.locked === true,
@@ -1102,8 +1120,19 @@ export function buildSeatMapPublishPayload(
           sectorType === "STANDING"
             ? Math.max(0, Math.round(asNumber(shape.totalCapacity) ?? 0))
             : getVisibleSeatCount(shape.seats),
-        ticketTypeId: sectorType === "STANDING" ? shape.ticketTypeId : undefined,
-        ticketTypeName: sectorType === "STANDING" ? shape.ticketTypeName : undefined,
+        ticketTypeId:
+          sectorType === "STANDING"
+            ? shape.ticketTypeIds?.[0] ?? shape.ticketTypeId
+            : undefined,
+        ticketTypeName:
+          sectorType === "STANDING"
+            ? shape.ticketTypeNames?.[0] ?? shape.ticketTypeName
+            : undefined,
+        ticketTypeIds:
+          sectorType === "STANDING"
+            ? shape.ticketTypeIds ?? (shape.ticketTypeId ? [shape.ticketTypeId] : [])
+            : undefined,
+        ticketTypeNames: sectorType === "STANDING" ? shape.ticketTypeNames : undefined,
         zIndex: shape.zIndex,
         visible: shape.visible,
         locked: shape.locked,

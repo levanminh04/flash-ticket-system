@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { SendHorizontal } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const socialLinks = [
   {
@@ -21,6 +22,8 @@ const socialLinks = [
 ];
 
 export default function Footer() {
+  const { t } = useTranslation();
+
   return (
     <footer className="footer home-footer">
       <div className="container">
@@ -29,11 +32,7 @@ export default function Footer() {
             <Link to="/" className="logo home-footer-logo">
               FlashTicket
             </Link>
-            <p>
-              Nền tảng đặt vé sự kiện trực tuyến dành cho người mua vé muốn
-              giao dịch nhanh và organizer muốn vận hành bán vé trên một giao
-              diện rõ ràng.
-            </p>
+            <p>{t("footer.brandDescription")}</p>
             <div className="home-footer-socials">
               {socialLinks.map((social) => (
                 <a
@@ -48,15 +47,15 @@ export default function Footer() {
             </div>
           </div>
           <div className="footer-col home-footer-subscribe">
-            <h4>Get Update Subscribe</h4>
-            <h4>Our Newsletter</h4>
+            <h4>{t("footer.newsletterFirstLine")}</h4>
+            <h4>{t("footer.newsletterSecondLine")}</h4>
             <form className="home-footer-subscribe-form">
               <input
                 type="email"
-                placeholder="Enter your email address"
-                aria-label="Enter your email address"
+                placeholder={t("footer.subscribePlaceholder")}
+                aria-label={t("footer.subscribePlaceholder")}
               />
-              <button type="button" aria-label="Send newsletter request">
+              <button type="button" aria-label={t("footer.newsletterFirstLine")}>
                 <SendHorizontal size={16} />
               </button>
             </form>
@@ -64,37 +63,37 @@ export default function Footer() {
           <div className="footer-col home-footer-links-group">
             <div className="home-footer-links-columns">
               <div className="footer-col">
-                <h4>Quick Links</h4>
+                <h4>{t("footer.quickLinks")}</h4>
                 <ul className="footer-links">
                   <li>
-                    <Link to="/">Home</Link>
+                    <Link to="/">{t("nav.home")}</Link>
                   </li>
                   <li>
-                    <Link to="/search">Events</Link>
+                    <Link to="/search">{t("nav.events")}</Link>
                   </li>
                   <li>
-                    <Link to="/venues">Venues</Link>
+                    <Link to="/venues">{t("nav.venues")}</Link>
                   </li>
                   <li>
-                    <Link to="/organizer">Organizer</Link>
+                    <Link to="/organizer">{t("nav.organizer")}</Link>
                   </li>
                 </ul>
               </div>
 
               <div className="footer-col">
-                <h4>Support</h4>
+                <h4>{t("footer.support")}</h4>
                 <ul className="footer-links">
                   <li>
                     <a href="#home-faq">FAQ</a>
                   </li>
                   <li>
-                    <Link to="/profile">My Account</Link>
+                    <Link to="/profile">{t("nav.myAccount")}</Link>
                   </li>
                   <li>
-                    <Link to="/my-orders">Orders</Link>
+                    <Link to="/my-orders">{t("nav.orders")}</Link>
                   </li>
                   <li>
-                    <Link to="/my-tickets">Tickets</Link>
+                    <Link to="/my-tickets">{t("nav.tickets")}</Link>
                   </li>
                 </ul>
               </div>
@@ -103,10 +102,7 @@ export default function Footer() {
         </div>
 
         <div className="footer-bottom">
-          <p>
-            &copy; 2026 FlashTicket. Event booking homepage for buyers and
-            organizers.
-          </p>
+          <p>{t("footer.copyright")}</p>
         </div>
       </div>
     </footer>

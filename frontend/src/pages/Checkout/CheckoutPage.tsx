@@ -13,6 +13,7 @@ import {
 } from "react-router-dom";
 import { useKeycloak } from "@react-keycloak/web";
 import { toast } from "react-toastify";
+import { useTranslation } from "react-i18next";
 import { orderService, OrderDetail } from "../../services/orderService";
 import { paymentService } from "../../services/paymentService";
 import { eventService } from "../../services/eventService";
@@ -29,8 +30,8 @@ import { IoIosInformationCircle } from "react-icons/io";
 import { TiTicket } from "react-icons/ti";
 import { FaCheck } from "react-icons/fa6";
 
-function formatCurrency(value: number): string {
-  return `${value.toLocaleString("vi-VN")} đ`;
+function formatCurrency(value: number, language: string): string {
+  return `${value.toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`;
 }
 
 function formatTimer(value: number): string {
@@ -52,9 +53,11 @@ const paymentStrategyLogos = {
 };
 
 export default function CheckoutPage() {
+  const { i18n, t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { keycloak, initialized } = useKeycloak();
+  const language = i18n.resolvedLanguage || "vi";
 
   const orderId = searchParams.get("orderId") || sessionStorage.getItem("lastOrderId") || "";
 
@@ -100,7 +103,7 @@ export default function CheckoutPage() {
     if (!initialized) return;
 
     if (!orderId) {
-      toast.error("Không tìm thấy thông tin đơn hàng.");
+      toast.error(t("checkout.missingOrder"));
       allowNavigationRef.current = true;
       navigate("/");
       return;
@@ -111,14 +114,14 @@ export default function CheckoutPage() {
       try {
         const order = await orderService.getOrderDetail(orderId);
         if (!order) {
-          toast.error("Đơn hàng không tồn tại.");
+          toast.error(t("checkout.orderNotFound"));
           allowNavigationRef.current = true;
           navigate("/");
           return;
         }
 
         if (order.status !== "PENDING") {
-          toast.info(`Đơn hàng ở trạng thái: ${order.status}`);
+          toast.info(t("checkout.orderStatus", { status: order.status }));
           allowNavigationRef.current = true;
           if (order.status === "CONFIRMED") {
             navigate("/payment-result", { state: { fromCheckout: true } });
@@ -138,7 +141,7 @@ export default function CheckoutPage() {
         setEvent(eventData);
       } catch (err) {
         console.error("Error loading order or event details:", err);
-        toast.error("Không thể tải thông tin đơn hàng.");
+        toast.error(t("ordersPage.loadDetailFailed"));
         allowNavigationRef.current = true;
         navigate("/");
       } finally {
@@ -147,7 +150,7 @@ export default function CheckoutPage() {
     };
 
     void fetchOrderAndEvent();
-  }, [orderId, initialized, navigate]);
+  }, [orderId, initialized, navigate, t]);
 
   // Page unload guard
   useEffect(() => {
@@ -234,7 +237,7 @@ export default function CheckoutPage() {
     const handleTimeout = async () => {
       clearInterval(timerRef.current);
       clearCheckoutSession();
-      toast.error("Hết thời gian giữ vé. Đơn hàng của bạn đã bị hủy.");
+      toast.error(t("checkout.holdTimeout"));
       allowNavigationRef.current = true;
       if (orderId) {
         try {
@@ -259,7 +262,7 @@ export default function CheckoutPage() {
     updateTimer();
     timerRef.current = setInterval(updateTimer, 1000);
     return () => clearInterval(timerRef.current);
-  }, [orderDetail?.expiresAt, event, orderId, navigate, clearCheckoutSession]);
+  }, [orderDetail?.expiresAt, event, orderId, navigate, clearCheckoutSession, t]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
@@ -302,14 +305,14 @@ export default function CheckoutPage() {
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 503) {
-        toast.error("Cổng thanh toán đang bận. Vui lòng thử lại sau vài giây.");
+        toast.error(t("checkout.paymentBusy"));
       } else if (status === 405) {
-        toast.error("Endpoint thanh toán chưa sẵn sàng. Vui lòng thử lại sau.");
+        toast.error(t("checkout.paymentEndpointUnavailable"));
       } else {
         toast.error(
           err?.response?.data?.message ||
             err?.response?.data?.error?.message ||
-            "Có lỗi xảy ra khi thanh toán. Vui lòng thử lại.",
+            t("checkout.paymentError"),
         );
       }
     } finally {
@@ -364,7 +367,7 @@ export default function CheckoutPage() {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
         <div className="loading-spinner" style={{ margin: "0 auto 16px" }} />
-        <p>Đang tải thông tin đơn hàng...</p>
+        <p>{t("checkout.loadingOrder")}</p>
       </div>
     );
   }
@@ -372,7 +375,7 @@ export default function CheckoutPage() {
   if (!keycloak?.authenticated) {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
-        <p style={{ marginBottom: 8 }}>Bạn cần đăng nhập để tiếp tục thanh toán.</p>
+        <p style={{ marginBottom: 8 }}>{t("checkout.loginRequired")}</p>
         <button
           type="button"
           className="btn btn-primary"
@@ -381,7 +384,7 @@ export default function CheckoutPage() {
             keycloak.login({ redirectUri: window.location.href });
           }}
         >
-          Đăng nhập
+          {t("auth.signIn")}
         </button>
       </div>
     );
@@ -390,9 +393,9 @@ export default function CheckoutPage() {
   if (!orderDetail) {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
-        <p>Không tìm thấy thông tin đơn hàng.</p>
+        <p>{t("checkout.missingOrder")}</p>
         <Link to="/" className="btn btn-outline" style={{ marginTop: 16 }}>
-          Quay lại trang chủ
+          {t("checkout.returnHome")}
         </Link>
       </div>
     );
@@ -407,7 +410,7 @@ export default function CheckoutPage() {
               <li className="breadcrumb-item">
                 <Link to="/" className="breadcrumb-home">
                   <Home size={15} />
-                  Home
+                  {t("nav.home")}
                 </Link>
               </li>
               <li className="breadcrumb-separator" aria-hidden="true">
@@ -415,7 +418,7 @@ export default function CheckoutPage() {
               </li>
               <li className="breadcrumb-item">
                 <Link to="/search" className="breadcrumb-event">
-                  Events
+                  {t("nav.events")}
                 </Link>
               </li>
               <li className="breadcrumb-separator" aria-hidden="true">
@@ -436,7 +439,7 @@ export default function CheckoutPage() {
               </li>
               <li className="breadcrumb-item">
                 <span className="breadcrumb-current" aria-current="page">
-                  Checkout
+                  {t("checkout.checkout")}
                 </span>
               </li>
             </ol>
@@ -452,11 +455,11 @@ export default function CheckoutPage() {
             <div className="checkout-form-section">
               <h2 className="buyer-info-title">
                 <User size={20} />
-                <span>Thông tin người nhận vé</span>
+                <span>{t("checkout.buyerInfo")}</span>
               </h2>
 
               <div className="form-group">
-                <label><span className="checkout-required-star">*</span>Họ và tên</label>
+                <label><span className="checkout-required-star">*</span>{t("profile.displayName")}</label>
                 <input
                   type="text"
                   className="form-input"
@@ -469,7 +472,7 @@ export default function CheckoutPage() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label><span className="checkout-required-star">*</span>Email</label>
+                  <label><span className="checkout-required-star">*</span>{t("profile.email")}</label>
                   <input
                     type="email"
                     className="form-input"
@@ -481,7 +484,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="form-group">
-                  <label><span className="checkout-required-star">*</span>Số điện thoại</label>
+                  <label><span className="checkout-required-star">*</span>{t("profile.phone")}</label>
                   <input
                     type="tel"
                     className="form-input"
@@ -495,7 +498,7 @@ export default function CheckoutPage() {
 
               {orderDetail.customerNote && (
                 <div className="form-group" style={{ marginTop: 16 }}>
-                  <label>Ghi chú</label>
+                  <label>{t("selectTicket.note")}</label>
                   <textarea
                     className="form-input"
                     value={orderDetail.customerNote}
@@ -510,7 +513,7 @@ export default function CheckoutPage() {
             <div className="checkout-form-section" style={{ marginTop: "24px" }}>
               <h2 className="buyer-info-title">
                 <ShieldCheck size={20} />
-                <span>Phương thức thanh toán</span>
+                <span>{t("checkout.paymentMethod")}</span>
               </h2>
               
               <div className="payment-strategies-list" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -542,8 +545,8 @@ export default function CheckoutPage() {
                     aria-hidden="true"
                   />
                   <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Cổng thanh toán VNPay (Mặc định)</span>
-                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Tự chọn ngân hàng/ví điện tử trên cổng VNPay</span>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>{t("checkout.defaultPaymentTitle")}</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t("checkout.defaultPaymentDescription")}</span>
                   </div>
                 </label>
 
@@ -575,8 +578,8 @@ export default function CheckoutPage() {
                     aria-hidden="true"
                   />
                   <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Thanh toán quét mã VNPay-QR</span>
-                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Sử dụng Mobile Banking quét mã QR</span>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>{t("checkout.qrTitle")}</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t("checkout.qrDescription")}</span>
                   </div>
                 </label>
 
@@ -608,8 +611,8 @@ export default function CheckoutPage() {
                     aria-hidden="true"
                   />
                   <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Thẻ ATM / Tài khoản ngân hàng nội địa</span>
-                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Thanh toán qua thẻ ATM của các ngân hàng Việt Nam</span>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>{t("checkout.atmTitle")}</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t("checkout.atmDescription")}</span>
                   </div>
                 </label>
 
@@ -641,8 +644,8 @@ export default function CheckoutPage() {
                     aria-hidden="true"
                   />
                   <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Thẻ quốc tế (Visa, Mastercard, JCB...)</span>
-                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Hỗ trợ thẻ tín dụng, thẻ ghi nợ quốc tế</span>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>{t("checkout.internationalCardTitle")}</span>
+                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t("checkout.internationalCardDescription")}</span>
                   </div>
                 </label>
               </div>
@@ -652,7 +655,7 @@ export default function CheckoutPage() {
           <aside className="checkout-sidebar">
             <div className={`checkout-timer-card ${isLowTime ? "warning" : ""}`}>
               <div className="timer-heading">
-                <span>Hoàn tất đặt vé trong</span>
+                <span>{t("checkout.timerHeading")}</span>
               </div>
               <div className="timer-badges">
                 <span className="timer-badge">{formatTimer(minutes)}</span>
@@ -664,14 +667,14 @@ export default function CheckoutPage() {
             <div className="sidebar-card">
               <div className="sidebar-card-header">
                 <h3>
-                  <TiTicket size={22} /> Thông tin đặt vé
+                  <TiTicket size={22} /> {t("checkout.ticketInfo")}
                 </h3>
                 <button
                   type="button"
                   className="reselect-link"
                   onClick={handleReselectTickets}
                 >
-                  Chọn lại vé
+                  {t("checkout.reselectTickets")}
                 </button>
               </div>
 
@@ -679,7 +682,7 @@ export default function CheckoutPage() {
                 {orderDetail.items?.map((item, idx) => {
                   const lineTotal = item.subtotal;
                   const seatLabels = item.seats ? (item.seats.map(s => s.seatLabel).filter(Boolean) as string[]) : [];
-                  const zoneTag = item.sectorName ? `Khu ${item.sectorName}` : null;
+                  const zoneTag = item.sectorName ? `${t("checkout.zone")} ${item.sectorName}` : null;
                   const ticketColor = ticketTypeColorById.get(item.ticketTypeId) || "#2DC275";
                   const ticketColorStyle = {
                     backgroundColor: ticketColor,
@@ -690,9 +693,9 @@ export default function CheckoutPage() {
                   return (
                     <div className="ticket-summary-item" key={`${item.ticketTypeId}-${idx}`}>
                       <div className="ticket-item-left">
-                        <p className="ticket-name">{item.ticketTypeName || "Vé sự kiện"}</p>
+                        <p className="ticket-name">{item.ticketTypeName || t("checkout.eventTicket")}</p>
                         <p className="ticket-description">
-                          Vé điện tử tham dự sự kiện
+                          {t("checkout.eventTicketDescription")}
                         </p>
                         {zoneTag && (
                           <div className="ticket-tags">
@@ -719,7 +722,7 @@ export default function CheckoutPage() {
                             ))}
                           </div>
                         )}
-                        <span className="ticket-price">{formatCurrency(lineTotal)}</span>
+                        <span className="ticket-price">{formatCurrency(lineTotal, language)}</span>
                       </div>
                     </div>
                   );
@@ -730,42 +733,42 @@ export default function CheckoutPage() {
             <div className="sidebar-card">
               <div className="sidebar-card-header">
                 <h3>
-                  <IoIosInformationCircle size={22} /> Thông tin đơn hàng
+                  <IoIosInformationCircle size={22} /> {t("checkout.orderInfo")}
                 </h3>
               </div>
 
               {orderDetail.promotionCode && (
                 <div className="sidebar-voucher">
                   <div className="ticket-tag" style={{ width: "100%", justifyContent: "center", padding: "8px", fontWeight: "600" }}>
-                    Đã áp dụng mã: {orderDetail.promotionCode}
+                    {t("checkout.appliedCode")} {orderDetail.promotionCode}
                   </div>
                 </div>
               )}
 
               <div className="order-pricing">
                 <div className="pricing-row">
-                  <span>Tạm tính</span>
-                  <span>{formatCurrency(orderDetail.subtotal || 0)}</span>
+                  <span>{t("checkout.subtotal")}</span>
+                  <span>{formatCurrency(orderDetail.subtotal || 0, language)}</span>
                 </div>
                 {orderDetail.discountAmount !== undefined && orderDetail.discountAmount > 0 && (
                   <div className="pricing-row" style={{ color: "var(--error)", marginTop: "8px" }}>
-                    <span>Giảm giá</span>
-                    <span>-{formatCurrency(orderDetail.discountAmount)}</span>
+                    <span>{t("checkout.discount")}</span>
+                    <span>-{formatCurrency(orderDetail.discountAmount, language)}</span>
                   </div>
                 )}
                 <div className="pricing-divider" />
                 <div className="pricing-row total">
-                  <span>Tổng tiền</span>
-                  <span>{formatCurrency(orderDetail.totalAmount || 0)}</span>
+                  <span>{t("checkout.total")}</span>
+                  <span>{formatCurrency(orderDetail.totalAmount || 0, language)}</span>
                 </div>
               </div>
 
               <p className="checkout-terms">
-                Bằng việc tiếp tục, bạn đồng ý với{" "}
+                {t("checkout.termsBefore")}{" "}
                 <a href="#" onClick={(e) => e.preventDefault()}>
-                  Điều khoản giao dịch
+                  {t("checkout.termsLink")}
                 </a>{" "}
-                của FlashTicket.
+                {t("checkout.termsAfter")}
               </p>
 
               <button
@@ -777,11 +780,11 @@ export default function CheckoutPage() {
                 {isSubmitting ? (
                   <>
                     <span className="spinner" />
-                    Đang xử lý
+                    {t("checkout.processing")}
                   </>
                 ) : (
                   <>
-                    Thanh toán
+                    {t("checkout.checkout")}
                   </>
                 )}
               </button>
@@ -789,7 +792,7 @@ export default function CheckoutPage() {
               {isLowTime && (
                 <p className="timer-warning-note">
                   <AlertTriangle size={14} />
-                  Sắp hết thời gian giữ vé, vui lòng hoàn tất thanh toán.
+                  {t("checkout.timerWarning")}
                 </p>
               )}
             </div>
@@ -801,17 +804,17 @@ export default function CheckoutPage() {
         <div className="checkout-leave-modal-overlay" role="dialog" aria-modal="true">
           <div className="checkout-leave-modal">
             <div className="checkout-leave-modal-header">
-              <h3>Hủy đơn hàng?</h3>
+              <h3>{t("ordersPage.cancelTitle")}</h3>
             </div>
 
             <p className="checkout-leave-modal-subtitle">
-              Bạn có chắc chắn muốn tiếp tục?
+              {t("checkout.leaveConfirmQuestion")}
             </p>
 
             <ul className="checkout-leave-modal-list">
-              <li>Bạn sẽ mất vị trí mình đã lựa chọn.</li>
+              <li>{t("checkout.leaveLoseSelection")}</li>
               <li>
-                Đơn hàng chưa thanh toán sẽ bị hủy ngay lập tức trên hệ thống để trả lại ghế trống.
+                {t("checkout.leaveOrderCancelled")}
               </li>
             </ul>
 
@@ -821,14 +824,14 @@ export default function CheckoutPage() {
                 className="checkout-leave-btn checkout-leave-btn-danger"
                 onClick={handleConfirmLeaveCheckout}
               >
-                Hủy đơn
+                {t("checkout.cancelOrder")}
               </button>
               <button
                 type="button"
                 className="checkout-leave-btn checkout-leave-btn-safe"
                 onClick={handleStayOnCheckout}
               >
-                Ở lại
+                {t("checkout.stay")}
               </button>
             </div>
           </div>

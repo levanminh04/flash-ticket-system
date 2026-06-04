@@ -8,6 +8,8 @@ type ConfirmDialogOptions = {
   cancelButtonText?: string;
 };
 
+export const DEFAULT_CANCEL_TEXT = "Quay lại";
+
 const confirmDialog = Swal.mixin({
   showCancelButton: true,
   reverseButtons: true,
@@ -21,7 +23,7 @@ export async function confirmDestructiveAction({
   title,
   text,
   confirmButtonText,
-  cancelButtonText = "Quay lại",
+  cancelButtonText = DEFAULT_CANCEL_TEXT,
 }: ConfirmDialogOptions): Promise<boolean> {
   const result = await confirmDialog.fire({
     icon: "warning",

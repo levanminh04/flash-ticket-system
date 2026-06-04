@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { LoaderCircle } from "lucide-react";
 import { FaCalendarAlt, FaMapMarkedAlt } from "react-icons/fa";
 import { IoTicketSharp } from "react-icons/io5";
+import { useTranslation } from "react-i18next";
 import { categoryService } from "../../services/categoryService";
 import { eventService } from "../../services/eventService";
 import { organizerService } from "../../services/organizerService";
@@ -13,6 +14,7 @@ import { Category, EventSummary, Venue } from "../../types/api";
 import { partnerLogos } from "../../constants/partners";
 
 export default function EventDetailPage() {
+  const { i18n, t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [event, setEvent] = useState<EventSummary | null>(null);
@@ -20,6 +22,7 @@ export default function EventDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const language = i18n.resolvedLanguage || "vi";
 
   useEffect(() => {
     categoryService
@@ -41,10 +44,10 @@ export default function EventDetailPage() {
       })
       .catch((err) => {
         console.error("Failed to load event details:", err);
-        setError("Không thể tải thông tin sự kiện.");
+        setError(t("selectTicket.ticketLoadFailed"));
       })
       .finally(() => setIsLoading(false));
-  }, [slug]);
+  }, [slug, t]);
 
   useEffect(() => {
     if (!event?.venue?.id) return;
@@ -115,7 +118,7 @@ export default function EventDetailPage() {
         <ul className="category-list">
           <li className="category-item">
             <Link to="/search" className="category-link">
-              Tất cả
+              {t("common.all")}
             </Link>
           </li>
           {allCategories.length > 0 ? (
@@ -131,7 +134,7 @@ export default function EventDetailPage() {
             ))
           ) : (
             <li className="category-item">
-              <span className="category-link">Đang tải</span>
+              <span className="category-link">{t("eventDetail.loading")}</span>
             </li>
           )}
         </ul>
@@ -145,7 +148,7 @@ export default function EventDetailPage() {
         {categoryNav}
         <div className="event-detail-loading" role="status" aria-live="polite">
           <LoaderCircle className="event-detail-loading-icon" size={24} />
-          <span>Loading</span>
+          <span>{t("eventDetail.loading")}</span>
         </div>
       </div>
     );
@@ -156,12 +159,12 @@ export default function EventDetailPage() {
       <div className="event-detail-page" style={{ paddingBottom: 0 }}>
         {categoryNav}
         <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-          <p>{error || "Không tìm thấy sự kiện"}</p>
+          <p>{error || t("eventDetail.notFound")}</p>
           <Link
             to="/"
             style={{ textDecoration: "underline", color: "var(--primary)" }}
           >
-            Quay về trang chủ
+            {t("eventDetail.returnHome")}
           </Link>
         </div>
       </div>
@@ -175,12 +178,12 @@ export default function EventDetailPage() {
       <div className="event-detail-page" style={{ paddingBottom: 0 }}>
         {categoryNav}
         <div style={{ textAlign: "center", padding: "100px", color: "red" }}>
-          <p>Sự kiện không có thông tin thời gian hợp lệ</p>
+          <p>{t("eventDetail.invalidTime")}</p>
           <Link
             to="/"
             style={{ textDecoration: "underline", color: "var(--primary)" }}
           >
-            Quay về trang chủ
+            {t("eventDetail.returnHome")}
           </Link>
         </div>
       </div>
@@ -239,15 +242,15 @@ export default function EventDetailPage() {
   const eventDescriptionHtml =
     event.description ||
     event.shortDescription ||
-    "Đang cập nhật thông tin giới thiệu chi tiết cho sự kiện này.";
+    t("eventDetail.updatingDescription");
   const eventTerms = [
-    `Thời gian: ${startDate.toLocaleDateString("vi-VN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} lúc ${startDate.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`,
-    venueName ? `Địa điểm: ${venueName}${city ? `, ${city}` : ""}` : null,
+    `${t("eventDetail.time")}: ${startDate.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} ${startDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", { hour: "2-digit", minute: "2-digit" })}`,
+    venueName ? `${t("eventDetail.venue")}: ${venueName}${city ? `, ${city}` : ""}` : null,
     hasTotalCapacity
-      ? `Sức chứa: ${totalCapacity.toLocaleString("vi-VN")} người`
+      ? `${t("eventDetail.capacity")}: ${totalCapacity.toLocaleString(language === "en" ? "en-US" : "vi-VN")}`
       : null,
     event.tags && event.tags.length > 0
-      ? `Chủ đề: ${event.tags.join(", ")}`
+      ? `${t("eventDetail.theme")}: ${event.tags.join(", ")}`
       : null,
   ].filter((term): term is string => Boolean(term));
   const organizer = event.organizer;
@@ -261,7 +264,7 @@ export default function EventDetailPage() {
         .toUpperCase()
     : "OT";
   const formattedMinPrice =
-    typeof minPrice === "number" ? minPrice.toLocaleString("vi-VN") : null;
+    typeof minPrice === "number" ? minPrice.toLocaleString(language === "en" ? "en-US" : "vi-VN") : null;
   const heroMaskId = "event-hero-mask";
   const heroCardStyle = {
     "--event-hero-mask": `url(#${heroMaskId})`,
@@ -343,7 +346,7 @@ export default function EventDetailPage() {
                 <FaCalendarAlt size={20} className="event-hero-meta-icon" />
                 <div>
                   <p className="event-hero-meta-primary">
-                    {startDate.toLocaleDateString("vi-VN", {
+                    {startDate.toLocaleDateString(language === "en" ? "en-US" : "vi-VN", {
                       weekday: "long",
                       year: "numeric",
                       month: "long",
@@ -351,12 +354,12 @@ export default function EventDetailPage() {
                     })}
                   </p>
                   <p className="event-hero-meta-secondary">
-                    {startDate.toLocaleTimeString("vi-VN", {
+                    {startDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}{" "}
                     -{" "}
-                    {endDate.toLocaleTimeString("vi-VN", {
+                    {endDate.toLocaleTimeString(language === "en" ? "en-US" : "vi-VN", {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
@@ -367,10 +370,10 @@ export default function EventDetailPage() {
                 <FaMapMarkedAlt size={20} className="event-hero-meta-icon" />
                 <div>
                   <p className="event-hero-meta-primary">
-                    {venueName || "Đang cập nhật địa điểm"}
+                    {venueName || t("eventDetail.venueUpdating")}
                   </p>
                   <p className="event-hero-meta-secondary">
-                    {detailAddressLine || "Đang cập nhật địa chỉ chi tiết"}
+                    {detailAddressLine || t("eventDetail.addressUpdating")}
                   </p>
                 </div>
               </div>
@@ -379,10 +382,10 @@ export default function EventDetailPage() {
                   <IoTicketSharp size={20} className="event-hero-meta-icon" />
                   <div>
                     <p className="event-hero-meta-primary">
-                      Số lượng vé:{" "}
+                      {t("eventDetail.soldQuantity")}{" "}
                       {hasTotalCapacity
-                        ? totalCapacity.toLocaleString("vi-VN")
-                        : "Không giới hạn"}
+                        ? totalCapacity.toLocaleString(language === "en" ? "en-US" : "vi-VN")
+                        : t("eventDetail.unlimited")}
                     </p>
                   </div>
                 </div>
@@ -391,12 +394,12 @@ export default function EventDetailPage() {
             <div className="event-hero-separator" />
             <div className="event-hero-cta-row">
               <div className="event-hero-price-inline">
-                <p className="event-hero-price-label">Giá vé chỉ từ</p>
+                <p className="event-hero-price-label">{t("eventDetail.minPriceLabel")}</p>
                 <p
                   className="event-hero-price-value"
                   style={{ color: "#CC9900" }}
                 >
-                  {formattedMinPrice ? `${formattedMinPrice} đ` : "Miễn phí"}
+                  {formattedMinPrice ? `${formattedMinPrice} đ` : t("eventDetail.free")}
                 </p>
               </div>
             </div>
@@ -405,7 +408,7 @@ export default function EventDetailPage() {
               onClick={() => navigate(`/events/${slug}/book`)}
               style={{ backgroundColor: "#CC9900", borderColor: "#CC9900" }}
             >
-              Mua vé
+              {t("eventDetail.buyTicket")}
             </button>
           </section>
 
@@ -432,7 +435,7 @@ export default function EventDetailPage() {
           <div className="event-detail-content-grid">
             <article className="event-detail-main-card">
               <div className="event-detail-card-header">
-                <h2>Event Details</h2>
+                <h2>{t("eventDetail.detailTitle")}</h2>
               </div>
               <div
                 className="event-detail-description"
@@ -441,7 +444,7 @@ export default function EventDetailPage() {
               <div className="event-detail-card-divider event-detail-card-divider--dashed" />
               <div className="event-detail-terms">
                 <div className="event-detail-card-header">
-                  <h2>Terms &amp; Conditions</h2>
+                  <h2>{t("eventDetail.terms")}</h2>
                 </div>
                 <ul className="event-detail-terms-list">
                   {eventTerms.map((term) => (
@@ -454,7 +457,7 @@ export default function EventDetailPage() {
             <aside className="event-detail-sidebar">
               <section className="event-detail-side-card">
                 <div className="event-detail-card-header">
-                  <h2>Ticket Options</h2>
+                  <h2>{t("eventDetail.ticketOptions")}</h2>
                 </div>
                 {ticketTypes.length > 0 ? (
                   <div className="event-ticket-list">
@@ -473,27 +476,27 @@ export default function EventDetailPage() {
                           </div>
                           <p className="event-ticket-item-meta">
                             {ticketType.description?.trim() ||
-                              "Đang cập nhật mô tả vé"}
+                              t("eventDetail.ticketDescriptionFallback")}
                           </p>
                         </div>
                         <div className="event-ticket-item-price">
                           {typeof ticketType.price === "number"
-                            ? `${ticketType.price.toLocaleString("vi-VN")} đ`
-                            : "Đang cập nhật"}
+                            ? `${ticketType.price.toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`
+                            : t("eventDetail.priceUpdating")}
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <p className="event-ticket-item-meta">
-                    Chưa có dữ liệu loại vé.
+                    {t("eventDetail.ticketTypeEmpty")}
                   </p>
                 )}
               </section>
 
               <section className="event-detail-side-card">
                 <div className="event-detail-card-header">
-                  <h2>Organizer</h2>
+                  <h2>{t("eventDetail.organizer")}</h2>
                 </div>
                 {organizer?.bannerUrl ? (
                   <div className="event-organizer-banner">
@@ -514,21 +517,21 @@ export default function EventDetailPage() {
                   )}
                   <div className="event-organizer-meta">
                     <div className="event-organizer-title-row">
-                      <h4>{organizer?.name || "Đang cập nhật"}</h4>
+                      <h4>{organizer?.name || t("eventDetail.priceUpdating")}</h4>
                       {organizer?.isVerified && (
                         <span className="event-organizer-badge">Verified</span>
                       )}
                     </div>
                     <p>
                       {organizer?.description ||
-                        "Thông tin nhà tổ chức sẽ được cập nhật sớm."}
+                        t("eventDetail.organizerDescriptionFallback")}
                     </p>
                     {organizer?.slug ? (
                       <Link
                         className="event-organizer-profile-link"
                         to={`/organizers/${organizer.slug}`}
                       >
-                        Xem hồ sơ nhà tổ chức
+                        {t("eventDetail.organizerProfile")}
                       </Link>
                     ) : null}
                   </div>
@@ -538,7 +541,7 @@ export default function EventDetailPage() {
                     <span>
                       <span className="event-organizer-label">Name:</span>{" "}
                       <span className="event-organizer-value">
-                        {organizer?.name || "Đang cập nhật"}
+                        {organizer?.name || t("eventDetail.priceUpdating")}
                       </span>
                     </span>
                   </div>
@@ -546,7 +549,7 @@ export default function EventDetailPage() {
                     <span>
                       <span className="event-organizer-label">Describe:</span>{" "}
                       <span className="event-organizer-value">
-                        {organizer?.description || "Đang cập nhật"}
+                        {organizer?.description || t("eventDetail.priceUpdating")}
                       </span>
                     </span>
                   </div>
@@ -554,7 +557,7 @@ export default function EventDetailPage() {
                     <span>
                       <span className="event-organizer-label">Email:</span>{" "}
                       <span className="event-organizer-value">
-                        {organizer?.email || "Đang cập nhật"}
+                        {organizer?.email || t("eventDetail.priceUpdating")}
                       </span>
                     </span>
                   </div>
@@ -562,7 +565,7 @@ export default function EventDetailPage() {
                     <span>
                       <span className="event-organizer-label">Phone:</span>{" "}
                       <span className="event-organizer-value">
-                        {organizer?.phone || "Đang cập nhật"}
+                        {organizer?.phone || t("eventDetail.priceUpdating")}
                       </span>
                     </span>
                   </div>
@@ -579,7 +582,7 @@ export default function EventDetailPage() {
                             {organizer.websiteUrl}
                           </a>
                         ) : (
-                          "Đang cập nhật"
+                          t("eventDetail.priceUpdating")
                         )}
                       </span>
                     </span>
@@ -592,11 +595,8 @@ export default function EventDetailPage() {
 
         <section className="event-gallery-section" aria-label="Event Gallery">
           <header className="event-gallery-header">
-            <h2>Event <span className="event-gallery-title-highlight">Gallery</span></h2>
-            <p>
-              Khoảnh khắc sống động từ đám đông, sân khấu và các hoạt động nổi
-              bật tại sự kiện.
-            </p>
+            <h2>{t("eventDetail.eventGallery")}</h2>
+            <p>{t("eventDetail.eventGalleryDescription")}</p>
           </header>
 
           <div className="event-gallery-grid">
@@ -630,11 +630,11 @@ export default function EventDetailPage() {
 
         <section className="event-trust-strip">
           <header className="event-trust-header">
-            <h2>We <span className="event-trust-title-highlight">Accepted</span></h2>
+            <h2>{t("eventDetail.acceptedFirst")} <span className="event-trust-title-highlight">{t("eventDetail.acceptedHighlight")}</span></h2>
           </header>
 
           <p className="event-trust-copy">
-            Thousands of attendees trust FlashTicket for secure event ticketing
+            {t("eventDetail.trustCopy")}
           </p>
 
           <div className="partner-grid event-partner-grid">

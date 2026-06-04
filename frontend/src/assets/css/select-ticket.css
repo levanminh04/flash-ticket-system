@@ -218,6 +218,79 @@
   background: #102231;
 }
 
+.seat-map-status-legend {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 24;
+  width: min(300px, calc(100% - 36px));
+  padding: 13px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.82);
+  color: #ffffff;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.seat-map-status-legend strong {
+  display: block;
+  margin-bottom: 9px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.seat-map-status-legend-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+}
+
+.seat-map-status-legend-grid span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.legend-seat-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1.5px solid transparent;
+  flex-shrink: 0;
+}
+
+.legend-seat-dot.is-available {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+.legend-seat-dot.is-selected {
+  background: #16a34a;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.36);
+}
+
+.legend-seat-dot.is-sold {
+  background: #cbd5e1;
+  border-color: #94a3b8;
+}
+
+.legend-seat-dot.is-locked {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.legend-seat-dot.is-unavailable {
+  background: #94a3b8;
+  border-color: #64748b;
+}
+
 .seat-map-viewport {
   width: 100%;
   flex: 1;
@@ -320,6 +393,104 @@
   line-height: 1.6;
   color: var(--text-secondary, #475569);
   margin: 0;
+}
+
+.quantity-booking-panel {
+  width: 100%;
+  min-height: 480px;
+  padding: 12px 64px 40px;
+  background: #020403;
+  color: #ffffff;
+}
+
+.quantity-booking-panel h2 {
+  margin: 0 0 10px;
+  color: #22c55e;
+  font-size: 17px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.quantity-booking-panel > p {
+  max-width: 640px;
+  margin: 0 auto 28px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.quantity-ticket-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.quantity-ticket-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 92px;
+  padding: 18px 14px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.38);
+}
+
+.quantity-ticket-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.quantity-ticket-copy strong {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.quantity-ticket-copy span {
+  color: #22c55e;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.quantity-ticket-row.sold-out .quantity-ticket-copy strong,
+.quantity-ticket-row.sold-out .quantity-ticket-copy span {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.quantity-selector-main {
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.quantity-selector-main .quantity-btn,
+.quantity-selector-main .quantity-value {
+  width: 42px;
+  height: 34px;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #020617;
+  font-size: 13px;
+}
+
+.quantity-selector-main .quantity-btn {
+  border: 1px solid #e5e7eb;
+}
+
+.quantity-selector-main .quantity-btn:last-child {
+  border-color: #bbf7d0;
+  color: #22c55e;
+}
+
+.quantity-selector-main .quantity-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  font-weight: 700;
 }
 
 .seat-map-content {
@@ -1156,18 +1327,48 @@
   font-weight: 700;
 }
 
+.standing-ticket-popup-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
 .standing-ticket-popup-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 14px;
+  min-height: 48px;
 }
 
 .standing-ticket-popup-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   color: #2dc275;
   font-size: 14px;
   font-weight: 700;
+}
+
+.standing-ticket-popup-name strong,
+.standing-ticket-popup-name small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standing-ticket-popup-name strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.standing-ticket-popup-name small {
+  color: #2dc275;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .standing-ticket-popup-quantity {

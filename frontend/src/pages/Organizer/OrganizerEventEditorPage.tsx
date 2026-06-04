@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -32,6 +33,10 @@ import {
   toIsoString,
 } from "./organizerWorkspaceUtils";
 import { useOrganizerGate } from "./useOrganizerGate";
+import {
+  dispatchOrganizerWorkflowDirty,
+  dispatchOrganizerWorkflowSaveResult,
+} from "./organizerWorkflowEvents";
 
 type EventFormState = {
   title: string;
@@ -55,7 +60,21 @@ type EventFormState = {
   metaKeywords: string;
 };
 
-const eventDescriptionTemplate = `<h2>Giới thiệu sự kiện:</h2>
+const getEventDescriptionTemplate = (language: string) =>
+  language === "en"
+    ? `<h2>Event introduction:</h2>
+<p>[Briefly summarize the event: main content, strongest highlights, and why attendees should not miss it.]</p>
+<h2>Event details:</h2>
+<p><strong>Main program:</strong> [List key activities in the event: performances, special guests, and specific agenda items if available.]</p>
+<p><strong>Guests:</strong> [Information about special guests, artists, or speakers attending the event.]</p>
+<p><strong>Special experience:</strong> [Mention workshops, experience zones, photo booths, check-in areas, gifts, or attendee-only offers if available.]</p>
+<h2>Terms and conditions:</h2>
+<ul>
+  <li>[TnC] event</li>
+  <li>Children policy notes</li>
+  <li>VAT policy notes</li>
+</ul>`
+    : `<h2>Giới thiệu sự kiện:</h2>
 <p>[Tóm tắt ngắn gọn về sự kiện: Nội dung chính của sự kiện, điểm đặc sắc nhất và lý do khiến người tham gia không nên bỏ lỡ]</p>
 <h2>Chi tiết sự kiện:</h2>
 <p><strong>Chương trình chính:</strong> [Liệt kê những hoạt động nổi bật trong sự kiện: các phần trình diễn, khách mời đặc biệt, lịch trình các tiết mục cụ thể nếu có.]</p>
@@ -68,10 +87,10 @@ const eventDescriptionTemplate = `<h2>Giới thiệu sự kiện:</h2>
   <li>Lưu ý về điều khoản VAT</li>
 </ul>`;
 
-const defaultFormState: EventFormState = {
+const getDefaultFormState = (language: string): EventFormState => ({
   title: "",
   shortDescription: "",
-  description: eventDescriptionTemplate,
+  description: getEventDescriptionTemplate(language),
   tags: "",
   startDatetime: "",
   endDatetime: "",
@@ -88,7 +107,7 @@ const defaultFormState: EventFormState = {
   metaTitle: "",
   metaDescription: "",
   metaKeywords: "",
-};
+});
 
 function buildFormState(event: OrganizerEventDetail): EventFormState {
   return {
@@ -288,6 +307,8 @@ function MenuBar({ editor }: MenuBarProps) {
 }
 
 export default function OrganizerEventEditorPage() {
+  const { i18n, t } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language;
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
   const isCreateMode = !eventId;
@@ -296,7 +317,7 @@ export default function OrganizerEventEditorPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [venues, setVenues] = useState<OrganizerVenue[]>([]);
   const [currentEvent, setCurrentEvent] = useState<OrganizerEventDetail | null>(null);
-  const [formState, setFormState] = useState<EventFormState>(defaultFormState);
+  const [formState, setFormState] = useState<EventFormState>(() => getDefaultFormState(language));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const shortDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
@@ -388,10 +409,13 @@ export default function OrganizerEventEditorPage() {
         setCategories(nextCategories);
         setVenues(nextVenues);
         setCurrentEvent(nextEvent);
-        setFormState(nextEvent ? buildFormState(nextEvent) : defaultFormState);
+        setFormState(nextEvent ? buildFormState(nextEvent) : getDefaultFormState(language));
+        if (nextEvent) {
+          dispatchOrganizerWorkflowSaveResult(true);
+        }
       } catch {
         if (!cancelled) {
-          toast.error("Không thể tải dữ liệu form sự kiện.");
+          toast.error(t("eventEditor.loadFailed"));
         }
       } finally {
         if (!cancelled) {
@@ -405,7 +429,7 @@ export default function OrganizerEventEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [eventId, ready]);
+  }, [eventId, language, ready, t]);
 
   const autoResizeTextarea = (element: HTMLTextAreaElement | null) => {
     if (!element) {
@@ -424,6 +448,7 @@ export default function OrganizerEventEditorPage() {
     key: K,
     value: EventFormState[K],
   ) => {
+    dispatchOrganizerWorkflowDirty();
     setFormState((current) => ({
       ...current,
       [key]: value,
@@ -437,28 +462,28 @@ export default function OrganizerEventEditorPage() {
     submitEvent.preventDefault();
 
     if (!formState.title.trim()) {
-      toast.error("Tên sự kiện là bắt buộc.");
+      toast.error(t("eventEditor.titleRequired"));
       return;
     }
 
     if (!formState.categoryIds.length || !formState.categoryIds[0]) {
-      toast.error("Danh mục là bắt buộc.");
+      toast.error(t("eventEditor.categoryRequired"));
       return;
     }
 
     const fullPayload = toPayload(formState);
     if (!fullPayload) {
-      toast.error("Thời gian bắt đầu và kết thúc chưa hợp lệ.");
+      toast.error(t("eventEditor.invalidTime"));
       return;
     }
 
     if (new Date(fullPayload.endDatetime) <= new Date(fullPayload.startDatetime)) {
-      toast.error("Thời gian kết thúc phải lớn hơn thời gian bắt đầu.");
+      toast.error(t("eventEditor.endAfterStart"));
       return;
     }
 
     if (!formState.isOnline && !fullPayload.venueId) {
-      toast.error("Sự kiện offline cần chọn venue");
+      toast.error(t("eventEditor.offlineVenueRequired"));
       return;
     }
 
@@ -467,20 +492,45 @@ export default function OrganizerEventEditorPage() {
       fullPayload.saleEndDatetime &&
       new Date(fullPayload.saleEndDatetime) <= new Date(fullPayload.saleStartDatetime)
     ) {
-      toast.error("Thời gian mở bán phải nhỏ hơn thời gian kết thúc bán.");
+      toast.error(t("eventEditor.saleEndAfterSaleStart"));
       return;
     }
 
-    if (fullPayload.minTicketsPerOrder && fullPayload.maxTicketsPerOrder) {
-      if (fullPayload.minTicketsPerOrder > fullPayload.maxTicketsPerOrder) {
-        toast.error("Giới hạn mua vé tối thiểu không được lớn hơn tối đa.");
-        return;
-      }
+    if (
+      fullPayload.saleEndDatetime &&
+      new Date(fullPayload.saleEndDatetime) > new Date(fullPayload.startDatetime)
+    ) {
+      toast.error(t("eventEditor.saleEndBeforeEventStart"));
+      return;
+    }
+
+    const minTicketsPerOrder = fullPayload.minTicketsPerOrder;
+    const maxTicketsPerOrder = fullPayload.maxTicketsPerOrder;
+    if (
+      minTicketsPerOrder === undefined ||
+      maxTicketsPerOrder === undefined ||
+      !Number.isFinite(minTicketsPerOrder) ||
+      !Number.isFinite(maxTicketsPerOrder) ||
+      minTicketsPerOrder < 1 ||
+      maxTicketsPerOrder < 1
+    ) {
+      toast.error(t("eventEditor.ticketLimitInvalid"));
+      return;
+    }
+
+    if (minTicketsPerOrder > maxTicketsPerOrder) {
+      toast.error(t("eventEditor.minGreaterThanMax"));
+      return;
+    }
+
+    if (maxTicketsPerOrder > 100) {
+      toast.error(t("eventEditor.maxLimitExceeded"));
+      return;
     }
 
     const updatePayload = buildUpdatePayload(formState, currentEvent);
     if (!isCreateMode && !updatePayload) {
-      toast.error("Thời gian bắt đầu và kết thúc chưa hợp lệ.");
+      toast.error(t("eventEditor.invalidTime"));
       return;
     }
 
@@ -492,9 +542,10 @@ export default function OrganizerEventEditorPage() {
 
       setCurrentEvent(nextEvent);
       setFormState(buildFormState(nextEvent));
+      dispatchOrganizerWorkflowSaveResult(true);
 
       if (isCreateMode) {
-        toast.success("Tạo sự kiện thành công.");
+        toast.success(t("eventEditor.createSuccess"));
         sessionStorage.setItem(
           `organizer-workflow-step-saved:/organizer/events/${nextEvent.id}/edit`,
           "true",
@@ -507,21 +558,22 @@ export default function OrganizerEventEditorPage() {
         return;
       }
 
-      toast.success("Cập nhật sự kiện thành công.");
+      toast.success(t("eventEditor.updateSuccess"));
     } catch {
-      toast.error(isCreateMode ? "Tạo sự kin thất bại." : "Cập nhật sự kin thất bại.");
+      dispatchOrganizerWorkflowSaveResult(false);
+      toast.error(isCreateMode ? t("eventEditor.createFailed") : t("eventEditor.updateFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   const pageDescription = isCreateMode
-    ? "Tạo event, gắn category, venue và cấu hình bán vé"
-    : `Cập nhật gần nhất: ${formatDateTime(currentEvent?.updatedAt)}`;
+    ? t("eventEditor.createDescription")
+    : t("eventEditor.updatedAt", { time: formatDateTime(currentEvent?.updatedAt) });
 
   return (
     <OrganizerLayout
-      title={isCreateMode ? "Tạo sự kiện mới" : currentEvent?.title || ""}
+      title={isCreateMode ? t("eventEditor.createTitle") : currentEvent?.title || ""}
       description={pageDescription}
       actions={null}
       hideTopBar
@@ -533,7 +585,7 @@ export default function OrganizerEventEditorPage() {
       {loading ? (
         <section className="organizer-panel organizer-empty-state">
           <div className="loading-spinner" />
-          <p>Đang tải dữ liệu form sự kiện</p>
+          <p>{t("eventEditor.loading")}</p>
         </section>
       ) : (
         <>
@@ -541,32 +593,32 @@ export default function OrganizerEventEditorPage() {
             <div className="organizer-form-grid">
               <label className="organizer-field organizer-form-span-2">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Tên sự kiện
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.eventTitle")}
                 </span>
                 <input
                   className="organizer-input"
                   value={formState.title}
                   onChange={(event) => handleChange("title", event.target.value)}
-                  placeholder="Nhập tên sự kiện"
+                  placeholder={t("eventEditor.eventTitlePlaceholder")}
                 />
               </label>
 
               <label className="organizer-field organizer-form-span-2">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Mô tả ngắn
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.shortDescription")}
                 </span>
                 <textarea
                   ref={shortDescriptionRef}
                   className="organizer-input organizer-textarea organizer-textarea-sm"
                   value={formState.shortDescription}
                   onChange={(event) => handleChange("shortDescription", event.target.value)}
-                  placeholder="Mô tả ngắn"
+                  placeholder={t("eventEditor.shortDescriptionPlaceholder")}
                 />
               </label>
 
               <div className="organizer-field organizer-form-span-2">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Mô tả chi tiết
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.descriptionDetail")}
                 </span>
                 <div className="tiptap-editor-wrapper">
                   <MenuBar editor={editor} />
@@ -582,13 +634,13 @@ export default function OrganizerEventEditorPage() {
                   className="organizer-input"
                   value={formState.tags}
                   onChange={(event) => handleChange("tags", event.target.value)}
-                  placeholder="Nhập tag"
+                  placeholder={t("eventEditor.tagsPlaceholder")}
                 />
               </label>
 
               <label className="organizer-field">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Bắt đầu
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.start")}
                 </span>
                 <input
                   type="datetime-local"
@@ -600,7 +652,7 @@ export default function OrganizerEventEditorPage() {
 
               <label className="organizer-field">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Kết thúc
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.end")}
                 </span>
                 <input
                   type="datetime-local"
@@ -624,7 +676,7 @@ export default function OrganizerEventEditorPage() {
 
               <label className="organizer-field organizer-switch-field">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Hình thức
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.format")}
                 </span>
                 <label className="organizer-checkbox-card">
                   <input
@@ -633,7 +685,7 @@ export default function OrganizerEventEditorPage() {
                     onChange={(event) => handleChange("isOnline", event.target.checked)}
                   />
                   <div>
-                    <strong>Sự kiện online</strong>
+                    <strong>{t("eventEditor.onlineEvent")}</strong>
                   </div>
                 </label>
               </label>
@@ -645,20 +697,20 @@ export default function OrganizerEventEditorPage() {
                     className="organizer-input"
                     value={formState.onlineEventUrl}
                     onChange={(event) => handleChange("onlineEventUrl", event.target.value)}
-                    placeholder="Nhập link online"
+                    placeholder={t("eventEditor.onlineLinkPlaceholder")}
                   />
                 </label>
               ) : (
                 <label className="organizer-field organizer-form-span-2">
                   <span>
-                    <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Địa điểm
+                    <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventDetail.venue")}
                   </span>
                   <select
                     className="organizer-input"
                     value={formState.venueId}
                     onChange={(event) => handleChange("venueId", event.target.value)}
                   >
-                    <option value="">Chọn địa điểm</option>
+                    <option value="">{t("eventEditor.chooseVenue")}</option>
                     {venues.map((venue) => (
                       <option key={venue.id} value={venue.id}>
                         {venue.name} {venue.city ? `- ${venue.city}` : ""}
@@ -670,7 +722,7 @@ export default function OrganizerEventEditorPage() {
 
               <label className="organizer-field">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Bắt đầu bán
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.saleStart")}
                 </span>
                 <input
                   type="datetime-local"
@@ -682,7 +734,7 @@ export default function OrganizerEventEditorPage() {
 
               <label className="organizer-field">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Kết thúc bán
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.saleEnd")}
                 </span>
                 <input
                   type="datetime-local"
@@ -694,7 +746,7 @@ export default function OrganizerEventEditorPage() {
 
               <label className="organizer-field">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Mua tối thiểu
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.minPurchase")}
                 </span>
                 <input
                   type="number"
@@ -707,7 +759,7 @@ export default function OrganizerEventEditorPage() {
 
               <label className="organizer-field">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Mua tối đa
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.maxPurchase")}
                 </span>
                 <input
                   type="number"
@@ -720,7 +772,7 @@ export default function OrganizerEventEditorPage() {
 
               <label className="organizer-field organizer-form-span-2">
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Hiển thị
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("eventEditor.visibility")}
                 </span>
                 <select
                   className="organizer-input"
@@ -737,7 +789,7 @@ export default function OrganizerEventEditorPage() {
 
               <div className="organizer-field organizer-form-span-2" ref={categoryDropdownRef}>
                 <span>
-                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>Danh mục
+                  <span style={{ color: "#ef4444", marginRight: "4px" }}>*</span>{t("searchPage.category")}
                 </span>
                 <div style={{ position: "relative" }}>
                   <div
@@ -755,7 +807,7 @@ export default function OrganizerEventEditorPage() {
                     onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
                   >
                     {formState.categoryIds.length === 0 ? (
-                      <span style={{ color: "#94a3b8" }}>Chọn danh mục (cho phép chọn nhiều)</span>
+                      <span style={{ color: "#94a3b8" }}>{t("eventEditor.chooseCategories")}</span>
                     ) : (
                       formState.categoryIds.map((id) => {
                         const cat = categories.find((c) => c.id === id);

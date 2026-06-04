@@ -4,10 +4,12 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Search, X } from "lucide-react";
 import { FaHome, FaUserAlt } from "react-icons/fa";
 import { CgLogOut } from "react-icons/cg";
+import { useTranslation } from "react-i18next";
 import {
   organizerService,
   OrganizerProfile,
 } from "../../services/organizerService";
+import LanguageSwitcher from "../common/LanguageSwitcher";
 
 export const ORGANIZER_PROFILE_UPDATED_EVENT =
   "flashTicket:organizerProfileUpdated";
@@ -18,45 +20,6 @@ type OrganizerSearchPage = {
   path: string;
   keywords: string[];
 };
-
-const organizerSearchPages: OrganizerSearchPage[] = [
-  {
-    title: "Tổng quan",
-    description: "Dashboard điều hành workspace organizer",
-    path: "/organizer",
-    keywords: ["dashboard", "overview", "tong quan"],
-  },
-  {
-    title: "Quản lý sự kiện",
-    description: "Danh sách, doanh thu, vé bán và thao tác sự kiện",
-    path: "/organizer/events",
-    keywords: ["events", "event", "su kien"],
-  },
-  {
-    title: "Hồ sơ ban tổ chức",
-    description: "Thông tin liên hệ và nhận diện organizer",
-    path: "/organizer/profile",
-    keywords: ["profile", "organizer", "ho so"],
-  },
-  {
-    title: "Thư viện ảnh",
-    description: "Banner, poster, thumbnail và gallery sự kiện",
-    path: "/organizer/media",
-    keywords: ["media", "image", "anh"],
-  },
-  {
-    title: "Địa điểm",
-    description: "Danh sách venue, sức chứa và tiện ích",
-    path: "/venues",
-    keywords: ["venue", "venues", "dia diem"],
-  },
-  {
-    title: "Check-in",
-    description: "Quét QR và xác nhận vé tại cổng",
-    path: "/organizer/check-in",
-    keywords: ["checkin", "check-in", "qr"],
-  },
-];
 
 function normalizeText(value: string) {
   return value
@@ -73,12 +36,55 @@ function getTokenString(tokenParsed: unknown, key: string): string | undefined {
 
 export default function OrganizerTopBar() {
   const { keycloak } = useKeycloak();
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [organizerProfile, setOrganizerProfile] =
     useState<OrganizerProfile | null>(null);
+
+  const organizerSearchPages = useMemo<OrganizerSearchPage[]>(
+    () => [
+      {
+        title: t("organizer.overview"),
+        description: t("organizer.workspaceOverview"),
+        path: "/organizer",
+        keywords: ["dashboard", "overview", "tong quan"],
+      },
+      {
+        title: t("organizer.eventManagement"),
+        description: t("organizer.workspaceEvents"),
+        path: "/organizer/events",
+        keywords: ["events", "event", "su kien"],
+      },
+      {
+        title: t("organizer.profile"),
+        description: t("organizer.workspaceProfile"),
+        path: "/organizer/profile",
+        keywords: ["profile", "organizer", "ho so"],
+      },
+      {
+        title: "Media",
+        description: t("organizer.workspaceMedia"),
+        path: "/organizer/media",
+        keywords: ["media", "image", "anh"],
+      },
+      {
+        title: t("nav.venues"),
+        description: t("organizer.workspaceVenue"),
+        path: "/venues",
+        keywords: ["venue", "venues", "dia diem"],
+      },
+      {
+        title: t("organizer.checkIn"),
+        description: t("organizer.workspaceCheckIn"),
+        path: "/organizer/check-in",
+        keywords: ["checkin", "check-in", "qr"],
+      },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     if (!keycloak.authenticated) {
@@ -130,7 +136,7 @@ export default function OrganizerTopBar() {
   const email =
     organizerProfile?.email ||
     getTokenString(keycloak.tokenParsed, "email") ||
-    "workspace@flash-ticket.vn";
+    t("organizer.workspaceEmailFallback");
   const avatarUrl = organizerProfile?.logoUrl;
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -143,7 +149,7 @@ export default function OrganizerTopBar() {
         normalizeText([page.title, page.description, page.path, ...page.keywords].join(" ")).includes(keyword),
       )
       .slice(0, 8);
-  }, [searchTerm]);
+  }, [organizerSearchPages, searchTerm]);
 
   const goToPage = (page: OrganizerSearchPage) => {
     navigate(page.path);
@@ -181,7 +187,7 @@ export default function OrganizerTopBar() {
             setIsSearchOpen(true);
           }}
           onFocus={() => setIsSearchOpen(true)}
-          placeholder="Tìm kiếm trang..."
+          placeholder={t("organizer.searchPagePlaceholder")}
         />
         {searchTerm ? (
           <button
@@ -191,7 +197,7 @@ export default function OrganizerTopBar() {
               setSearchTerm("");
               setIsSearchOpen(true);
             }}
-            aria-label="Xóa từ khóa tìm kiếm"
+            aria-label={t("organizer.searchClear")}
           >
             <X size={15} />
           </button>
@@ -215,7 +221,9 @@ export default function OrganizerTopBar() {
                 </button>
               ))
             ) : (
-              <div className="organizer-topbar-search-empty">Không có trang phù hợp</div>
+              <div className="organizer-topbar-search-empty">
+                {t("organizer.noMatchingPage")}
+              </div>
             )}
           </div>
         ) : null}
@@ -227,7 +235,7 @@ export default function OrganizerTopBar() {
             type="button"
             className="organizer-topbar-user"
             aria-haspopup="menu"
-            aria-label="Mở menu tài khoản"
+            aria-label={t("organizer.openAccountMenu")}
           >
             <div className="organizer-topbar-avatar">
               {avatarUrl ? (
@@ -250,7 +258,7 @@ export default function OrganizerTopBar() {
           <div className="organizer-topbar-dropdown" role="menu">
             <button type="button" role="menuitem" onClick={() => navigate("/")}>
               <FaHome size={16} />
-              <span>Home</span>
+              <span>{t("organizer.home")}</span>
             </button>
             <button
               type="button"
@@ -258,7 +266,7 @@ export default function OrganizerTopBar() {
               onClick={() => navigate("/organizer/profile")}
             >
               <FaUserAlt size={15} />
-              <span>Profile</span>
+              <span>{t("organizer.profile")}</span>
             </button>
             <button
               type="button"
@@ -267,10 +275,11 @@ export default function OrganizerTopBar() {
               onClick={handleLogout}
             >
               <CgLogOut size={18} />
-              <span>Logout</span>
+              <span>{t("organizer.logout")}</span>
             </button>
           </div>
         </div>
+        <LanguageSwitcher className="language-switcher-organizer" />
       </div>
     </div>
   );
