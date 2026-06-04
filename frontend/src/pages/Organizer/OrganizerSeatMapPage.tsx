@@ -6,6 +6,7 @@ import OrganizerLayout from "../../components/organizer/OrganizerLayout";
 import SeatMapCanvasShell from "../../components/seat-map/editor/SeatMapCanvasShell";
 import SeatMapRightSidebar from "../../components/seat-map/editor/SeatMapRightSidebar";
 import {
+  buildDefaultSeatLayoutConfig,
   buildSeatMapPublishPayload,
   createEditorDraftKey,
   exportEditorDocument,
@@ -470,15 +471,19 @@ export default function OrganizerSeatMapPage() {
       return;
     }
 
+    const seatLayout =
+      selectedShape.seatLayout ??
+      buildDefaultSeatLayoutConfig(selectedShape.bounds, selectedShape.seats.length);
+
     setSeatLayoutInputs({
-      rows: String(selectedShape.seatLayout.rows),
-      seatsPerRow: String(selectedShape.seatLayout.seatsPerRow),
-      gapX: String(selectedShape.seatLayout.gapX),
-      gapY: String(selectedShape.seatLayout.gapY),
-      paddingX: String(selectedShape.seatLayout.paddingX),
-      paddingY: String(selectedShape.seatLayout.paddingY),
-      seatRadius: String(selectedShape.seatLayout.seatRadius),
-      seatStartNumber: String(selectedShape.seatLayout.seatStartNumber),
+      rows: String(seatLayout.rows),
+      seatsPerRow: String(seatLayout.seatsPerRow),
+      gapX: String(seatLayout.gapX),
+      gapY: String(seatLayout.gapY),
+      paddingX: String(seatLayout.paddingX),
+      paddingY: String(seatLayout.paddingY),
+      seatRadius: String(seatLayout.seatRadius),
+      seatStartNumber: String(seatLayout.seatStartNumber),
     });
   }, [selectedShape]);
 
