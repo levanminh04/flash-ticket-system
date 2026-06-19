@@ -25,6 +25,25 @@ function formatCurrency(value: number, language: string) {
   return `${value.toLocaleString(language === "en" ? "en-US" : "vi-VN")} đ`;
 }
 
+function extractVNPayParams(params: URLSearchParams) {
+  const callbackParams: Record<string, string> = {};
+  params.forEach((value, key) => {
+    if (key.startsWith("vnp_")) {
+      callbackParams[key] = value;
+    }
+  });
+  return callbackParams;
+}
+
+function hasVNPayCallback(params: Record<string, string>) {
+  return Boolean(
+    params.vnp_TxnRef &&
+      params.vnp_SecureHash &&
+      params.vnp_ResponseCode &&
+      params.vnp_Amount,
+  );
+}
+
 export default function PaymentResultPage() {
   const { i18n, t } = useTranslation();
   const [searchParams] = useSearchParams();
@@ -90,6 +109,20 @@ export default function PaymentResultPage() {
         return;
       }
 
+      const vnpCallbackParams = extractVNPayParams(params);
+      if (hasVNPayCallback(vnpCallbackParams)) {
+        try {
+          const callbackResult =
+            await paymentService.confirmVNPayReturn(vnpCallbackParams);
+
+          if (!["00", "02"].includes(callbackResult.RspCode)) {
+            console.warn("VNPay callback relay was not accepted:", callbackResult);
+          }
+        } catch (error) {
+          console.error("Failed to relay VNPay callback:", error);
+        }
+      }
+
       let attempts = 0;
       const maxAttempts = 10;
 
@@ -117,6 +150,20 @@ export default function PaymentResultPage() {
             setIsLoading(false);
             sessionStorage.removeItem("lastOrderId");
             sessionStorage.removeItem("lastOrderNumber");
+            return;
+          }
+
+          const latestTx = status.transactions?.[0];
+          if (latestTx && latestTx.status !== "PENDING") {
+            clearInterval(pollRef.current);
+            setResult({
+              success: false,
+              orderNumber: orderNumber || undefined,
+              transactionNumber: latestTx.transactionNumber || transactionNumber,
+              amount: Number(status.totalAmount) || quickAmount,
+              message: t("paymentResult.statusPending", { status: latestTx.status }),
+            });
+            setIsLoading(false);
             return;
           }
 
