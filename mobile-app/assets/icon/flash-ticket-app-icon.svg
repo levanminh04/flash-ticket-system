@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-labelledby="title desc">
+  <title id="title">Flash Ticket app icon</title>
+  <desc id="desc">A neon event-ticket outline on a cyan-to-lavender gradient.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="108" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22C7F2"/>
+      <stop offset="0.52" stop-color="#4F8DF7"/>
+      <stop offset="1" stop-color="#9B4DFF"/>
+    </linearGradient>
+    <linearGradient id="ticket" x1="29" y1="54" x2="79" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#A5F3FC"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="108" height="108" fill="url(#background)"/>
+  <g transform="rotate(-35 54 54)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M33 37H75Q79 37 79 41V46C74 46 71 49.5 71 54C71 58.5 74 62 79 62V67Q79 71 75 71H33Q29 71 29 67V62C34 62 37 58.5 37 54C37 49.5 34 46 29 46V41Q29 37 33 37Z" stroke="#67E8F9" stroke-opacity=".30" stroke-width="7" filter="url(#glow)"/>
+    <g stroke="url(#ticket)" stroke-width="3.4">
+      <path d="M33 37H75Q79 37 79 41V46C74 46 71 49.5 71 54C71 58.5 74 62 79 62V67Q79 71 75 71H33Q29 71 29 67V62C34 62 37 58.5 37 54C37 49.5 34 46 29 46V41Q29 37 33 37Z"/>
+      <path d="M43 43H61Q64 43 64 46V62Q64 65 61 65H43Q40 65 40 62V46Q40 43 43 43Z"/>
+      <path d="M68 45V49M68 52V56M68 59V63"/>
+    </g>
+  </g>
+</svg>
