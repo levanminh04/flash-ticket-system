@@ -12,9 +12,13 @@ abstract class AuthModule {
 
     @Binds
     @Singleton
-    abstract fun bindTokenStorage(impl: EncryptedTokenStorage): TokenStorage
+    abstract fun bindTokenStorage(impl: KeystoreTokenStorage): TokenStorage
 
     @Binds
     @Singleton
     abstract fun bindAuthSessionController(impl: AuthManager): AuthSessionController
+
+    @Binds
+    @Singleton
+    abstract fun bindUserRepository(impl: UserRepositoryImpl): UserRepository
 }
