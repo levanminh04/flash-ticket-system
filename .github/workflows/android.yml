@@ -1,0 +1,86 @@
+name: Android CI Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - feature/mobile
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - master
+      - feature/mobile
+
+jobs:
+  build-and-test:
+    name: Lint, Test & Assemble
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Make Gradlew Executable
+        run: chmod +x ./mobile-app/gradlew
+
+      - name: Run Android Lint
+        working-directory: ./mobile-app
+        run: ./gradlew lintDebug --no-daemon
+
+      - name: Run Unit Tests
+        working-directory: ./mobile-app
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Assemble Debug APK
+        working-directory: ./mobile-app
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Assemble Staging APK
+        working-directory: ./mobile-app
+        run: ./gradlew assembleStaging --no-daemon
+
+      - name: Assemble Instrumented Android Tests
+        working-directory: ./mobile-app
+        run: ./gradlew assembleDebugAndroidTest --no-daemon
+
+      - name: Validate Production Configuration Policy
+        working-directory: ./mobile-app
+        run: ./gradlew validateProductionConfiguration --no-daemon
+
+      - name: Verify Fail-Fast on Missing Keystore in CI
+        working-directory: ./mobile-app
+        env:
+          CI: "true"
+        run: |
+          set +e
+          output=$(./gradlew validateReleaseSigningConfiguration --no-daemon 2>&1)
+          status=$?
+          set -e
+
+          printf '%s\n' "$output"
+
+          if [ "$status" -eq 0 ]; then
+            echo "Expected validateReleaseSigningConfiguration to fail when credentials are missing in CI, but it succeeded."
+            exit 1
+          fi
+
+          if ! printf '%s\n' "$output" | grep -Fq "RELEASE_KEYSTORE_PATH is required and must exist in CI release build."; then
+            echo "Gradle failed for an unexpected reason; the signing guard was not proven."
+            exit 1
+          fi
+
+          echo "Signing guard successfully rejected release build without signing credentials."
