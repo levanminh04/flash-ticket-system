@@ -3,6 +3,21 @@ package com.flashticket.mobile.core.network
 import com.flashticket.mobile.core.model.UserProfile
 import kotlinx.serialization.Serializable
 
+@Serializable(with = UserStatus.Serializer::class)
+enum class UserStatus {
+    ACTIVE,
+    INACTIVE,
+    PENDING_VERIFICATION,
+    SUSPENDED,
+    UNKNOWN;
+
+    object Serializer : SafeEnumSerializer<UserStatus>(
+        serialName = "UserStatus",
+        enumEntries = entries.toTypedArray(),
+        default = UNKNOWN
+    )
+}
+
 /** Network DTO matching user-service UserResponse for API-07 and API-08. */
 @Serializable
 data class UserResponseDto(
@@ -20,7 +35,7 @@ data class UserResponseDto(
     val phone: String? = null,
     val phoneVerified: Boolean? = null,
     val roles: List<String> = emptyList(),
-    val status: String? = null,
+    val status: UserStatus = UserStatus.UNKNOWN,
     val organizerProfileId: String? = null,
     val language: String? = null,
     val timezone: String? = null,
@@ -44,7 +59,7 @@ internal fun UserResponseDto.toDomain(): UserProfile {
         phoneNumber = phone,
         avatarUrl = avatarUrl,
         roles = roles,
-        status = status
+        status = status.name
     )
 }
 

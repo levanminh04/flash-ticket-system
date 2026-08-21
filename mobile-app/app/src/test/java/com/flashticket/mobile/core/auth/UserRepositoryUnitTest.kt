@@ -2,19 +2,36 @@ package com.flashticket.mobile.core.auth
 
 import com.flashticket.mobile.core.model.AppError
 import com.flashticket.mobile.core.model.UserRole
+import com.flashticket.mobile.core.network.ErrorParser
 import com.flashticket.mobile.core.network.UserApiService
 import com.flashticket.mobile.core.network.UserResponseDto
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
 
 class UserRepositoryUnitTest {
+
+    private lateinit var json: Json
+    private lateinit var errorParser: ErrorParser
+
+    @Before
+    fun setUp() {
+        json = Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+            isLenient = false
+            encodeDefaults = false
+        }
+        errorParser = ErrorParser(json)
+    }
 
     @Test
     fun getCurrentUserProfile_success_returnsMappedUserProfile() = runTest {
@@ -29,7 +46,7 @@ class UserRepositoryUnitTest {
             }
         }
 
-        val repo = UserRepositoryImpl(fakeService)
+        val repo = UserRepositoryImpl(fakeService, errorParser)
         val result = repo.getCurrentUserProfile()
 
         assertTrue(result.isSuccess)
@@ -52,7 +69,7 @@ class UserRepositoryUnitTest {
             }
         }
 
-        val repo = UserRepositoryImpl(fakeService)
+        val repo = UserRepositoryImpl(fakeService, errorParser)
         val result = repo.getCurrentUserProfile()
 
         assertTrue(result.isFailure)
@@ -72,7 +89,7 @@ class UserRepositoryUnitTest {
             }
         }
 
-        val repo = UserRepositoryImpl(fakeService)
+        val repo = UserRepositoryImpl(fakeService, errorParser)
         val result = repo.getCurrentUserProfile()
 
         assertTrue(result.isFailure)
@@ -88,7 +105,7 @@ class UserRepositoryUnitTest {
             }
         }
 
-        val repo = UserRepositoryImpl(fakeService)
+        val repo = UserRepositoryImpl(fakeService, errorParser)
         val result = repo.getCurrentUserProfile()
 
         assertTrue(result.isFailure)

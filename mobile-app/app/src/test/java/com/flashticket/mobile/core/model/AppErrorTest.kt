@@ -20,14 +20,19 @@ class AppErrorTest {
 
     @Test
     fun appError_hierarchy_createsCorrectTypes() {
-        val networkError = AppError.Network(RuntimeException("No internet"))
-        assertTrue(networkError is AppError)
+        val networkError = AppError.NetworkUnavailable()
+        assertEquals(
+            "Không thể kết nối máy chủ. Vui lòng kiểm tra kết nối mạng.",
+            networkError.message
+        )
 
-        val unauthenticated = AppError.Unauthenticated()
-        assertEquals("Phiên đăng nhập đã hết hạn", unauthenticated.message)
+        val sessionExpired = AppError.SessionExpired()
+        assertEquals("Phiên đăng nhập đã hết hạn.", sessionExpired.message)
+        assertEquals(401, sessionExpired.httpStatus)
 
         val forbidden = AppError.Forbidden()
-        assertEquals("Bạn không có quyền truy cập chức năng này", forbidden.message)
+        assertEquals("Bạn không có quyền thực hiện thao tác này.", forbidden.message)
+        assertEquals(403, forbidden.httpStatus)
 
         val notFound = AppError.NotFound("Ticket", "TKT-001")
         assertEquals("Ticket", notFound.resource)
@@ -41,5 +46,6 @@ class AppErrorTest {
 
         val server = AppError.Server(500, "Internal Server Error")
         assertEquals(500, server.code)
+        assertEquals(500, server.httpStatus)
     }
 }

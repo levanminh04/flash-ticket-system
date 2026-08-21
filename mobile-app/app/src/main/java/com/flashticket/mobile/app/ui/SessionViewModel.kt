@@ -83,7 +83,7 @@ class SessionViewModel @Inject constructor(
                 authSessionController.logout()
                 _uiState.value = SessionUiState.Unauthenticated
             } else {
-                val appError = (error as? AppError) ?: AppError.Unknown(error.message ?: "Lỗi xác thực", error)
+                val appError = (error as? AppError) ?: AppError.Unknown()
                 _uiState.value = SessionUiState.Error(appError)
             }
         }

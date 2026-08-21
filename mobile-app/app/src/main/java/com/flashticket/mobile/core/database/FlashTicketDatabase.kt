@@ -8,8 +8,8 @@ data class CategoryEntity(
     @PrimaryKey val id: String,
     val name: String,
     val slug: String,
-    val iconUrl: String?,
-    val displayOrder: Int,
+    val iconUrl: String? = null,
+    val displayOrder: Int = 0,
     val cachedAt: Long = System.currentTimeMillis()
 )
 
@@ -21,11 +21,10 @@ data class TicketEntity(
     val eventId: String,
     val eventTitle: String,
     val ticketTypeName: String,
-    val seatLabel: String?,
+    val seatLabel: String? = null,
     val holderName: String,
     val status: String,
-    val checkedInAt: String?,
-    val qrCodeUrl: String?,
+    val checkedInAt: String? = null,
     val userId: String,
     val cachedAt: Long = System.currentTimeMillis()
 )
@@ -43,6 +42,12 @@ interface CategoryDao {
 
     @Query("DELETE FROM categories")
     suspend fun clearAll()
+
+    @Transaction
+    suspend fun replaceAll(categories: List<CategoryEntity>) {
+        clearAll()
+        insertCategories(categories)
+    }
 }
 
 @Dao
@@ -50,11 +55,14 @@ interface TicketDao {
     @Query("SELECT * FROM tickets WHERE userId = :userId ORDER BY cachedAt DESC")
     fun getTicketsByUserId(userId: String): Flow<List<TicketEntity>>
 
+    @Query("SELECT COUNT(*) FROM tickets WHERE userId = :userId")
+    suspend fun getUserTicketCount(userId: String): Int
+
     @Query("SELECT COUNT(*) FROM tickets")
     suspend fun getTicketCount(): Int
 
-    @Query("SELECT * FROM tickets WHERE id = :ticketId")
-    suspend fun getTicketById(ticketId: String): TicketEntity?
+    @Query("SELECT * FROM tickets WHERE id = :ticketId AND userId = :userId")
+    suspend fun getTicketById(ticketId: String, userId: String): TicketEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTickets(tickets: List<TicketEntity>)
@@ -67,9 +75,12 @@ interface TicketDao {
 }
 
 @Database(
-    entities = [CategoryEntity::class, TicketEntity::class],
+    entities = [
+        CategoryEntity::class,
+        TicketEntity::class
+    ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class FlashTicketDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao

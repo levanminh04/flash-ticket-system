@@ -70,7 +70,6 @@ class PocRepository @Inject constructor(
             holderName = "Tester",
             status = "VALID",
             checkedInAt = null,
-            qrCodeUrl = null,
             userId = "user-poc-1"
         )
         categoryDao.insertCategories(listOf(sampleCat))

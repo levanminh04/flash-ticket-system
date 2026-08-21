@@ -110,8 +110,7 @@ class AuthManager @Inject constructor(
             }
             return@withContext AuthCallbackResult.Error(
                 AppError.AuthError(
-                    message = exception.errorDescription ?: exception.message ?: "Authentication failed",
-                    cause = exception
+                    message = "Không thể hoàn tất xác thực. Vui lòng thử lại."
                 )
             )
         }
@@ -131,8 +130,7 @@ class AuthManager @Inject constructor(
                         continuation.resume(
                             AuthCallbackResult.Error(
                                 AppError.AuthError(
-                                    message = tokenEx?.errorDescription ?: tokenEx?.message ?: "Token exchange failed",
-                                    cause = tokenEx
+                                    message = "Không thể hoàn tất trao đổi mã đăng nhập. Vui lòng thử lại."
                                 )
                             )
                         )
@@ -140,7 +138,7 @@ class AuthManager @Inject constructor(
                 }
             }
         } else {
-            AuthCallbackResult.Error(AppError.AuthError("No authorization response or exception in callback intent"))
+            AuthCallbackResult.Error(AppError.AuthError())
         }
     }
 

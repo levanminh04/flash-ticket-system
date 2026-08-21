@@ -43,8 +43,9 @@ private class RecordingTicketDao : TicketDao {
     var failure: Exception? = null
 
     override fun getTicketsByUserId(userId: String): Flow<List<TicketEntity>> = emptyFlow()
+    override suspend fun getUserTicketCount(userId: String): Int = 0
     override suspend fun getTicketCount(): Int = 0
-    override suspend fun getTicketById(ticketId: String): TicketEntity? = null
+    override suspend fun getTicketById(ticketId: String, userId: String): TicketEntity? = null
     override suspend fun insertTickets(tickets: List<TicketEntity>) = Unit
     override suspend fun clearUserTickets(userId: String) = Unit
     override suspend fun clearAll() {

@@ -188,6 +188,10 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn(validateReleaseSigningConfiguration)
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // Compose BOM & UI
     implementation(platform(libs.androidx.compose.bom))
