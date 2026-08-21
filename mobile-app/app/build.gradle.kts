@@ -22,12 +22,12 @@ val productionIssuerUrl = providers.gradleProperty("PROD_KEYCLOAK_ISSUER_URL")
 
 android {
     namespace = "com.flashticket.mobile"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.flashticket.mobile"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
 
@@ -36,23 +36,64 @@ android {
         manifestPlaceholders["appAuthRedirectScheme"] = "com.flashticket.mobile"
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = providers.environmentVariable("RELEASE_KEYSTORE_PATH")
+                .orElse(providers.gradleProperty("RELEASE_KEYSTORE_PATH"))
+                .orNull
+            val keystorePassword = providers.environmentVariable("RELEASE_KEYSTORE_PASSWORD")
+                .orElse(providers.gradleProperty("RELEASE_KEYSTORE_PASSWORD"))
+                .orNull
+            val keyAlias = providers.environmentVariable("RELEASE_KEY_ALIAS")
+                .orElse(providers.gradleProperty("RELEASE_KEY_ALIAS"))
+                .orNull
+            val keyPassword = providers.environmentVariable("RELEASE_KEY_PASSWORD")
+                .orElse(providers.gradleProperty("RELEASE_KEY_PASSWORD"))
+                .orNull
+
+            if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+                storeFile = file(keystorePath)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
+            manifestPlaceholders["appAuthRedirectScheme"] = "com.flashticket.mobile"
             buildConfigField("String", "GATEWAY_BASE_URL", "\"${productionGatewayUrl.get()}\"")
             buildConfigField("String", "KEYCLOAK_ISSUER_URL", "\"${productionIssuerUrl.get()}\"")
             buildConfigField("String", "KEYCLOAK_CLIENT_ID", "\"flash-ticket-android\"")
+            buildConfigField("String", "REDIRECT_URI", "\"com.flashticket.mobile:/oauth2redirect\"")
+            buildConfigField("String", "ALLOWED_CLEARTEXT_HOST", "\"$acceptedCleartextProductionHost\"")
+        }
+        create("staging") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            matchingFallbacks += listOf("debug")
+            manifestPlaceholders["appAuthRedirectScheme"] = "com.flashticket.mobile.staging"
+            buildConfigField("String", "GATEWAY_BASE_URL", "\"${productionGatewayUrl.get()}\"")
+            buildConfigField("String", "KEYCLOAK_ISSUER_URL", "\"${productionIssuerUrl.get()}\"")
+            buildConfigField("String", "KEYCLOAK_CLIENT_ID", "\"flash-ticket-android\"")
+            buildConfigField("String", "REDIRECT_URI", "\"com.flashticket.mobile.staging:/oauth2redirect\"")
             buildConfigField("String", "ALLOWED_CLEARTEXT_HOST", "\"$acceptedCleartextProductionHost\"")
         }
         release {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            manifestPlaceholders["appAuthRedirectScheme"] = "com.flashticket.mobile"
             buildConfigField("String", "GATEWAY_BASE_URL", "\"${productionGatewayUrl.get()}\"")
             buildConfigField("String", "KEYCLOAK_ISSUER_URL", "\"${productionIssuerUrl.get()}\"")
             buildConfigField("String", "KEYCLOAK_CLIENT_ID", "\"flash-ticket-android\"")
+            buildConfigField("String", "REDIRECT_URI", "\"com.flashticket.mobile:/oauth2redirect\"")
             buildConfigField("String", "ALLOWED_CLEARTEXT_HOST", "\"$acceptedCleartextProductionHost\"")
         }
     }
@@ -109,8 +150,42 @@ val validateProductionConfiguration by tasks.registering {
     }
 }
 
-tasks.matching { it.name == "preDebugBuild" || it.name == "preReleaseBuild" }.configureEach {
+val validateReleaseSigningConfiguration by tasks.registering {
+    group = "verification"
+    description = "Fails fast if release signing credentials are missing when building release artifacts in CI."
+
+    doLast {
+        val keystorePath = providers.environmentVariable("RELEASE_KEYSTORE_PATH")
+            .orElse(providers.gradleProperty("RELEASE_KEYSTORE_PATH"))
+            .orNull
+        val keystorePassword = providers.environmentVariable("RELEASE_KEYSTORE_PASSWORD")
+            .orElse(providers.gradleProperty("RELEASE_KEYSTORE_PASSWORD"))
+            .orNull
+        val keyAlias = providers.environmentVariable("RELEASE_KEY_ALIAS")
+            .orElse(providers.gradleProperty("RELEASE_KEY_ALIAS"))
+            .orNull
+        val keyPassword = providers.environmentVariable("RELEASE_KEY_PASSWORD")
+            .orElse(providers.gradleProperty("RELEASE_KEY_PASSWORD"))
+            .orNull
+
+        val isCI = providers.environmentVariable("CI").orNull.toBoolean()
+        if (isCI) {
+            require(!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+                "RELEASE_KEYSTORE_PATH is required and must exist in CI release build."
+            }
+            require(!keystorePassword.isNullOrBlank()) { "RELEASE_KEYSTORE_PASSWORD is required in CI release build." }
+            require(!keyAlias.isNullOrBlank()) { "RELEASE_KEY_ALIAS is required in CI release build." }
+            require(!keyPassword.isNullOrBlank()) { "RELEASE_KEY_PASSWORD is required in CI release build." }
+        }
+    }
+}
+
+tasks.matching { it.name == "preDebugBuild" || it.name == "preStagingBuild" || it.name == "preReleaseBuild" }.configureEach {
     dependsOn(validateProductionConfiguration)
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(validateReleaseSigningConfiguration)
 }
 
 dependencies {
@@ -168,4 +243,5 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
