@@ -109,7 +109,7 @@ class AuthManager @Inject constructor(
             serviceConfiguration,
             BuildConfig.KEYCLOAK_CLIENT_ID,
             ResponseTypeValues.CODE,
-            Uri.parse("com.flashticket.mobile:/oauth2redirect")
+            Uri.parse(BuildConfig.REDIRECT_URI)
         )
             .setScopes("openid", "profile", "email")
             .setCodeVerifier(CodeVerifierUtil.generateRandomCodeVerifier())
@@ -183,7 +183,7 @@ class AuthManager @Inject constructor(
         val idToken = _authStateFlow.value?.idToken ?: return null
         val endSessionRequest = EndSessionRequest.Builder(serviceConfiguration)
             .setIdTokenHint(idToken)
-            .setPostLogoutRedirectUri(Uri.parse("com.flashticket.mobile:/oauth2redirect"))
+            .setPostLogoutRedirectUri(Uri.parse(BuildConfig.REDIRECT_URI))
             .build()
         return authService.getEndSessionRequestIntent(endSessionRequest)
     }
