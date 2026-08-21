@@ -1,3 +1,31 @@
 <resources>
     <string name="app_name">Flash Ticket</string>
+
+    <!-- Bottom Navigation Tabs -->
+    <string name="tab_discovery">Khám phá</string>
+    <string name="tab_tickets">Vé của tôi</string>
+    <string name="tab_profile">Hồ sơ</string>
+
+    <!-- App Bar Titles -->
+    <string name="title_app_bar_default">Flash Ticket</string>
+    <string name="title_app_bar_tickets">Vé của tôi</string>
+    <string name="title_app_bar_profile">Hồ sơ người dùng</string>
+    <string name="title_app_bar_poc">PoC Kỹ thuật (G0)</string>
+
+    <!-- Buyer Discovery Screen -->
+    <string name="title_discovery_card">Khám phá Sự kiện</string>
+    <string name="desc_discovery_card">Danh sách sự kiện âm nhạc, thể thao nổi bật tại Flash Ticket.</string>
+    <string name="btn_open_poc">Mở màn hình PoC Kỹ thuật (G0)</string>
+
+    <!-- Buyer Tickets Screen -->
+    <string name="title_tickets_placeholder">Vé của tôi</string>
+    <string name="desc_tickets_placeholder">Danh sách vé đã thanh toán sẽ hiển thị tại đây.</string>
+
+    <!-- Buyer Profile Screen -->
+    <string name="title_profile_placeholder">Hồ sơ Tài khoản</string>
+    <string name="desc_profile_placeholder">Quản lý thông tin cá nhân và đăng ký Organizer.</string>
+
+    <!-- Common States -->
+    <string name="loading_default">Đang tải dữ liệu...</string>
+    <string name="btn_retry">Thử lại</string>
 </resources>
