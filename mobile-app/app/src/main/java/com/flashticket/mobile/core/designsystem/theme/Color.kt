@@ -16,12 +16,20 @@ val NeonAmberWarning = Color(0xFFF59E0B)
 val NeonGreenSuccess = Color(0xFF10B981)
 val NeonCoralError = Color(0xFFEF4444)
 
+// Status Aliases
+val StatusWarning = NeonAmberWarning
+val StatusSuccess = NeonGreenSuccess
+val StatusError = NeonCoralError
+
 // Dark Theme Surfaces & Backgrounds
 val DarkBackground = Color(0xFF0A0B10)
 val DarkSurface = Color(0xFF12141F)
 val DarkSurfaceElevated = Color(0xFF1A1D2D)
 val DarkSurfaceBorder = Color(0xFF2E334D)
 val DarkCardBackground = Color(0xFF151827)
+
+// Border Aliases
+val BorderSubtle = DarkSurfaceBorder
 
 // Text on Dark Surfaces
 val TextPrimary = Color(0xFFF8FAFC)

@@ -78,6 +78,23 @@ fun FlashPrimaryButton(
 }
 
 @Composable
+fun FlashSecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    leadingIcon: @Composable (() -> Unit)? = null
+) {
+    FlashOutlinedButton(
+        text = text,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        leadingIcon = leadingIcon
+    )
+}
+
+@Composable
 fun FlashOutlinedButton(
     text: String,
     onClick: () -> Unit,

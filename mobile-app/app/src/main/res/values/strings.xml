@@ -5,12 +5,33 @@
     <string name="tab_discovery">Khám phá</string>
     <string name="tab_tickets">Vé của tôi</string>
     <string name="tab_profile">Hồ sơ</string>
+    <string name="tab_scanner">Quét vé</string>
+    <string name="tab_organizer_events">Sự kiện của tôi</string>
+    <string name="tab_organizer_review">Duyệt Organizer</string>
+    <string name="tab_system_dashboard">Hệ thống</string>
 
     <!-- App Bar Titles -->
     <string name="title_app_bar_default">Flash Ticket</string>
     <string name="title_app_bar_tickets">Vé của tôi</string>
     <string name="title_app_bar_profile">Hồ sơ người dùng</string>
     <string name="title_app_bar_poc">PoC Kỹ thuật (G0)</string>
+    <string name="title_app_bar_scanner">Quét mã QR Check-in</string>
+    <string name="title_app_bar_organizer">Quản lý Sự kiện Organizer</string>
+    <string name="title_app_bar_admin">Quản trị Hệ thống</string>
+
+    <!-- Auth & Welcome Screen -->
+    <string name="title_welcome">Flash Ticket</string>
+    <string name="desc_welcome">Nền tảng mua vé và quản lý sự kiện tốc độ cao.</string>
+    <string name="btn_login_oidc">Đăng nhập tài khoản</string>
+    <string name="btn_logout">Đăng xuất</string>
+    <string name="msg_login_prompt">Vui lòng đăng nhập để tiếp tục.</string>
+
+    <!-- Role Badges & Switching -->
+    <string name="badge_role_buyer">BUYER</string>
+    <string name="badge_role_organizer">ORGANIZER</string>
+    <string name="badge_role_admin">ADMIN</string>
+    <string name="label_current_role">Vai trò hiện tại:</string>
+    <string name="btn_switch_view">Chuyển sang giao diện</string>
 
     <!-- Buyer Discovery Screen -->
     <string name="title_discovery_card">Khám phá Sự kiện</string>
@@ -24,6 +45,18 @@
     <!-- Buyer Profile Screen -->
     <string name="title_profile_placeholder">Hồ sơ Tài khoản</string>
     <string name="desc_profile_placeholder">Quản lý thông tin cá nhân và đăng ký Organizer.</string>
+
+    <!-- Organizer Screens -->
+    <string name="title_organizer_scanner_card">Quét vé Check-in</string>
+    <string name="desc_organizer_scanner_card">Sử dụng Camera để quét mã QR vé và xác thực tức thời.</string>
+    <string name="title_organizer_events_card">Sự kiện đã xuất bản</string>
+    <string name="desc_organizer_events_card">Theo dõi tiến độ bán vé và thống kê lượt check-in.</string>
+
+    <!-- Admin Screens -->
+    <string name="title_admin_review_card">Xét duyệt hồ sơ Organizer</string>
+    <string name="desc_admin_review_card">Danh sách các đơn đăng ký trở thành Ban tổ chức đang chờ duyệt.</string>
+    <string name="title_admin_dashboard_card">Tổng quan Hệ thống</string>
+    <string name="desc_admin_dashboard_card">Giám sát hoạt động toàn bộ hệ thống Flash Ticket.</string>
 
     <!-- Common States -->
     <string name="loading_default">Đang tải dữ liệu...</string>

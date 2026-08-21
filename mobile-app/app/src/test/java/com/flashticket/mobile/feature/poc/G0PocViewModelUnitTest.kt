@@ -20,13 +20,16 @@ import org.junit.Test
 
 private class FakeAuthSessionController : AuthSessionController {
     override var isAuthenticated: Boolean = false
+    override val authStateFlow: kotlinx.coroutines.flow.StateFlow<net.openid.appauth.AuthState?> = kotlinx.coroutines.flow.MutableStateFlow(null)
     var accessToken: String? = null
     var logoutCalled = false
     var logoutResult = LocalLogoutResult()
 
     override fun createAuthorizationIntent(): Intent = error("Not used by this test")
     override suspend fun handleAuthorizationResponse(intent: Intent): Boolean = false
+    override suspend fun processAuthorizationResponse(intent: Intent): com.flashticket.mobile.core.auth.AuthCallbackResult = com.flashticket.mobile.core.auth.AuthCallbackResult.Success
     override suspend fun getValidAccessToken(): String? = accessToken
+    override suspend fun refreshAccessToken(failedToken: String?): String? = accessToken
     override fun createEndSessionIntent(): Intent? = null
     override suspend fun logout(): LocalLogoutResult {
         logoutCalled = true
